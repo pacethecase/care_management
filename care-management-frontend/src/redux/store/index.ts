@@ -1,0 +1,13 @@
+import { configureStore } from "@reduxjs/toolkit";
+import userReducer from "../slices/userSlice";
+import patientsReducer from "../slices/patientSlice";
+import taskReducer from "../slices/taskSlice";
+import noteReducer from "../slices/noteSlice";
+export const store = configureStore({
+  reducer: {
+    user: userReducer,
+    patients: patientsReducer, 
+    tasks: taskReducer,
+    notes: noteReducer,
+  },
+});

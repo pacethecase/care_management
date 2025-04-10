@@ -1,0 +1,185 @@
+@import "tailwindcss";
+
+:root {
+  /* Typography */
+  font-family: "Segoe UI", "Poppins", system-ui, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  /* 🌈 Brand Colors */
+  --funky-orange: #FF8243;         /* Main accent (from logo) */
+  --mint-green: #7CD4B8;           /* Soft success color */
+  --lavender-purple: #CABDFF;      /* Soft highlight */
+  --sky-blue: #A5D8FF;             /* Calm secondary */
+  --deep-navy: #1E1B4B;            /* Dark text / footer */
+
+  /* Neutrals */
+  --bg-light: #F9FAFB;
+  --text-dark: #222222;
+  --text-muted: #6B7280;
+  --border-muted: #E5E7EB;
+  --hover-tab: #F1F5F9;
+}
+
+/* ---------------- Base ---------------- */
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background-color: var(--bg-light);
+  color: var(--text-dark);
+  font-family: inherit;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4 {
+  color: var(--deep-navy);
+  font-weight: 600;
+}
+
+a {
+  color: var(--funky-orange);
+  text-decoration: none;
+  transition: color 0.3s ease;
+}
+
+a:hover {
+  color: var(--mint-green);
+}
+
+/* ---------------- Buttons ---------------- */
+.btn {
+  background-color: var(--funky-orange);
+  color: white;
+  padding: 0.6rem 1.2rem;
+  border-radius: 8px;
+  font-weight: 500;
+  font-size: 1rem;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.btn:hover {
+  background-color: var(--mint-green);
+}
+
+.btn-outline {
+  background-color: transparent;
+  color: var(--funky-orange);
+  border: 2px solid var(--funky-orange);
+}
+
+.btn-outline:hover {
+  background-color: var(--funky-orange);
+  color: white;
+}
+
+/* ---------------- Cards & Containers ---------------- */
+.card {
+  background-color: white;
+  border: 1px solid var(--border-muted);
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+}
+
+/* ---------------- Input Fields ---------------- */
+input, select, textarea {
+  border: 1px solid var(--border-muted);
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  width: 100%;
+  font-size: 1rem;
+  transition: border-color 0.2s ease;
+}
+
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--funky-orange);
+}
+
+/* ---------------- Tabs ---------------- */
+.tab {
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  color: var(--deep-navy);
+  background-color: transparent;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+.tab:hover {
+  background-color: var(--hover-tab);
+}
+
+.tab-active {
+  background-color: var(--funky-orange);
+  color: white;
+}
+
+/* ---------------- Navbar ---------------- */
+.navbar {
+  background-color: var(--deep-navy);
+  color: white;
+  padding: 1rem 2rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  
+}
+
+.navbar a {
+  color: var(--funky-orange);
+  margin-right: 1.5rem;
+}
+
+.navbar a:hover {
+  color: var(--funky-orange);
+}
+
+/* ---------------- Status Badges ---------------- */
+.badge {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+}
+
+.badge-pending {
+  background-color: #FFF3CD;
+  color: #8A6D3B;
+}
+
+.badge-inprogress {
+  background-color: #D1ECF1;
+  color: #0C5460;
+}
+
+.badge-completed {
+  background-color: #D4EDDA;
+  color: #155724;
+}
+
+
+.text-orange {
+  color: var(--funky-orange);
+}
+
+
+/* ---------------- Footer ---------------- */
+.footer {
+  background-color: var(--deep-navy);
+  color: white;
+  padding: 2rem 1.5rem;
+}
+
+.footer-container {
+  max-width: 1280px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+
