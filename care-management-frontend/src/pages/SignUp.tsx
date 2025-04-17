@@ -34,10 +34,7 @@ const SignUp = () => {
       toast.success("Signup successful! Check your email.");
       setTimeout(() => navigate("/login"), 2000);
     } catch (err: any) {
-      const message =
-        typeof err === "string"
-          ? err
-          : err?.error || err?.message || "Signup failed";
+      const message = typeof err === "string" ? err : err?.error || err?.message || "Signup failed";
       toast.error(message);
     }
   };
@@ -48,9 +45,7 @@ const SignUp = () => {
       <main className="flex items-center justify-center p-6 flex-1">
         <div className="card w-full max-w-lg">
           <h2 className="text-2xl font-bold mb-6 text-center">Create an Account</h2>
-
           <form onSubmit={handleSignup} className="space-y-5">
-            {/* Name */}
             <div>
               <label className="block mb-1 font-medium">Full Name</label>
               <div className="relative">
@@ -67,7 +62,6 @@ const SignUp = () => {
               </div>
             </div>
 
-            {/* Email */}
             <div>
               <label className="block mb-1 font-medium">Email</label>
               <div className="relative">
@@ -84,7 +78,6 @@ const SignUp = () => {
               </div>
             </div>
 
-            {/* Password */}
             <div>
               <label className="block mb-1 font-medium">Password</label>
               <div className="relative">
@@ -101,7 +94,6 @@ const SignUp = () => {
               </div>
             </div>
 
-            {/* Role Selector */}
             <div>
               <label className="block mb-1 font-medium">Select Role</label>
               <div className="flex gap-4 mb-1">
@@ -109,7 +101,7 @@ const SignUp = () => {
                   type="button"
                   className={`flex items-center gap-2 px-4 py-2 rounded-lg border-2 transition ${
                     formData.isStaff
-                      ? "border-[var(--funky-orange)] bg-[var(--hover-tab)] text-[var(--funky-orange)] font-semibold"
+                      ? "border-[var(--prussian-blue)] bg-[var(--hover-tab)] text-[var(--prussian-blue)] font-semibold"
                       : "border-gray-300 bg-white text-gray-600"
                   }`}
                   onClick={() =>
@@ -124,7 +116,7 @@ const SignUp = () => {
                   type="button"
                   className={`flex items-center gap-2 px-4 py-2 rounded-lg border-2 transition ${
                     formData.isAdmin
-                      ? "border-[var(--funky-orange)] bg-[var(--hover-tab)] text-[var(--funky-orange)] font-semibold"
+                      ? "border-[var(--prussian-blue)] bg-[var(--hover-tab)] text-[var(--prussian-blue)] font-semibold"
                       : "border-gray-300 bg-white text-gray-600"
                   }`}
                   onClick={() =>
@@ -143,16 +135,13 @@ const SignUp = () => {
               </p>
             </div>
 
-            {/* Error */}
             {error && <p className="text-red-500 text-sm">{error}</p>}
 
-            {/* Submit */}
             <button type="submit" className="btn w-full" disabled={loading}>
               {loading ? "Creating Account..." : "Sign Up"}
             </button>
           </form>
 
-          {/* Switch to Login */}
           <p className="text-center text-sm mt-6">
             Already have an account?{" "}
             <a href="/login" className="text-orange font-medium hover:underline">

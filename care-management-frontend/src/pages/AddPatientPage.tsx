@@ -1,15 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { addPatient } from '../redux/slices/patientSlice';
 import { fetchStaffs } from '../redux/slices/userSlice';
 import { RootState } from '../redux/store';
 import AlgorithmSelection from "../components/AlgorithmSelection";
+import Navbar from '../components/Navbar';
+import Footer from '../components/Footer';
 
 const AddPatientPage = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-
   const staffs = useSelector((state: RootState) => state.user.staffs);
 
   const [formData, setFormData] = useState({
@@ -17,6 +18,7 @@ const AddPatientPage = () => {
     birth_date: '',
     age: '',
     bedId: '',
+    mrn: '',
     medical_info: '',
     assignedStaffId: '',
     is_behavioral: false,
@@ -24,7 +26,12 @@ const AddPatientPage = () => {
     is_geriatric_psych_available: false,
     is_behavioral_team: false,
     is_ltc: false,
+    is_ltc_medical: false,
+    is_ltc_financial: false,
     is_guardianship: false,
+    is_guardianship_financial: false,
+    is_guardianship_person: false,
+    is_guardianship_emergency: false,
   });
 
   useEffect(() => {
@@ -38,7 +45,6 @@ const AddPatientPage = () => {
       const calculatedAge = Math.floor(
         (today.getTime() - birthDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000)
       );
-
       setFormData((prev) => ({
         ...prev,
         age: calculatedAge >= 0 ? calculatedAge : '',
@@ -47,7 +53,9 @@ const AddPatientPage = () => {
     }
   }, [formData.birth_date]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
+  ) => {
     const { name, value, type, checked } = e.target;
     setFormData((prev) => ({
       ...prev,
@@ -57,17 +65,13 @@ const AddPatientPage = () => {
 
   const handleSubmit = async () => {
     try {
-      console.log('Patient Data to be Sent:', formData);
-   
       await dispatch(addPatient(formData)).unwrap();
-
-
-
       setFormData({
         name: '',
         birth_date: '',
         age: '',
         bedId: '',
+        mrn:'',
         medical_info: '',
         assignedStaffId: '',
         is_behavioral: false,
@@ -75,109 +79,136 @@ const AddPatientPage = () => {
         is_geriatric_psych_available: false,
         is_behavioral_team: false,
         is_ltc: false,
+        is_ltc_medical: false,
+        is_ltc_financial: false,
         is_guardianship: false,
+        is_guardianship_financial: false,
+        is_guardianship_person: false,
+        is_guardianship_emergency:false,
       });
-
       navigate('/patients');
     } catch (err) {
-      console.error('Submit failed:', err);
+      if (err && err.message) {
+        alert(`Error: ${err.message}`);
+        console.error("Submit failed:", err.message);
+      } else {
+        console.error("Submit failed (unknown):", err);
+      }
     }
   };
 
   return (
-    <div className="container mx-auto px-6 py-8">
-      <h3 className="text-3xl font-semibold text-hospital-blue mb-6">Add New Patient</h3>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-gray-700">
-        <div>
-          <label className="block font-medium">Patient Name*</label>
-          <input
-            type="text"
-            name="name"
-            value={formData.name}
-            onChange={handleChange}
-            className="w-full p-2 border rounded"
-            placeholder="Enter patient name"
-            required
-          />
+    <div className="flex flex-col min-h-screen bg-[var(--bg-light)] text-[var(--text-dark)]">
+      <Navbar />
+      <main className="flex-grow container mx-auto px-6 py-10">
+        <div className="flex justify-between items-center mb-6">
+          <h3 className="text-3xl font-semibold text-[var(--deep-navy)]">Add New Patient</h3>
+          <Link to="/patients" className="text-[var(--funky-orange)] hover:underline font-medium text-sm">
+            ← Back to Patients
+          </Link>
         </div>
 
-        <div>
-          <label className="block font-medium">Birth Date*</label>
-          <input
-            type="date"
-            name="birth_date"
-            value={formData.birth_date}
-            onChange={handleChange}
-            className="w-full p-2 border rounded"
-            required
-          />
+        <div className="card">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block font-medium">Patient Name*</label>
+              <input
+                type="text"
+                name="name"
+                value={formData.name}
+                onChange={handleChange}
+                placeholder="Enter patient name"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block font-medium">Birth Date*</label>
+              <input
+                type="date"
+                name="birth_date"
+                value={formData.birth_date}
+                onChange={handleChange}
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block font-medium">Age*</label>
+              <input
+                type="number"
+                name="age"
+                value={formData.age}
+                readOnly
+                className="bg-gray-100 cursor-not-allowed"
+                placeholder="Auto-calculated"
+                required
+              />
+            </div>
+            <div>
+              <label className="block font-medium">MRN (Medical Record Number)</label>
+              <input
+                type="text"
+                name="mrn"
+                value={formData.mrn}
+                onChange={handleChange}
+                placeholder="Enter MRN"
+                required
+              />
+            </div>
+            <div>
+              <label className="block font-medium">Bed ID*</label>
+              <input
+                type="text"
+                name="bedId"
+                value={formData.bedId}
+                onChange={handleChange}
+                placeholder="Enter Bed ID"
+                required
+              />
+            </div>  
+
+            <div className="md:col-span-2">
+              <label className="block font-medium">Medical Information</label>
+              <textarea
+                name="medical_info"
+                value={formData.medical_info}
+                onChange={handleChange}
+                placeholder="Enter medical details"
+              />
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="block font-medium">Assign Staff</label>
+              <select
+                name="assignedStaffId"
+                value={formData.assignedStaffId}
+                onChange={handleChange}
+              >
+                <option value="">Select a Staff</option>
+                {staffs?.length > 0 ? (
+                  staffs.map((staff) => (
+                    <option key={staff.id} value={staff.id}>
+                      {staff.name}
+                    </option>
+                  ))
+                ) : (
+                  <option disabled>Loading staffs...</option>
+                )}
+              </select>
+            </div>
+
+            <div className="md:col-span-2">
+              <AlgorithmSelection formData={formData} setFormData={setFormData} />
+            </div>
+          </div>
+
+          <button className="btn mt-6" onClick={handleSubmit}>
+            Add Patient
+          </button>
         </div>
-
-        <div>
-          <label className="block font-medium">Age*</label>
-          <input
-            type="number"
-            name="age"
-            value={formData.age}
-            readOnly
-            className="w-full p-2 border rounded bg-gray-100 cursor-not-allowed"
-            placeholder="Auto-calculated from birth date"
-            required
-          />
-        </div>
-
-        <div>
-          <label className="block font-medium">Bed ID*</label>
-          <input
-            type="text"
-            name="bedId"
-            value={formData.bedId}
-            onChange={handleChange}
-            className="w-full p-2 border rounded"
-            placeholder="Enter Bed ID"
-            required
-          />
-        </div>
-
-        <div className="md:col-span-2">
-          <label className="block font-medium">Medical Information</label>
-          <textarea
-            name="medical_info"
-            value={formData.medical_info}
-            onChange={handleChange}
-            className="w-full p-2 border rounded"
-            placeholder="Enter medical details"
-          />
-        </div>
-
-        <div className="md:col-span-2">
-          <label className="block font-medium">Assign Staff</label>
-          <select
-            name="assignedStaffId"
-            value={formData.assignedStaffId}
-            onChange={handleChange}
-            className="w-full p-2 border rounded"
-          >
-            <option value="">Select a Staff</option>
-            {staffs?.length > 0 ? (
-              staffs.map((staff) => (
-                <option key={staff.id} value={staff.id}>
-                  {staff.name}
-                </option>
-              ))
-            ) : (
-              <option disabled>Loading staffs...</option>
-            )}
-          </select>
-        </div>
-
-        <AlgorithmSelection formData={formData} setFormData={setFormData} />
-      </div>
-
-      <button className="mt-6 btn" onClick={handleSubmit}>
-        Add Patient
-      </button>
+      </main>
+      <Footer />
     </div>
   );
 };

@@ -1,55 +1,51 @@
 @import "tailwindcss";
 
+/* 🎨 Root Variables */
 :root {
-  /* Typography */
-  font-family: "Segoe UI", "Poppins", system-ui, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
-
-  /* 🌈 Brand Colors */
-  --funky-orange: #FF8243;         /* Main accent (from logo) */
-  --mint-green: #7CD4B8;           /* Soft success color */
-  --lavender-purple: #CABDFF;      /* Soft highlight */
-  --sky-blue: #A5D8FF;             /* Calm secondary */
-  --deep-navy: #1E1B4B;            /* Dark text / footer */
+  /* Brand Colors */
+  --prussian-blue: #003049;      /* Deep navy - primary background */
+  --fire-red: #D62828;           /* Alert/danger */
+  --warm-orange: #F77F00;        /* Primary accent */
+  --xanthous-yellow: #FCBF49;    /* Highlights / CTAs */
+  --vanilla: #5ac8fa4a;            /* Light background / cards */
 
   /* Neutrals */
-  --bg-light: #F9FAFB;
-  --text-dark: #222222;
+  --bg-light: #fdfdfd;
+  --text-main: #1F2937;
   --text-muted: #6B7280;
-  --border-muted: #E5E7EB;
-  --hover-tab: #F1F5F9;
+  --border-muted: #D1D5DB;
+  --tab-hover: #F3F4F6;
 }
 
-/* ---------------- Base ---------------- */
+/* 🧼 Reset & Base */
 body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
   background-color: var(--bg-light);
-  color: var(--text-dark);
-  font-family: inherit;
+  color: var(--text-main);
+  font-family: "Segoe UI", "Poppins", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
 h1, h2, h3, h4 {
-  color: var(--deep-navy);
+  color: var(--warm-orange);
   font-weight: 600;
 }
 
 a {
-  color: var(--funky-orange);
+  color: var(--warm-orange);
   text-decoration: none;
   transition: color 0.3s ease;
 }
 
 a:hover {
-  color: var(--mint-green);
+  color: var(--fire-red);
 }
 
-/* ---------------- Buttons ---------------- */
+/* 🔘 Buttons */
 .btn {
-  background-color: var(--funky-orange);
+  background-color: var(--warm-orange);
   color: white;
   padding: 0.6rem 1.2rem;
   border-radius: 8px;
@@ -61,31 +57,23 @@ a:hover {
 }
 
 .btn:hover {
-  background-color: var(--mint-green);
+  background-color: var(--fire-red);
+  color: white;
 }
 
 .btn-outline {
   background-color: transparent;
-  color: var(--funky-orange);
-  border: 2px solid var(--funky-orange);
+  color: var(--warm-orange);
+  border: 2px solid var(--warm-orange);
 }
 
 .btn-outline:hover {
-  background-color: var(--funky-orange);
+  background-color: var(--warm-orange);
   color: white;
 }
 
-/* ---------------- Cards & Containers ---------------- */
-.card {
-  background-color: white;
-  border: 1px solid var(--border-muted);
-  border-radius: 12px;
-  padding: 1.5rem;
-  box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-}
-
-/* ---------------- Input Fields ---------------- */
-input, select, textarea {
+/* 💬 Inputs */
+input, textarea {
   border: 1px solid var(--border-muted);
   padding: 0.5rem 0.75rem;
   border-radius: 6px;
@@ -93,51 +81,63 @@ input, select, textarea {
   font-size: 1rem;
   transition: border-color 0.2s ease;
 }
+select{
+  border: 1px solid var(--border-muted);
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  font-size: 1rem;
+  transition: border-color 0.2s ease;
+}
 
 input:focus, select:focus, textarea:focus {
   outline: none;
-  border-color: var(--funky-orange);
+  border-color: var(--warm-orange);
 }
 
-/* ---------------- Tabs ---------------- */
+/* 📦 Cards */
+.card {
+  background-color: var(--vanilla);
+  border: 1px solid var(--border-muted);
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+}
+
+.card.non-blocking {
+  background-color: #FFF3CD; 
+}
+
+.card.card-missed{
+  background-color: #ffb8b8;
+}
+
+.card.card-completed{
+  background-color:#a6d3ae;
+}
+
+/* 🧭 Tabs */
 .tab {
   padding: 0.5rem 1rem;
   border-radius: 6px;
-  color: var(--deep-navy);
+  color: var(--prussian-blue);
   background-color: transparent;
   transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 .tab:hover {
-  background-color: var(--hover-tab);
+  background-color: var(--tab-hover);
 }
 
 .tab-active {
-  background-color: var(--funky-orange);
+  background-color: var(--warm-orange);
   color: white;
 }
 
-/* ---------------- Navbar ---------------- */
-.navbar {
-  background-color: var(--deep-navy);
-  color: white;
-  padding: 1rem 2rem;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  
-}
-
-.navbar a {
-  color: var(--funky-orange);
-  margin-right: 1.5rem;
-}
-
-.navbar a:hover {
-  color: var(--funky-orange);
-}
-
-/* ---------------- Status Badges ---------------- */
+/* 📌 Status Badges */
 .badge {
   font-size: 0.75rem;
   font-weight: 600;
@@ -146,13 +146,13 @@ input:focus, select:focus, textarea:focus {
 }
 
 .badge-pending {
-  background-color: #FFF3CD;
+  background-color: var(--xanthous-yellow);
   color: #8A6D3B;
 }
 
 .badge-inprogress {
-  background-color: #D1ECF1;
-  color: #0C5460;
+  background-color: #E0F2FE;
+  color: var(--prussian-blue);
 }
 
 .badge-completed {
@@ -160,17 +160,31 @@ input:focus, select:focus, textarea:focus {
   color: #155724;
 }
 
-
-.text-orange {
-  color: var(--funky-orange);
+/* 🚪 Navbar */
+.navbar {
+  background-color: var(--prussian-blue);
+  color: white;
+  padding: 1rem 2rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
+.navbar a {
+  color: var(--xanthous-yellow);
+  margin-right: 1.5rem;
+}
 
-/* ---------------- Footer ---------------- */
+.navbar a:hover {
+  color: var(--warm-orange);
+}
+
+/* 🔚 Footer */
 .footer {
-  background-color: var(--deep-navy);
+  background-color: var(--prussian-blue);
   color: white;
   padding: 2rem 1.5rem;
+  text-align: center;
 }
 
 .footer-container {
@@ -180,6 +194,28 @@ input:focus, select:focus, textarea:focus {
   flex-direction: column;
   align-items: center;
   gap: 1rem;
+}
+
+/* 🎨 Utility Text */
+.text-accent {
+  color: var(--warm-orange);
+}
+
+.text-muted {
+  color: var(--text-muted);
+}
+
+.text-red {
+  color: var(--fire-red);
+}
+
+/* index.css or global styles */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-thumb {
+  background-color: #888;
+  border-radius: 4px;
 }
 
 

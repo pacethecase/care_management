@@ -14,8 +14,23 @@ const AlgorithmSelection = ({ formData, setFormData }) => {
         },
       ],
     },
-    { key: "is_ltc", label: "LTC", subOptions: [] },
-    { key: "is_guardianship", label: "Guardianship", subOptions: [] },
+    {
+      key: "is_ltc",
+      label: "LTC",
+      subOptions: [
+        { key: "is_ltc_medical", label: "Medical Eligibility" },
+        { key: "is_ltc_financial", label: "Financial Eligibility" },
+      ],
+    },
+    {
+      key: "is_guardianship",
+      label: "Guardianship",
+      subOptions: [
+        { key: "is_guardianship_financial", label: "Financial Requirement" },
+        { key: "is_guardianship_person", label: "Person Requirement" },
+        {key: "is_guardianship_emergency",label:"Emergency Required"},
+      ],
+    },
   ];
 
   const handleSelection = (event, key) => {
@@ -24,10 +39,11 @@ const AlgorithmSelection = ({ formData, setFormData }) => {
       const newValue = !prev[key];
       const updatedData = { ...prev, [key]: newValue };
 
-      if (key === "is_behavioral" && !newValue) {
-        updatedData.is_restrained = false;
-        updatedData.is_behavioral_team = false;
-        updatedData.is_geriatric_psych_available = false;
+      if (!newValue) {
+        const algo = algorithms.find((a) => a.key === key);
+        algo?.subOptions.forEach(({ key: subKey }) => {
+          updatedData[subKey] = false;
+        });
       }
 
       return updatedData;
@@ -38,11 +54,10 @@ const AlgorithmSelection = ({ formData, setFormData }) => {
     const { name, checked } = event.target;
 
     setFormData((prev) => {
-      let updatedData = { ...prev, [name]: checked };
+      const updatedData = { ...prev, [name]: checked };
 
-      // Disable and uncheck Geriatric Psychiatry if age is <= 65
       if (name === "is_geriatric_psych_available" && prev.age <= 65) {
-        updatedData.is_geriatric_psych_available = false;
+        updatedData[name] = false;
       }
 
       return updatedData;
@@ -51,17 +66,16 @@ const AlgorithmSelection = ({ formData, setFormData }) => {
 
   return (
     <div className="md:col-span-2">
-      <p className="font-medium  text-gray-dark mb-3 text-lg">Patient Tags:</p>
+      <p className="font-medium text-[var(--text-dark)] mb-3 text-lg">Patient Tags:</p>
 
-      {/* Main Algorithm Tabs */}
-      <div className="flex space-x-4 mb-6">
+      <div className="flex flex-wrap gap-3 mb-6">
         {algorithms.map(({ key, label }) => (
           <button
             key={key}
             className={`tab px-6 py-2 rounded-lg font-semibold transition-all duration-300 focus:outline-none border ${
               formData[key]
-                ? "border-hospital-blue shadow-md bg-blue-50 text-blue-700"
-                : "border-transparent hover:bg-hospital-tab-hover hover:text-hospital-blue"
+                ? "border-[var(--funky-orange)] bg-[var(--hover-tab)] text-[var(--funky-orange)] shadow"
+                : "border-transparent hover:bg-[var(--hover-tab)]"
             }`}
             onClick={(e) => handleSelection(e, key)}
           >
@@ -70,38 +84,47 @@ const AlgorithmSelection = ({ formData, setFormData }) => {
         ))}
       </div>
 
-      {/* Behavioral Sub-options */}
-      {formData.is_behavioral && (
-        <div className="p-5 bg-gray-50 rounded-md shadow-sm border border-gray-300">
-          <p className="font-semibold text-gray-700 mb-3">Behavioral Management Details:</p>
+      {/* Suboptions for each algorithm */}
+      {algorithms.map(
+        (alg) =>
+          formData[alg.key] &&
+          alg.subOptions.length > 0 && (
+            <div
+              key={alg.key}
+              className="p-5 mb-5 bg-white rounded-md border border-[var(--border-muted)] shadow-sm"
+            >
+              <p className="font-semibold text-[var(--text-dark)] mb-3">
+                {alg.label} Details:
+              </p>
 
-          <div className="flex flex-row space-y-2">
-            {algorithms
-              .find((alg) => alg.key === "is_behavioral")
-              ?.subOptions.map(({ key, label }) => (
-                <label key={key} className="flex items-center space-x-3 justify-start">
-                  <input
-                    type="checkbox"
-                    id={key}
-                    name={key}
-                    checked={formData[key] || false}
-                    onChange={handleSubOptionChange}
-                    className="w-4 h-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                    disabled={key === "is_geriatric_psych_available" && formData.age <= 65}
-                  />
-                  <span
-                    className={`text-gray-800 ${
-                      key === "is_geriatric_psych_available" && formData.age <= 65
-                        ? "text-gray-400" // Make text lighter if disabled
-                        : ""
-                    }`}
+              <div className="flex flex-row">
+                {alg.subOptions.map(({ key, label }) => (
+                  <label
+                    key={key}
+                    className="flex items-center gap-3 text-[var(--text-dark)]"
                   >
-                    {label}
-                  </span>
-                </label>
-              ))}
-          </div>
-        </div>
+                    <input
+                      type="checkbox"
+                      name={key}
+                      checked={formData[key] || false}
+                      onChange={handleSubOptionChange}
+                      disabled={key === "is_geriatric_psych_available" && formData.age <= 65}
+                      className="w-4 h-4 text-[var(--funky-orange)] border-gray-300 rounded"
+                    />
+                    <span
+                      className={`${
+                        key === "is_geriatric_psych_available" && formData.age <= 65
+                          ? "text-gray-400"
+                          : ""
+                      }`}
+                    >
+                      {label}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )
       )}
     </div>
   );

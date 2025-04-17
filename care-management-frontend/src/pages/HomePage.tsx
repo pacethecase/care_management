@@ -1,27 +1,39 @@
-import Footer from "../components/Footer";
-
-import React, { useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import DischargeBarriers from "../components/DischargeBarriers";
-import Navbar from "../components/Navbar";
+import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-
 import { RootState } from '../redux/store';
+import Footer from "../components/Footer";
+import Navbar from "../components/Navbar";
+
+import DischargeBarriers from "../components/DischargeBarriers"; 
+
+import { loadPatientCountsByAlgorithm } from "../redux/slices/algorithmSlice"; 
 const HomePage = () => {
-    const { user } = useSelector((state: RootState) => state.user); 
- useEffect(() => {
-    console.log("User from Redux:", user);
-});
+
+  const { user } = useSelector((state: RootState) => state.user); 
+  const dispatch = useDispatch();
+  // Log the user data whenever it changes
+  useEffect(() => {
+    dispatch(loadPatientCountsByAlgorithm());
+  }, [dispatch]); 
+
+
   return (
     <div className="flex flex-col min-h-screen bg-hospital-neutral text-hospital-blue">
-<Navbar/>
+      <Navbar />
       <div className="container p-4">
         <div className="row">
           <div className="col-md-12">
-     Welcome
+            <h1 className="text-3xl font-bold mb-4">Welcome</h1>
+            {user && <p className="mt-2 text-lg">Hello, {user.name}!</p>} {/* Display user name if available */}
+           
+
+            {/* Conditionally render reports based on selected button */}
+            <div className="mt-4">
+             
+              <DischargeBarriers />
+            </div>
           </div>
         </div>
-       
       </div>
       <Footer />
     </div>

@@ -6,6 +6,8 @@ const userRoutes = require("./routes/userRoutes");
 const patientRoutes = require("./routes/patientRoutes");
 const taskRoutes = require("./routes/taskRoutes");
 const noteRoutes = require("./routes/noteRoutes");  
+const reportRoutes = require("./routes/reportRoutes");  
+const algorithmRoutes = require("./routes/algorithmRoutes");
 const cookieParser = require("cookie-parser");
 
 require('./controller/missedTaskJob');
@@ -31,8 +33,8 @@ app.use(cors({
   app.use('/patients', patientRoutes);
   app.use('/tasks', taskRoutes);
   app.use('/notes', noteRoutes);  
-
-
+  app.use('/reports', reportRoutes);  
+  app.use("/algorithms", algorithmRoutes);
 // Start server
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {

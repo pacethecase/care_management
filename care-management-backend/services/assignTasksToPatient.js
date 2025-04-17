@@ -1,3 +1,4 @@
+const { assign } = require("nodemailer/lib/shared");
 const pool = require("../models/db");
 
 const assignTasksToPatient = async (patientId) => {
@@ -22,7 +23,16 @@ const assignTasksToPatient = async (patientId) => {
       is_behavioral: patient.is_behavioral,
       is_restrained: patient.is_restrained,
       is_behavioral_team: patient.is_behavioral_team,
-      is_geriatric_psych_available: patient.is_geriatric_psych_available
+      is_geriatric_psych_available: patient.is_geriatric_psych_available,
+      is_guardianship: patient.is_guardianship,
+      is_guardianship_financial: patient.is_guardianship_financial,
+      is_guardianship_person: patient.is_guardianship_person,
+      is_guardianship_emergency: patient.is_guardianship_emergency,
+      is_court_date: patient.court_date,
+      is_ltc: patient.is_ltc,
+      is_ltc_financial:patient.is_ltc_financial,
+      is_ltc_medical:patient.is_ltc_medical,
+
     });
 
     // Step 2: Fetch all tasks from DB
@@ -66,7 +76,7 @@ const assignTasksToPatient = async (patientId) => {
       assignTask("Behavioral Contract Created", 2);
       assignTask("Medication Assessment", 1);
       assignTask("Daily Nursing Documentation", 0);
-    }
+
 
     if (patient.is_restrained) {
       assignTask("Assessment of Appropriateness", 0);
@@ -83,7 +93,32 @@ const assignTasksToPatient = async (patientId) => {
     } else {
       assignTask("Geriatric Psychiatry Consult", 2);
     }
+}
 
+    if(patient.is_guardianship_financial || patient.is_guardianship_person ){
+        if(patient.is_guardianship_emergency){
+            assignTask("Appropriate Office Contacted ASAP",1);
+            assignTask("Court Petition Initiated",2);
+        }
+        else{
+            assignTask("Identify Guardian",3)
+            assignTask("Appropriate Office Contacted ASAP",5);
+            assignTask("Court Petition Initiated",7);
+        }
+    }
+    if(patient.is_guardianship_financial){
+        assignTask("Financial inventory of patient assets required",2);
+    }
+
+    if(patient.is_ltc){
+      assignTask("Initiate appropriate application process",2);
+      if(patient.is_ltc_medical){
+        assignTask("Complete the Medical Eligibility Assessment application / required forms and compile supporting medical documentation",5)
+      }
+      if(patient.is_ltc_financial){
+        assignTask("Complete Financial Screening and Determine Eligibility",3)
+      }
+    }
     // Step 6: Insert assignments into patient_tasks
     if (taskAssignments.length === 0) {
       console.log("⚠️ No new tasks assigned.");

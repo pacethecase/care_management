@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { FiUser } from 'react-icons/fi';
 import { Link, useNavigate } from 'react-router-dom';
-import { useDispatch } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';  // Import useSelector
 import { logoutUser } from '../redux/slices/userSlice';
 import logo from '../assets/logo.png';
 
@@ -9,6 +9,9 @@ const Navbar = () => {
   const [isDropdownOpen, setDropdownOpen] = useState(false);
   const dispatch = useDispatch();
   const navigate = useNavigate();
+
+  // Access the user state from Redux
+  const { user } = useSelector((state) => state.user);
 
   const handleLogout = async () => {
     try {
@@ -42,9 +45,19 @@ const Navbar = () => {
           <Link to="/patients" className="tab transition">
             Patients
           </Link>
-          <Link to="/tasks" className="tab transition">
+          {user?.is_staff === true && (
+            <Link to="/tasks" className="tab transition">
             Tasks
           </Link>
+          )}
+        
+
+          {/* Conditionally render Reports link for Admin only */}
+          {user?.is_admin === true && (
+            <Link to="/reports" className="tab transition">
+              Reports
+            </Link>
+          )}
 
           {/* Profile Dropdown */}
           <div className="relative">

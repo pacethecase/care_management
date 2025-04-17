@@ -5,6 +5,8 @@
   import AddPatientPage from './pages/AddPatientPage';
   import EditProfile from "./pages/EditProfile";
   import Patients from "./pages/Patients";
+  import AlgorithmPatients from './pages/AlgorithmPatientsPage';
+  import ReportPage from './pages/ReportPage';
   import { ToastContainer } from 'react-toastify';
   import 'react-toastify/dist/ReactToastify.css';
   import './index.css'; 
@@ -14,6 +16,7 @@
   import { RootState } from "./redux/store";
   import PrivateRoute from "./components/PrivateRoute";
   import PatientTasks from "./components/PatientTasks";
+  import DischargedPatients from './pages/DischargedPatients';
   import Tasks  from './pages/Tasks';
 
   function App() {
@@ -83,8 +86,33 @@
               </PrivateRoute>
           }
         />
+
+      <Route
+          path="/algorithms/:algorithm"
+          element={
+            <PrivateRoute>
+              <AlgorithmPatients />
+              </PrivateRoute>
+          }
+        />
         
-        
+      
+        <Route
+          path="/reports"
+          element={
+            <PrivateRoute>
+              <ReportPage />
+              </PrivateRoute>
+          }
+        />
+         <Route
+          path="/discharged"
+          element={
+            <PrivateRoute>
+              <DischargedPatients />
+              </PrivateRoute>
+          }
+        />
         
         </Routes>
         <ToastContainer position="top-right" autoClose={3000} theme="light" />

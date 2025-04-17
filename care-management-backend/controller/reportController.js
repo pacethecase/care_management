@@ -1,0 +1,179 @@
+const pool = require("../models/db");
+const dayjs = require('dayjs');
+
+
+// Daily Report Controller
+const getDailyReport = async (req, res) => {
+    const { date } = req.query; // Get date from the query parameter
+
+    if (!date) {
+      return res.status(400).json({ error: "Date parameter is required" });
+    }
+
+    try {
+      const result = await pool.query(`
+        SELECT 
+          p.id AS patient_id,
+          p.name AS patient_name,
+          t.name AS task_name,
+          pt.status,
+          pt.due_date,
+          pt.assigned_staff_id,
+          u.name AS staff_name,  -- Join with users table to get staff name
+          (
+            SELECT sh.value ->> 'reason' 
+            FROM jsonb_array_elements(pt.status_history) AS sh
+            WHERE sh.value ->> 'status' = 'Missed'
+            ORDER BY (sh.value ->> 'timestamp')::timestamp DESC
+            LIMIT 1
+          ) AS missed_reason
+        FROM patient_tasks pt
+        JOIN patients p ON pt.patient_id = p.id
+        JOIN tasks t ON pt.task_id = t.id
+        LEFT JOIN users u ON pt.assigned_staff_id = u.id -- Join users table to get the staff name
+        WHERE pt.due_date = $1
+          AND pt.status IN ('Missed')
+          AND p.status != 'Discharged'
+        ORDER BY p.name;
+      `, [date]);
+
+      if (result.rows.length === 0) {
+        return res.json({ message: "No tasks for the selected date." });
+      }
+
+      res.json(result.rows.map(row => ({
+        patient_id: row.patient_id,
+        patient_name: row.patient_name,
+        task_name: row.task_name,
+        status: row.status,
+        due_date: row.due_date,
+        staff_name: row.staff_name,  // Include staff name
+        missed_reason: row.missed_reason || "No reason provided"
+      })));
+    } catch (err) {
+      console.error("❌ Error fetching daily report:", err);
+      res.status(500).json({ error: "Failed to fetch daily report" });
+    }
+};
+const getPriorityReport = async (req, res) => {
+    const { date } = req.query; // Get date from the query parameter
+
+    if (!date) {
+      return res.status(400).json({ error: "Date parameter is required" });
+    }
+
+    try {
+      const result = await pool.query(`
+        SELECT 
+          p.id AS patient_id,
+          p.name AS patient_name,
+          t.name AS task_name,
+          pt.due_date,
+          pt.status,
+          u.name AS staff_name -- Join users table to get staff name
+        FROM patient_tasks pt
+        JOIN patients p ON pt.patient_id = p.id
+        JOIN tasks t ON pt.task_id = t.id
+        LEFT JOIN users u ON pt.assigned_staff_id = u.id -- Join users table to get staff name
+        WHERE pt.due_date = $1
+          AND pt.status IN ('Pending', 'In Progress', 'Missed')
+          AND p.status != 'Discharged'
+        ORDER BY pt.due_date ASC;
+      `, [date]);
+
+      if (result.rows.length === 0) {
+        return res.json({ message: "No tasks due for the selected date." });
+      }
+
+      res.json(result.rows.map(row => ({
+        patient_id: row.patient_id,
+        patient_name: row.patient_name,
+        task_name: row.task_name,
+        due_date: row.due_date,
+        status: row.status,
+        staff_name: row.staff_name // Include staff name
+      })));
+    } catch (err) {
+      console.error("❌ Error fetching priority report:", err);
+      res.status(500).json({ error: "Failed to fetch priority report" });
+    }
+};
+
+
+
+const getTransitionCareReport = async (req, res) => {
+  const patientId = req.params.id;
+
+  try {
+    // Get patient info
+    const patientQuery = await pool.query(`
+      SELECT id, name, mrn, birth_date, created_at AS admitted_date,
+        CASE
+          WHEN is_behavioral THEN 'Behavioral'
+          WHEN is_guardianship THEN 'Guardianship'
+          WHEN is_ltc THEN 'LTC'
+          ELSE 'N/A'
+        END AS algorithm
+      FROM patients
+      WHERE id = $1
+    `, [patientId]);
+
+    if (patientQuery.rowCount === 0) {
+      return res.status(404).json({ error: 'Patient not found' });
+    }
+
+    const patient = patientQuery.rows[0];
+
+    // Fetch completed tasks (with task algorithm + optional contact info)
+    const taskQuery = await pool.query(`
+      SELECT 
+        t.name AS task_name,
+        pt.completed_at,
+        t.algorithm
+      FROM patient_tasks pt
+      JOIN tasks t ON pt.task_id = t.id
+      WHERE pt.patient_id = $1 AND pt.status = 'Completed'
+      ORDER BY pt.completed_at DESC
+    `, [patientId]);
+
+    const grouped = {};
+
+    for (const row of taskQuery.rows) {
+      const algorithm = row.algorithm || "N/A";
+      const contact =  "";
+
+      const key = `${algorithm}__${contact}`;
+      if (!grouped[key]) {
+        grouped[key] = {
+          algorithm,
+          contact_info: contact,
+          tasks_completed: []
+        };
+      }
+
+      grouped[key].tasks_completed.push({
+        task_name: row.task_name,
+        completed_at: dayjs(row.completed_at).format("MM.DD.YY")
+      });
+    }
+
+    const report = {
+      patient: {
+        name: patient.name,
+        mrn: patient.mrn || "N/A",
+        dob: dayjs(patient.birth_date).format("MM.DD.YYYY"),
+        admitted_date: dayjs(patient.admitted_date).format("MM.DD.YYYY"),
+      },
+      date_of_report: dayjs().format("MM.DD.YY"),
+      sections: Object.values(grouped)
+    };
+
+    res.json(report);
+  } catch (err) {
+    console.error("❌ Error generating transition report:", err);
+    res.status(500).json({ error: "Failed to generate transition care report" });
+  }
+};
+
+
+module.exports = { getDailyReport, getPriorityReport,getTransitionCareReport };

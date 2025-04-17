@@ -2,7 +2,7 @@ const pool = require("../models/db");
 const cron = require("node-cron");
 
 // Runs every day at 3:00 PM (or tweak as needed)
-cron.schedule("* * * * *", async () => {
+cron.schedule("0 15 * * *", async () => {
   try {
     console.log("⏳ Running missed task job...");
 

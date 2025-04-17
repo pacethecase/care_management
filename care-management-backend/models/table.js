@@ -58,12 +58,26 @@ const createTables = async () => {
           medical_info TEXT,
           status VARCHAR(50) DEFAULT 'Admitted',
           assigned_staff_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+          discharge_date TIMESTAMP,
+          discharge_note TEXT,
+          mrn VARCHAR(50),
+          admitted_date DATE, 
+
           is_behavioral BOOLEAN DEFAULT FALSE,
-          is_restrained BOOLEAN DEFAULT FALSE,  -- Auto-calculated
+          is_restrained BOOLEAN DEFAULT FALSE, 
           is_geriatric_psych_available BOOLEAN DEFAULT FALSE,
           is_behavioral_team  BOOLEAN DEFAULT FALSE,
+
+
           is_ltc BOOLEAN DEFAULT FALSE,
+          is_ltc_financial BOOLEAN DEFAULT FALSE,
+          is_ltc_medical BOOLEAN DEFAULT FALSE,
+       
           is_guardianship BOOLEAN DEFAULT FALSE,
+          is_guardianship_financial BOOLEAN DEFAULT FALSE,
+          is_guardianship_person  BOOLEAN DEFAULT FALSE,
+          is_guardianship_emergency BOOLEAN DEFAULT FALSE,
+          court_date DATE DEFAULT NULL,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
@@ -76,10 +90,10 @@ const createTables = async () => {
           max_repeats INTEGER DEFAULT NULL,  -- Maximum times a task can repeat (NULL = unlimited)
           condition_required TEXT,  -- e.g., "If patient is > 65", "If restrained"
           category VARCHAR(100),  -- e.g., "Medication", "Psychiatry", "Documentation"
-          dependency_task_id INTEGER REFERENCES tasks(id) ON DELETE SET NULL,  -- Links tasks that should be moved if a related task is missed
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-          
-        
+          due_in_days_after_dependency INTEGER DEFAULT NULL,
+          is_non_blocking BOOLEAN DEFAULT FALSE,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          algorithm VARCHAR(50)
       );
 
      
@@ -88,7 +102,7 @@ const createTables = async () => {
           patient_id INTEGER REFERENCES patients(id) ON DELETE CASCADE,
           task_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
          assigned_staff_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
-          status VARCHAR(50) DEFAULT 'Pending',  -- Pending, In Progress, Completed, Missed
+          status VARCHAR(50) DEFAULT 'Pending',  -- Pending, In Progress, Completed, Missed, FollowUp
           due_date DATE,
           completed_at TIMESTAMP,
           status_history JSONB DEFAULT '[]',
@@ -102,6 +116,12 @@ CREATE TABLE IF NOT EXISTS notes (
     note_text TEXT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+CREATE TABLE task_dependencies (
+  task_id INTEGER REFERENCES tasks(id) ON DELETE CASCADE,
+  depends_on_task_id INTEGER REFERENCES tasks(id) ON DELETE CASCADE,
+  PRIMARY KEY (task_id, depends_on_task_id)
+);
+
 
     `);
 

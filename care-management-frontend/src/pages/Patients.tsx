@@ -11,48 +11,56 @@ const Patients = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
 
-  // Accessing patients state, loading, and error from Redux store
-  const { patients, loading, error } = useSelector(
-    (state: RootState) => state.patients
-  );
-  const { user, token } = useSelector((state: RootState) => state.user);
-
+  const { patients, loading, error } = useSelector((state: RootState) => state.patients);
+  const { user } = useSelector((state: RootState) => state.user);
 
   useEffect(() => {
-    console.log("User from Redux:", user);
     if (user) {
       dispatch(fetchPatients());
     }
   }, [dispatch, user]);
-  
 
   return (
-    <div className="flex flex-col min-h-screen b bg-hospital-neutral">
+    <div className="flex flex-col min-h-screen bg-[var(--bg-light)] text-[var(--text-dark)]">
       <Navbar />
-      <div className="p-6">
-     
 
+      <main className="flex-grow p-6 max-w-7xl mx-auto">
         <div className="flex flex-col lg:flex-row gap-6">
-          {/* Patients List Component */}
-          <PatientsList patients={patients} />
+          
+          {/* Patients List */}
+          <PatientsList patients={patients} user={user} />
 
-          {/* Admin: Show Add Patient Button */}
+          {/* Add Patient (Admin Only) */}
           {user?.is_admin && (
-            <div className="w-full lg:w-1/3">
-              <button
-                className="btn px-6 py-2 rounded w-full"
-                onClick={() => navigate('/add-patient')}
-              >
-                + Add Patient
-              </button>
+            <div className="w-full lg:w-1/3 bg-white border border-[var(--border-muted)] shadow-sm rounded-xl p-6 h-fit">
+              <div className="flex flex-col gap-3">
+                <button
+                  className="btn w-full"
+                  onClick={() => navigate("/discharged")}
+                >
+                  View Discharged Patients
+                </button>
+                <button
+                  className="btn w-full"
+                  onClick={() => navigate("/add-patient")}
+                >
+                  + Add Patient
+                </button>
+              </div>
             </div>
           )}
+
         </div>
 
-        {/* Display loading or error */}
-        {loading && <p>Loading patients...</p>}
-        {error && <p className="text-red-500">{error}</p>}
-      </div>
+        {/* Status Messages */}
+        {loading && (
+          <p className="mt-6 text-[var(--text-muted)] text-center">Loading patients...</p>
+        )}
+        {error && (
+          <p className="mt-6 text-red-600 text-center">{error}</p>
+        )}
+      </main>
+
       <Footer />
     </div>
   );
