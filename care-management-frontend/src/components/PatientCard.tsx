@@ -5,7 +5,7 @@ import { useDispatch } from "react-redux";
 import { dischargePatient } from "../redux/slices/patientSlice";
 import { toast } from "react-toastify";
 
-const PatientCard = ({ patient, user }) => {
+const PatientCard = ({ patient, user,showDischargeInfo = false }) => {
   const dispatch = useDispatch();
 
   const birthDate = new Date(patient.birth_date);
@@ -53,6 +53,13 @@ const PatientCard = ({ patient, user }) => {
         <p><span className="font-medium">Bed:</span> {patient.bed_id || "N/A"}</p>
         <p><span className="font-medium">Algorithm:</span> {algorithms.length > 0 ? algorithms.join(", ") : "Not Provided"}</p>
       </div>
+            {showDischargeInfo && patient.discharge_date && (
+        <div className="mt-2 text-sm text-gray-700">
+          <p><strong>Discharged on:</strong> {new Date(patient.discharge_date).toLocaleDateString()}</p>
+          <p><em>{patient.discharge_note}</em></p>
+        </div>
+      )}
+
 
       {/* CTA Button */}
       <div className="mt-4 flex justify-center">

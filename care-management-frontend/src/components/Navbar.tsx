@@ -71,12 +71,6 @@ const Navbar = () => {
             {isDropdownOpen && (
               <div className="absolute right-0 mt-2 w-44 bg-white rounded shadow-lg z-50">
                 <Link
-                  to="/settings"
-                  className="block px-4 py-2 hover:bg-gray-100 transition"
-                >
-                  Settings
-                </Link>
-                <Link
                   to="/edit-profile"
                   className="block px-4 py-2 hover:bg-gray-100 transition"
                 >

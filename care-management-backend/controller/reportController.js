@@ -1,5 +1,7 @@
 const pool = require("../models/db");
 const dayjs = require('dayjs');
+const isoWeek = require('dayjs/plugin/isoWeek');
+dayjs.extend(isoWeek);
 
 
 // Daily Report Controller
@@ -176,4 +178,69 @@ const getTransitionCareReport = async (req, res) => {
 };
 
 
-module.exports = { getDailyReport, getPriorityReport,getTransitionCareReport };
+const getHistoricalTimelineReport = async (req, res) => {
+  const patientId = req.params.id;
+
+  try {
+    const patientQuery = await pool.query(
+      `SELECT id, name, birth_date, created_at AS admitted_date FROM patients WHERE id = $1`,
+      [patientId]
+    );
+
+    if (patientQuery.rowCount === 0) {
+      return res.status(404).json({ error: "Patient not found" });
+    }
+
+    const patient = patientQuery.rows[0];
+    const admittedDate = dayjs(patient.admitted_date);
+
+    const tasksQuery = await pool.query(
+      `SELECT t.name AS task_name, pt.completed_at
+       FROM patient_tasks pt
+       JOIN tasks t ON pt.task_id = t.id
+       WHERE pt.patient_id = $1 AND pt.status = 'Completed'
+       ORDER BY pt.completed_at ASC`,
+      [patientId]
+    );
+
+    const weeksMap = {};
+
+    tasksQuery.rows.forEach(row => {
+      const completedAt = dayjs(row.completed_at);
+      const weekNumber = Math.floor(completedAt.diff(admittedDate, 'day') / 7) + 1;
+
+      const weekStart = admittedDate.add((weekNumber - 1) * 7, 'day');
+      const weekEnd = admittedDate.add(weekNumber * 7 - 1, 'day');
+      const weekKey = `Week #${weekNumber} (${weekStart.format('MM.DD.YY')} - ${weekEnd.format('MM.DD.YY')})`;
+
+      if (!weeksMap[weekKey]) {
+        weeksMap[weekKey] = [];
+      }
+
+      weeksMap[weekKey].push({
+        task_name: row.task_name,
+        completed_at: completedAt.format('MM.DD.YY'),
+      });
+    });
+
+    const timeline = Object.entries(weeksMap).map(([week, tasks]) => ({
+      week,
+      tasks,
+    }));
+
+    res.json({
+      patient: {
+        name: patient.name,
+        admitted_date: admittedDate.format('MM.DD.YY'),
+      },
+      timeline,
+    });
+  } catch (err) {
+    console.error('❌ Error generating historical timeline report:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+
+
+module.exports = { getDailyReport, getPriorityReport,getTransitionCareReport ,getHistoricalTimelineReport};

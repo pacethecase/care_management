@@ -4,6 +4,7 @@ import { FaPrint } from "react-icons/fa";
 import DailyReport from "../components/DailyReport";
 import PriorityReport from "../components/PriorityReport";
 import TransitionCareReport from "../components/TransitionCareReport";
+import HistoricalTimelineReport from "../components/HistoricalTimelineReport";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import logo from "../assets/logo.png";
@@ -13,14 +14,15 @@ import {
   fetchDailyReport,
   fetchPriorityReport,
   fetchTransitionReport,
+  fetchHistoricalTimelineReport,
 } from "../redux/slices/reportSlice";
 
 const ReportPage = () => {
   const dispatch = useDispatch();
   const { patients } = useSelector((state: RootState) => state.patients);
   const { transitionReport } = useSelector((state: RootState) => state.reports);
-
-  const [selectedReport, setSelectedReport] = useState<"daily" | "priority" | "transition" | null>(null);
+  const { historicalReport } = useSelector((state: RootState) => state.reports);
+  const [selectedReport, setSelectedReport] = useState<"daily" | "priority" | "transition" | "historical"| null>(null);
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split("T")[0]);
   const [selectedPatientId, setSelectedPatientId] = useState<number | null>(null);
 
@@ -36,6 +38,9 @@ const ReportPage = () => {
     } else if (selectedReport === "transition" && selectedPatientId) {
       dispatch(fetchTransitionReport(selectedPatientId) as any);
     }
+    else if (selectedReport === "historical" && selectedPatientId) {
+      dispatch(fetchHistoricalTimelineReport(selectedPatientId) as any);
+    }
   }, [selectedReport, selectedDate, selectedPatientId, dispatch]);
 
   const handlePrint = () => {
@@ -50,6 +55,8 @@ const ReportPage = () => {
           ? "PRIORITY REPORT"
           : selectedReport === "transition"
           ? "TRANSITIONAL CARE REPORT"
+          : selectedReport === "historical"
+          ? "HISTORICAL TIMELINE REPORT"
           :"REPORT";
           
 
@@ -163,10 +170,17 @@ const ReportPage = () => {
           >
             Transitional Care Report
           </button>
+          <button
+            className={`btn ${selectedReport === "historical" ? "btn-primary" : "btn-outline"}`}
+            onClick={() => setSelectedReport("historical")}
+          >
+            Historical Timeline Report
+          </button>
+
         </div>
 
         {/* Patient Selector for Transitional Care */}
-        {selectedReport === "transition" && (
+        {(selectedReport === "transition" || selectedReport === "historical") && (
           <div className="mb-4">
             <label className="text-lg mr-2">Select Patient:</label>
             <select
@@ -202,6 +216,13 @@ const ReportPage = () => {
           {selectedReport === "priority" && <PriorityReport date={selectedDate} />}
           {selectedReport === "transition" && transitionReport && (
   <TransitionCareReport report={transitionReport} />
+)}
+{selectedReport === "historical" && historicalReport && (
+  <>
+  
+  <HistoricalTimelineReport report={historicalReport} />
+  </>
+  
 )}
         </div>
       </div>

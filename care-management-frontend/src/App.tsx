@@ -18,7 +18,10 @@
   import PatientTasks from "./components/PatientTasks";
   import DischargedPatients from './pages/DischargedPatients';
   import Tasks  from './pages/Tasks';
+  import ForgotPassword from './components/ForgotPassword';
+  import ResetPassword from './components/ResetPassword';
 
+  import HistoricalTimelineReport from './components/HistoricalTimelineReport';
   function App() {
     const dispatch = useDispatch(); 
 
@@ -113,7 +116,12 @@
               </PrivateRoute>
           }
         />
-        
+      
+
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
+
+
         </Routes>
         <ToastContainer position="top-right" autoClose={3000} theme="light" />
       </Router>

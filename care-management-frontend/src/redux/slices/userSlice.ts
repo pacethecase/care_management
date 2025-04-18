@@ -53,6 +53,36 @@ export const loginUser = createAsyncThunk(
   }
 );
 
+
+export const sendResetLink = createAsyncThunk(
+  "auth/sendResetLink",
+  async (email: string, { rejectWithValue }) => {
+    try {
+      const res = await axios.post("http://localhost:5001/auth/forgot-password", { email });
+      return res.data.message;
+    } catch (err: any) {
+      return rejectWithValue(err.response?.data?.error || "Failed to send reset link");
+    }
+  }
+);
+export const resetPassword = createAsyncThunk(
+  "auth/resetPassword",
+  async ({ token, email, newPassword }: { token: string; email: string; newPassword: string }, { rejectWithValue }) => {
+    try {
+      const res = await axios.post("http://localhost:5001/auth/reset-password", {
+        token,
+        email,
+        newPassword,
+      });
+      return res.data.message;
+    } catch (err: any) {
+      return rejectWithValue(err.response?.data?.error || "Failed to reset password");
+    }
+  }
+);
+
+
+
 export const fetchCurrentUser = createAsyncThunk(
   "user/fetchCurrentUser",
   async (_, { rejectWithValue }) => {
@@ -92,6 +122,23 @@ export const logoutUser = createAsyncThunk(
       return true;
     } catch (error: any) {
       return rejectWithValue(error.response?.data || "Logout failed");
+    }
+  }
+);
+
+export const updateUserProfile = createAsyncThunk(
+  "user/updateUserProfile",
+  async ({ id, name, password }: { id: number; name: string; password?: string }, { rejectWithValue }) => {
+    try {
+      const response = await axios.put(`http://localhost:5001/users/${id}`, {
+        name,
+        password,
+      }, {
+        withCredentials: true,
+      });
+      return response.data.user;
+    } catch (error: any) {
+      return rejectWithValue(error.response?.data?.error || "Failed to update profile");
     }
   }
 );
@@ -155,6 +202,39 @@ const userSlice = createSlice({
       })
       .addCase(logoutUser.rejected, (state, action) => {
         state.error = action.payload as string;
+      })
+      .addCase(sendResetLink.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(sendResetLink.fulfilled, (state, action) => {
+        state.loading = false;
+        state.message = action.payload;
+      })
+      .addCase(sendResetLink.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      .addCase(resetPassword.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(resetPassword.fulfilled, (state, action) => {
+        state.loading = false;
+        state.message = action.payload;
+      })
+      .addCase(resetPassword.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      .addCase(updateUserProfile.fulfilled, (state, action) => {
+        state.user = action.payload;
+        state.error = null;
+        state.loading = false;
+      })
+      .addCase(updateUserProfile.rejected, (state, action) => {
+        state.error = action.payload as string;
+        state.loading = false;
       });
   },
 });

@@ -16,18 +16,18 @@ const getStaffs = async (req, res) => {
 const updateUser = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, email, password } = req.body;
+    const { name, password } = req.body;
 
-    let query = `UPDATE users SET name = $1, email = $2`;
-    const values = [name, email];
+    let query = `UPDATE users SET name = $1`;
+    const values = [name];
 
     if (password) {
       const hashedPassword = await bcrypt.hash(password, 10);
-      query += `, password = $3`;
+      query += `, password = $2`;
       values.push(hashedPassword);
     }
 
-    query += ` WHERE id = $${values.length + 1} RETURNING id, name, email, is_admin, is_staff, is_verified;`;
+    query += ` WHERE id = $${values.length + 1} RETURNING id, name, email, is_admin, is_staff, is_verified`;
     values.push(id);
 
     const result = await pool.query(query, values);

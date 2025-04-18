@@ -3,6 +3,8 @@ const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer');
 const bcrypt = require('bcrypt');
 const pool = require('../models/db');
+const crypto = require('crypto');
+const dayjs = require("dayjs");
 
 const JWT_SECRET = process.env.JWT_SECRET;
 const BASE_URL = process.env.BASE_URL;
@@ -18,15 +20,15 @@ const transporter = nodemailer.createTransport({
 
 // SIGNUP
 const signup = async (req, res) => {
-    const { name, email, password, isAdmin, isStaff } = req.body;
-  
+    const { name, password, isAdmin, isStaff } = req.body;
+    const email = req.body.email.toLowerCase();
     try {
       const hashedPassword = await bcrypt.hash(password, 10);
   
       const result = await pool.query(
         `INSERT INTO users (name, email, password, is_admin, is_staff, is_verified)
          VALUES ($1, $2, $3, $4, $5, false) RETURNING id, email, name, is_admin, is_staff, is_verified`,
-        [name, email, hashedPassword, isAdmin, isStaff]
+        [name,  email.toLowerCase(), hashedPassword, isAdmin, isStaff]
       );
   
       const token = jwt.sign({ userId: result.rows[0].id }, JWT_SECRET, { expiresIn: '1d' });
@@ -78,8 +80,8 @@ const verify = async (req, res) => {
 
 // LOGIN
 const login = async (req, res) => {
-    const { email, password } = req.body;
-  
+    const { password } = req.body;
+    const email = req.body.email.toLowerCase();
     try {
       const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
       const user = result.rows[0];
@@ -145,11 +147,91 @@ const login = async (req, res) => {
       res.status(500).json({ error: 'Failed to fetch user info' });
     }
   };
+  const forgotPassword = async (req, res) => {
+    const { email } = req.body;
   
+    if (!email) return res.status(400).json({ error: "Email is required" });
+  
+    try {
+      const normalizedEmail = email.toLowerCase();
+  
+      const userRes = await pool.query("SELECT * FROM users WHERE email = $1", [normalizedEmail]);
+      if (userRes.rowCount === 0) {
+        return res.status(404).json({ error: "No user with that email found." });
+      } 
+      const user = userRes.rows[0];
+      const name = user.name;
+  
+      const token = crypto.randomBytes(32).toString("hex");
+      const expires = dayjs().add(1, "hour").toISOString();
+  
+      await pool.query(
+        "UPDATE users SET reset_token = $1, reset_token_expires = $2 WHERE email = $3",
+        [token, expires, normalizedEmail]
+      );
+  
+      const resetLink = `http://localhost:5173/reset-password?token=${token}&email=${normalizedEmail}`;
+      console.log(`📨 Password reset link: ${resetLink}`);
+      await transporter.sendMail({
+        from: `"Care Management" <${process.env.EMAIL_USERNAME}>`,
+        to: normalizedEmail,
+        subject: "You requested a password reset",
+        html: `<p>Hello ${name},</p><p><a href="${resetLink}">Click here to reset your password.</a></p><p>This link will expire in 1 hour.</p>`,
+      });
+      
+  
+      res.json({ message: "Password reset link sent. Check your email (or console)." });
+    } catch (err) {
+      console.error("❌ Forgot Password Error:", err.message, err.stack);
+      res.status(500).json({ error: "Internal server error during password reset request" });
+    }
+  };
+  
+  const resetPassword = async (req, res) => {
+    const { email, token, newPassword } = req.body;
+  
+    if (!email || !token || !newPassword) {
+      return res.status(400).json({ error: 'Email, token, and new password are required' });
+    }
+  
+    try {
+      const normalizedEmail = email.toLowerCase();
+  
+      const userRes = await pool.query('SELECT * FROM users WHERE email = $1', [normalizedEmail]);
+      const user = userRes.rows[0];
+  
+      if (!user || !user.reset_token || !user.reset_token_expires) {
+        return res.status(400).json({ error: 'Invalid reset link or expired token' });
+      }
+  
+      if (
+        user.reset_token !== token ||
+        dayjs().isAfter(dayjs(user.reset_token_expires))
+      ) {
+        return res.status(400).json({ error: 'Invalid or expired reset token' });
+      }
+  
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+  
+      await pool.query(
+        'UPDATE users SET password = $1, reset_token = NULL, reset_token_expires = NULL WHERE email = $2',
+        [hashedPassword, normalizedEmail]
+      );
+  
+      res.json({ message: 'Password has been reset successfully' });
+    } catch (err) {
+      console.error('Error in resetPassword:', err);
+      res.status(500).json({ error: 'Failed to reset password' });
+    }
+  };
+
 module.exports = {
   signup,
   verify,
   login,
   logout,
-  getMe
+  getMe,
+  forgotPassword,
+  resetPassword
+
 };

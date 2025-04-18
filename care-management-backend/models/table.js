@@ -41,11 +41,13 @@ const createTables = async () => {
       CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
         name VARCHAR(100) NOT NULL,
-        email VARCHAR(100) UNIQUE NOT NULL,
+        email CITEXT UNIQUE NOT NULL,
         password TEXT NOT NULL,
         is_admin BOOLEAN DEFAULT FALSE,
         is_staff BOOLEAN DEFAULT TRUE,
         is_verified BOOLEAN DEFAULT FALSE,
+        reset_token TEXT,
+        reset_token_expires TIMESTAMP,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
