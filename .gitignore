@@ -24,6 +24,8 @@ dist-ssr
 *.sw?
 /care-management-backend/.env
 .env
+.env.production
+
 # Elastic Beanstalk Files
 .elasticbeanstalk/*
 !.elasticbeanstalk/*.cfg.yml
