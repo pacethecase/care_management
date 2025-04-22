@@ -105,7 +105,7 @@ const login = async (req, res) => {
       // ✅ Set the token as httpOnly cookie
       res.cookie("token", token, {
         httpOnly: true,
-        secure: false, // ⚠️ Set true in production
+        secure: process.env.NODE_ENV === 'production'
         sameSite: "Lax", // or "Strict"
         maxAge: 24 * 60 * 60 * 1000, // 1 day
       });
@@ -170,7 +170,7 @@ const login = async (req, res) => {
         [token, expires, normalizedEmail]
       );
   
-      const resetLink = `http://localhost:5173/reset-password?token=${token}&email=${normalizedEmail}`;
+      const resetLink = `https://care-management-roan.vercel.app/reset-password?token=${token}&email=${normalizedEmail}`;
       console.log(`📨 Password reset link: ${resetLink}`);
       await transporter.sendMail({
         from: `"Care Management" <${process.env.EMAIL_USERNAME}>`,
