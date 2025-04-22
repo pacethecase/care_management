@@ -32,7 +32,7 @@ const SignUp = () => {
       await dispatch(signupUser(formData)).unwrap();
       dispatch(clearUser());
       toast.success("Signup successful! Check your email.");
-      setTimeout(() => navigate("/login"), 2000);
+      setTimeout(() => navigate("/"), 2000);
     } catch (err: any) {
       const message = typeof err === "string" ? err : err?.error || err?.message || "Signup failed";
       toast.error(message);
