@@ -1,5 +1,5 @@
 const pool = require("../models/db");
-const bcrypt = require("bcrypt");
+const bcrypt = require("bcryptjs");
 
 const getStaffs = async (req, res) => {
   try {
