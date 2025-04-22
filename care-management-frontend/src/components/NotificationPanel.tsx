@@ -7,9 +7,7 @@ const NotificationPanel = () => {
   const dispatch = useDispatch();
   const { items: notifications, loading } = useSelector((state: RootState) => state.notifications);
 
-  useEffect(() => {
-    dispatch(fetchNotifications());
-  }, [dispatch]);
+
 
   return (
     <div className="w-80 bg-white rounded-lg shadow-lg p-3 z-50 max-h-[60vh] overflow-y-auto">
@@ -17,7 +15,11 @@ const NotificationPanel = () => {
         <h2 className="text-lg font-semibold">Notifications</h2>
         <button
           className="text-xs text-blue-600 hover:underline"
-          onClick={() => dispatch(markAllRead())}
+          onClick={async () => {
+            await dispatch(markAllRead());
+            dispatch(fetchNotifications()); // Add this line
+          }}
+          
         >
           Mark All Read
         </button>

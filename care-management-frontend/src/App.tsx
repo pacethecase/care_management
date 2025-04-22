@@ -24,6 +24,7 @@
   import EditPatientPage from './pages/EditPatientPage';
   import HistoricalTimelineReport from './components/HistoricalTimelineReport';
   import Notification from './components/Notification';
+  import { fetchNotifications } from './redux/slices/notificationSlice';
   function App() {
     const dispatch = useDispatch(); 
 
@@ -32,6 +33,13 @@
     useEffect(() => {
       dispatch(fetchCurrentUser());
     }, [dispatch]);
+    
+ 
+    useEffect(() => {
+      if (user?.id) {
+        dispatch(fetchNotifications());
+      }
+    }, [dispatch, user?.id]);
     
    if (!authLoaded || loading) {
     return <p>Loading...</p>; // gracefully handle loading state

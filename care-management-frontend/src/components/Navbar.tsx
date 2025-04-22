@@ -67,11 +67,12 @@ const Navbar = () => {
             className="relative focus:outline-none"
           >
             <FiBell className="w-5 h-5" />
-            {notifications.length > 0 && (
+            {notifications.filter(n => !n.read).length > 0 && (
               <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full px-1">
-                {notifications.length}
+                {notifications.filter(n => !n.read).length}
               </span>
             )}
+
           </button>
         
           {showNotifications && (
