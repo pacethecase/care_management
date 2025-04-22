@@ -4,8 +4,8 @@ import type { Patient } from '../types'; // reuse your shared Patient type
 
 
 const BASE_URL = process.env.NODE_ENV === 'development'
-  ? 'http://localhost:5000'  // For local development
-  : 'my-node-app-env.eba-fmxdv3xt.us-east-1.elasticbeanstalk.com ';
+  ? 'http://localhost:5001'  // For local development
+  : 'Pacethecase-dev.us-east-1.elasticbeanstalk.com';
 
 interface PatientState {
   patients: Patient[];
