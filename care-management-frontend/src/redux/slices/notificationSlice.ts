@@ -2,9 +2,7 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import axios from 'axios';
 import type { Notification } from '../types';
 
-const BASE_URL = process.env.NODE_ENV === 'development'
-  ? 'http://localhost:5001'  // For local development
-  : 'Pacethecase-dev.us-east-1.elasticbeanstalk.com';
+const BASE_URL = import.meta.env.VITE_API_BASE_URL;
 interface NotificationState {
   items: Notification[];
   loading: boolean;

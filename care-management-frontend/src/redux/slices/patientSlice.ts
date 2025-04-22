@@ -3,9 +3,7 @@ import axios from 'axios';
 import type { Patient } from '../types'; // reuse your shared Patient type
 
 
-const BASE_URL = process.env.NODE_ENV === 'development'
-  ? 'http://localhost:5001'  // For local development
-  : 'Pacethecase-dev.us-east-1.elasticbeanstalk.com';
+const BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 interface PatientState {
   patients: Patient[];
