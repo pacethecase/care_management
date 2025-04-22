@@ -22,13 +22,11 @@ const DischargeBarriers = () => {
     navigate(`/algorithms/${algorithm}`);
   };
 
-  // Colors for the three algorithms
-  const colors = {
-    Behavioral: "#F7D140", // Yellow
-    Guardianship: "#28A745", // Green
-    LTC: "#003366", // Blue
+  const cssVarMap = {
+    Behavioral: "var(--algo-behavioral)",
+    Guardianship: "var(--algo-guardianship)",
+    LTC: "var(--algo-ltc)",
   };
-
   return (
     <div className="p-6">
       <h2 className="text-xl font-bold mb-4">🏥 Discharge Barrier Summary</h2>
@@ -37,11 +35,11 @@ const DischargeBarriers = () => {
           <div
             key={item.algorithm}
             className="bg-white shadow-md p-6 rounded-lg flex flex-col items-center justify-between"
-            style={{ borderLeft: `5px solid ${colors[item.algorithm]}` }}
+            style={{ borderLeft: `5px solid ${cssVarMap[item.algorithm]}` }}
           >
             <div
               className="w-16 h-16 rounded-full flex items-center justify-center"
-              style={{ backgroundColor: colors[item.algorithm] }}
+              style={{ backgroundColor: cssVarMap[item.algorithm] }}
             >
               <span className="text-white font-bold">{item.algorithm[0]}</span>
             </div>

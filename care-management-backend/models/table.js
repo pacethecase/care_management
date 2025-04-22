@@ -105,8 +105,9 @@ const createTables = async () => {
           task_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
          assigned_staff_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
           status VARCHAR(50) DEFAULT 'Pending',  -- Pending, In Progress, Completed, Missed, FollowUp
-          due_date DATE,
+          due_date TIMESTAMP,
           completed_at TIMESTAMP,
+           ideal_due_date TIMESTAMP,
           status_history JSONB DEFAULT '[]',
           started_at TIMESTAMP,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -123,6 +124,16 @@ CREATE TABLE task_dependencies (
   depends_on_task_id INTEGER REFERENCES tasks(id) ON DELETE CASCADE,
   PRIMARY KEY (task_id, depends_on_task_id)
 );
+
+CREATE TABLE notifications (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER REFERENCES users(id),
+  title TEXT NOT NULL,
+  message TEXT NOT NULL,
+  created_at TIMESTAMP DEFAULT NOW(),
+  read BOOLEAN DEFAULT FALSE
+);
+
 
 
     `);

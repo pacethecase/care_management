@@ -8,22 +8,49 @@ const taskRoutes = require("./routes/taskRoutes");
 const noteRoutes = require("./routes/noteRoutes");  
 const reportRoutes = require("./routes/reportRoutes");  
 const algorithmRoutes = require("./routes/algorithmRoutes");
+const notificationRoutes = require("./routes/notificationRoutes");
 const cookieParser = require("cookie-parser");
+const http = require('http');
+const socketIo = require('socket.io');
 
-require('./controller/missedTaskJob');
+
 require("dotenv").config();
+const setupMissedTaskJob = require('./controller/missedTaskJob');
+
+
 const app = express();
+const server = http.createServer(app);
 
 app.use(cors({
     origin: "http://localhost:5173",
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS","PATCH"],
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true
   }));
   
   app.use(cookieParser());
   app.options("*", cors());
+  const io = socketIo(server, {
+    cors: {
+      origin: 'http://localhost:5173', // or your frontend domain
+      credentials: true,
+    },
+  });
+  app.set('io', io);
+  setupMissedTaskJob(io); 
+  io.on('connection', (socket) => {
   
+  
+    socket.on('join', (room) => {
+      socket.join(room);
+      console.log(`🟡 Joined room: ${room}`);
+    });
+  
+    socket.on('disconnect', () => {
+      console.log(`🔴 Socket disconnected: ${socket.id}`);
+    });
+  });
+
   // Middleware
   app.use(bodyParser.json());
   
@@ -35,8 +62,9 @@ app.use(cors({
   app.use('/notes', noteRoutes);  
   app.use('/reports', reportRoutes);  
   app.use("/algorithms", algorithmRoutes);
+  app.use('/notifications', notificationRoutes);
 // Start server
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+server.listen(PORT, () => {
+  console.log(`🚀 Server with Socket.IO running on http://localhost:${PORT}`);
 });

@@ -1,5 +1,7 @@
 const pool = require("../models/db");
 const assignTasksToPatient = require("../services/assignTasksToPatient");
+
+
 // GET All Patients (with role filter)
 const getPatients = async (req, res) => {
   try {
@@ -80,6 +82,18 @@ const addPatient = async (req, res) => {
 
   
     await assignTasksToPatient(newPatient.id); 
+    if (assignedStaffId) {
+      const io = req.app.get('io');
+
+        io.to(`user-${assignedStaffId}`).emit('notification', {
+          title: 'New Patient Assigned',
+          message: `You are assigned to ${newPatient.name}`,
+        });
+        await pool.query(`
+          INSERT INTO notifications (user_id, title, message)
+          VALUES ($1, $2, $3)
+        `, [assignedStaffId, 'New Patient Assigned',`You are assigned to ${newPatient.name}`]);
+    }
     res.status(201).json({ message: "Patient added and tasks assigned", patient: result.rows[0] });
   } catch (err) {
     console.error("❌ Error adding patient:", err);
@@ -119,7 +133,7 @@ const getPatientTasks = async (req, res) => {
     }
 
     const result = await pool.query(
-      `SELECT pt.id AS task_id, t.name AS task_name, t.category, t.description, pt.status, pt.due_date,pt.completed_at, t.condition_required, t.is_repeating,t.due_in_days_after_dependency,t.is_non_blocking
+      `SELECT pt.id AS task_id, t.name AS task_name, t.category, t.description, pt.status, pt.due_date,pt.completed_at, t.condition_required, t.is_repeating,t.due_in_days_after_dependency,t.is_non_blocking, t.algorithm,pt.ideal_due_date
        FROM patient_tasks pt
        JOIN tasks t ON pt.task_id = t.id
        WHERE pt.patient_id = $1
@@ -184,11 +198,94 @@ const getDischargedPatients = async (req, res) => {
 
 
 
+const updatePatient = async (req, res) => {
+  const patientId = req.params.patientId;
+  const {
+    name,
+    birth_date,
+    age,
+    bedId,
+    mrn,
+    medical_info,
+    assignedStaffId
+  } = req.body;
+
+  try {
+    // Check if patient exists
+    const isAdmin = req.user.is_admin;
+    if (!isAdmin) {
+      return res.status(403).json({ error: "Only admins can edit patient data." });
+    }
+
+    const checkRes = await pool.query(`SELECT * FROM patients WHERE id = $1`, [patientId]);
+    if (checkRes.rows.length === 0) {
+      return res.status(404).json({ error: "Patient not found." });
+    }
+
+    // Update patient
+    const updateRes = await pool.query(
+      `UPDATE patients
+       SET name = $1,
+           birth_date = $2,
+           age = $3,
+           bed_id = $4,
+           mrn = $5,
+           medical_info = $6,
+           assigned_staff_id = $7
+       WHERE id = $8
+       RETURNING *`,
+      [name, birth_date, age, bedId, mrn, medical_info, assignedStaffId || null, patientId]
+    );
+
+    await pool.query(
+      `UPDATE patient_tasks
+       SET assigned_staff_id = $1
+       WHERE patient_id = $2`,
+      [assignedStaffId || null, patientId]
+    );
+    return res.status(200).json({
+      message: "Patient updated successfully",
+      patient: updateRes.rows[0],
+    });
+  } catch (err) {
+    console.error("❌ Failed to update patient:", err);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+};
+
+// Search Patients (Global DB Search)
+const getSearchedPatients = async (req, res) => {
+  try {
+    const { q } = req.query;
+    if (!q || q.trim() === "") {
+      return res.status(400).json({ error: "Search query is required" });
+    }
+
+    const query = `%${q.toLowerCase()}%`;
+    const result = await pool.query(
+      `SELECT id, name, mrn, birth_date, admitted_date, status, created_at
+       FROM patients
+       WHERE LOWER(name) LIKE $1 OR LOWER(mrn) LIKE $1
+       ORDER BY created_at DESC`,
+      [query]
+    );
+
+    res.status(200).json(result.rows);
+  } catch (err) {
+    console.error("❌ Error searching patients:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+
+
 module.exports = {
   getPatients,
   addPatient,
   getPatientById,
   getPatientTasks,
   dischargePatient,
-  getDischargedPatients
+  getDischargedPatients,
+  updatePatient,
+  getSearchedPatients
 };

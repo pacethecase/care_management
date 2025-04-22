@@ -1,13 +1,18 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import { FaTrashAlt } from "react-icons/fa";
+import { FaEdit, FaUserSlash } from "react-icons/fa";
 import { useDispatch } from "react-redux";
 import { dischargePatient } from "../redux/slices/patientSlice";
 import { toast } from "react-toastify";
+import { useNavigate } from "react-router-dom";
 
 const PatientCard = ({ patient, user,showDischargeInfo = false }) => {
   const dispatch = useDispatch();
+  const navigate = useNavigate();
 
+  const handleEdit = () => {
+    navigate(`/patients/${patient.id}/edit`);
+  };
   const birthDate = new Date(patient.birth_date);
   const today = new Date();
   let age = today.getFullYear() - birthDate.getFullYear();
@@ -36,11 +41,19 @@ const PatientCard = ({ patient, user,showDischargeInfo = false }) => {
     <div className="bg-white w-full p-6 rounded-xl shadow-lg border border-[var(--border-muted)] transition-all duration-300 hover:shadow-xl hover:-translate-y-1 relative">
       {/* Discharge Icon - Admin only */}
       {user?.is_admin && (
-        <div
-          className="absolute top-2 right-2 cursor-pointer text-red-500"
-          onClick={handleDischarge}
-        >
-          <FaTrashAlt size={22} title="Discharge patient" />
+        <div className="absolute top-2 right-2 flex gap-3 text-lg">
+        <FaEdit
+        className="text-blue-600 cursor-pointer"
+        title="Edit patient"
+        onClick={handleEdit}
+      />
+      
+      {/* Discharge Icon */}
+      <FaUserSlash
+        className="text-red-500 cursor-pointer"
+        title="Discharge patient"
+        onClick={handleDischarge}
+      />
         </div>
       )}
 

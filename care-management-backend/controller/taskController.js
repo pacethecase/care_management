@@ -17,6 +17,24 @@ const startTask = async (req, res) => {
     const taskRes = await pool.query(`SELECT * FROM patient_tasks WHERE id = $1`, [taskId]);
     if (taskRes.rows.length === 0) return res.status(404).json({ error: "Task not found" });
 
+    const task = taskRes.rows[0];
+
+    // 🔒 Check if missed reason is missing
+    if (task.status === 'Missed') {
+      const historyCheck = await pool.query(`
+        SELECT jsonb_array_elements(status_history) AS entry FROM patient_tasks WHERE id = $1
+      `, [taskId]);
+
+      const hasMissedWithReason = historyCheck.rows.some(row => {
+        const entry = row.entry;
+        return entry.status === "Missed" && entry.reason;
+      });
+
+      if (!hasMissedWithReason) {
+        return res.status(400).json({ error: "Cannot start a missed task without a missed reason." });
+      }
+    }
+
     await pool.query(`
       UPDATE patient_tasks 
       SET status = 'In Progress', started_at = NOW()
@@ -37,6 +55,7 @@ const startTask = async (req, res) => {
   }
 };
 
+
 // ✅ Complete Task (handle repeat + dependency)
 const completeTask = async (req, res) => {
   try {
@@ -53,8 +72,8 @@ const completeTask = async (req, res) => {
     }
 
     const task = taskRes.rows[0];
-    const completedAt = new Date();
-    completedAt.setHours(0, 0, 0, 0);
+    const completedAt = new Date(); 
+
 
     // Step 2: Mark as completed in DB and update local object
     await pool.query(`
@@ -98,17 +117,33 @@ const completeTask = async (req, res) => {
 
     // Step 4: Handle repeating task
     if (taskDetails.is_repeating && taskDetails.recurrence_interval && patientStatus !== "Discharged" && !isManualFollowUpTask) {
-      const nextDue = new Date(task.completed_at);
+      const completedAt = taskDetails.completed_at
+        ? new Date(taskDetails.completed_at)
+        : new Date(); // fallback for first-time completion
+    
+      const previousIdealDue = taskDetails.ideal_due_date
+        ? new Date(taskDetails.ideal_due_date)
+        : new Date(); // fallback if missing
+    
+      const ideal_due_date = new Date(previousIdealDue);
+      ideal_due_date.setDate(ideal_due_date.getDate() + taskDetails.recurrence_interval);
+      ideal_due_date.setHours(15, 0, 0, 0);
+    
+      const nextDue = new Date(completedAt);
       nextDue.setDate(nextDue.getDate() + taskDetails.recurrence_interval);
-      nextDue.setHours(0, 0, 0, 0);
-
+      nextDue.setHours(15, 0, 0, 0);
+    
       await pool.query(
-        `INSERT INTO patient_tasks (patient_id, task_id, assigned_staff_id, status, due_date)
-         VALUES ($1, $2, $3, 'Pending', $4)`,
-        [task.patient_id, taskDetails.id, task.assigned_staff_id, nextDue]
+        `INSERT INTO patient_tasks (patient_id, task_id, assigned_staff_id, status, due_date, ideal_due_date)
+         VALUES ($1, $2, $3, 'Pending', $4, $5)`,
+        [task.patient_id, taskDetails.id, task.assigned_staff_id, nextDue, ideal_due_date]
       );
-      console.log(`🔁 Repeating task '${taskDetails.name}' scheduled for ${nextDue.toDateString()}`);
+    
+      console.log(
+        `🔁 Repeating task '${taskDetails.name}' scheduled for ${nextDue.toDateString()} (Ideal: ${ideal_due_date.toDateString()})`
+      );
     }
+    
 
     // Step 5: Handle dependent tasks
     const depRes = await pool.query(`
@@ -132,18 +167,9 @@ const completeTask = async (req, res) => {
       }
 
       // Handling specific tasks based on conditions
-      if (dep.name === "Court Hearing Date Received if not follow up completed") {
-        const isEmergency = patient.is_guardianship_emergency;
-        const isEmergencyValid = isEmergency && taskDetails.name === "Court Petition Filed-after Court Date is Received" && !!patient.court_date;
-        const isNormalValid = !isEmergency && taskDetails.name === "Court Petition Filed";
-
-        if (!isEmergencyValid && !isNormalValid) {
-          console.log("⏭ Skipping 'Court Hearing Date Received...' based on flow conditions.");
-          continue;
-        }
-      }
+      
       if (dep.name === "Begin compiling needed financial/legal information"){
-        if(patient.is_ltc_medical){
+        if(patient.is_ltc_medical && !patient.is_ltc_financial){
           console.log("⏭ Skipping 'compiling needed financial/legal information...' based on flow conditions.");
           continue;
         }
@@ -170,22 +196,29 @@ const completeTask = async (req, res) => {
         console.log(`📌 Non-blocking dependent task '${dep.name}' scheduled without a due date`);
         continue;
       }
-    
-      const baseDate = new Date(task.completed_at);
-      baseDate.setHours(0, 0, 0, 0);
+      const idealBaseDate = new Date(task.ideal_due_date || task.due_date);
+      const due = new Date(task.completed_at);       // 🔁 GOOD
 
-      const due = new Date(baseDate);
       if (dep.is_repeating && dep.recurrence_interval != null && dep.due_in_days_after_dependency == null) {
-        due.setDate(baseDate.getDate() + dep.recurrence_interval);
+        due.setDate(due.getDate() + dep.recurrence_interval);
+        idealBaseDate.setDate(idealBaseDate.getDate() + dep.recurrence_interval);
+        due.setHours(15, 0, 0, 0);
+        idealBaseDate.setHours(15, 0, 0, 0);
       } else if (dep.due_in_days_after_dependency != null) {
-        due.setDate(baseDate.getDate() + dep.due_in_days_after_dependency);
+        due.setDate(due.getDate() + dep.due_in_days_after_dependency);
+        idealBaseDate.setDate(idealBaseDate.getDate() + dep.due_in_days_after_dependency);
+        due.setHours(15, 0, 0, 0);
+        idealBaseDate.setHours(15, 0, 0, 0);
       }
-
+      
+      
+      // Include ideal_due_date in your INSERT
       await pool.query(
-        `INSERT INTO patient_tasks (patient_id, task_id, assigned_staff_id, status, due_date)
-         VALUES ($1, $2, $3, 'Pending', $4)`,
-        [task.patient_id, dep.id, task.assigned_staff_id, due]
+        `INSERT INTO patient_tasks (patient_id, task_id, assigned_staff_id, status, due_date, ideal_due_date)
+         VALUES ($1, $2, $3, 'Pending', $4, $5)`,
+        [task.patient_id, dep.id, task.assigned_staff_id, due, idealBaseDate]
       );
+      
 
       console.log(`📌 Dependent task '${dep.name}' scheduled for ${due.toDateString()}`);
     }
@@ -339,7 +372,7 @@ const followUpCourtTask = async (req, res) => {
     const now = new Date();
     const nextDue = new Date(now);
     nextDue.setDate(nextDue.getDate() + taskDetails.recurrence_interval); // Add recurrence interval (e.g., 7 days later)
-    nextDue.setHours(0, 0, 0, 0); // Set time to 00:00:00
+    nextDue.setHours(15, 0, 0, 0);
 
     await pool.query(
       `UPDATE patient_tasks

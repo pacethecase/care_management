@@ -1,12 +1,17 @@
 import React, { useState } from 'react';
-import { FiUser } from 'react-icons/fi';
+import { FiUser,FiBell } from 'react-icons/fi';
 import { Link, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';  // Import useSelector
 import { logoutUser } from '../redux/slices/userSlice';
 import logo from '../assets/logo.png';
-
+import NotificationPanel from './NotificationPanel';
 const Navbar = () => {
   const [isDropdownOpen, setDropdownOpen] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const { items: notifications } = useSelector((state: RootState) => state.notifications);
+
+
+
   const dispatch = useDispatch();
   const navigate = useNavigate();
 
@@ -50,14 +55,32 @@ const Navbar = () => {
             Tasks
           </Link>
           )}
-        
-
           {/* Conditionally render Reports link for Admin only */}
           {user?.is_admin === true && (
             <Link to="/reports" className="tab transition">
               Reports
             </Link>
           )}
+          <div className="relative">
+          <button
+            onClick={() => setShowNotifications((prev) => !prev)}
+            className="relative focus:outline-none"
+          >
+            <FiBell className="w-5 h-5" />
+            {notifications.length > 0 && (
+              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full px-1">
+                {notifications.length}
+              </span>
+            )}
+          </button>
+        
+          {showNotifications && (
+            <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg p-3 z-50 max-h-[60vh] overflow-y-auto">
+              <NotificationPanel />
+            </div>
+          )}
+        </div>
+        
 
           {/* Profile Dropdown */}
           <div className="relative">

@@ -1,11 +1,10 @@
 import React, { useState } from "react";
 import PatientCard from "./PatientCard";
 
-const PatientsList = ({ patients , user}) => {
+const PatientsList = ({ patients, user }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 9;
 
-  // Sort by created_at (newest first)
   const sortedPatients = [...patients].sort((a, b) =>
     new Date(b.created_at || b.id).getTime() - new Date(a.created_at || a.id).getTime()
   );
@@ -25,21 +24,23 @@ const PatientsList = ({ patients , user}) => {
   };
 
   return (
-    <div className="w-full lg:w-3/4 p-6 mx-auto">
-      <h2 className="text-3xl font-bold text-hospital-blue mb-6">Patients</h2>
+    <div className="w-full">
+      <h2 className="text-3xl font-bold text-hospital-blue mb-6 text-center lg:text-left">
+        Patients
+      </h2>
 
       {patients.length === 0 ? (
         <p className="text-gray-500 text-lg text-center">No patients found.</p>
       ) : (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {paginated.map((patient) => (
-            <PatientCard key={patient.id} patient={patient} user={user} />
-          ))}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {paginated.map((patient) => (
+              <PatientCard key={patient.id} patient={patient} user={user} />
+            ))}
           </div>
 
-          {/* Next/Previous Pagination */}
-          <div className="mt-8 flex justify-center gap-4 items-center">
+          {/* Pagination Controls */}
+          <div className="mt-8 flex justify-center gap-6 flex-wrap">
             <button
               onClick={handlePrev}
               disabled={currentPage === 1}
@@ -52,7 +53,7 @@ const PatientsList = ({ patients , user}) => {
               ← Previous
             </button>
 
-            <span className="text-gray-600 text-sm">
+            <span className="text-gray-700 text-sm self-center">
               Page {currentPage} of {totalPages}
             </span>
 

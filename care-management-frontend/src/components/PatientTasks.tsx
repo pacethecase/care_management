@@ -40,6 +40,13 @@ const PatientTasks = () => {
 
   const navigate = useNavigate();
 
+  const algoColorMap = {
+    Behavioral: "var(--algo-behavioral)",
+    Guardianship: "var(--algo-guardianship)",
+    LTC: "var(--algo-ltc)",
+  };
+ 
+  
   useEffect(() => {
     if (patientId) {
       dispatch(fetchPatientById(Number(patientId)));
@@ -141,11 +148,21 @@ const PatientTasks = () => {
       : patientTasks.filter((task) => task.status === selectedTab);
 
   const renderTasks = () =>
-    filteredTasks.map((task) => (
-      console.log(task),
+    filteredTasks.map((task) => {
+      const borderColor = algoColorMap[task.algorithm] || "var(--border-muted)";
+      const today = new Date();
+      const idealDue = task.ideal_due_date ? new Date(task.ideal_due_date) : null;
+      const completedAt = task.completed_at ? new Date(task.completed_at) : null;
+      const isDelayed = idealDue
+        ? (completedAt && completedAt > idealDue) || (!completedAt && today > idealDue)
+        : false;
+      
+      return (
         <div
         key={task.task_id}
-        className={`card w-full  border border-[var(--border-muted)] p-4 mb-4 ${task.is_non_blocking ? 'non-blocking' : ''} ${task.status === "Missed"?'card-missed':''} ${task.status === "Completed"?'card-completed':''}`}>
+        className={`card w-full border border-[var(--border-muted)] p-4 mb-4 ${task.is_non_blocking ? 'non-blocking' : ''} ${task.status === "Missed"?'card-missed':''} ${task.status === "Completed"?'card-completed':''}`}
+        style={{ borderLeft: `8px solid ${borderColor}` }}
+        >
        <div className="relative mb-2">
     {/* Task Name */}
     <h3 className="text-lg font-semibold w-[50%]  break-words whitespace-normal ">
@@ -155,6 +172,11 @@ const PatientTasks = () => {
     {/* Status Badge */}
     <div className="absolute top-0 right-0">
       {getStatusBadge(task.status)}
+      {isDelayed && (
+    <span className="text-xs font-medium bg-[#e25e5ee0] text-white px-2 py-0.5 rounded-full">
+      Delayed
+    </span>
+  )}
     </div>
   </div>
     
@@ -224,8 +246,8 @@ const PatientTasks = () => {
         )}
       </div>
     </div>
-    
-    ));
+    );
+  });
 
   const renderNotes = () => (
     <div className="bg-white p-6 rounded-lg shadow border space-y-4">
@@ -269,9 +291,10 @@ const PatientTasks = () => {
 
         <div className="card mb-6">
           <h2 className="text-2xl font-bold mb-1">{patient.name}</h2>
+          <h3 className="text-md mb-1">Staff:{patient.staff_name}</h3>
           <p className="text-sm text-[var(--text-muted)]">
-            Age {patient.age} • Bed {patient.bed_id} • Admitted on{" "}
-            {new Date(patient.created_at).toLocaleDateString()}
+          • Age {patient.age} • Bed {patient.bed_id} • Admitted on{" "}
+            {new Date(patient.created_at).toLocaleDateString()}  • MRN {patient.mrn}
           </p>
           <div className="text-xs text-[var(--text-muted)] mt-2 space-y-1">
             {patient.is_behavioral && (

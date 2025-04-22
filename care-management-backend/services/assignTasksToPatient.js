@@ -62,13 +62,21 @@ const assignTasksToPatient = async (patientId) => {
         console.log(`⏭️ Task "${taskName}" already assigned. Skipping.`);
         return;
       }
+      const baseDate = new Date(patient.admitted_date);
+      baseDate.setHours(15, 0, 0, 0); 
 
-      const dueDate = new Date();
-      dueDate.setHours(0, 0, 0, 0);
-      dueDate.setDate(dueDate.getDate() + dueInDays);
+      const dueDate = new Date(baseDate);
+      dueDate.setDate(baseDate.getDate() + dueInDays);
+      dueDate.setHours(15, 0, 0, 0);
 
-      taskAssignments.push({ taskId, dueDate });
-      console.log(`✔ Task '${taskName}' scheduled for ${dueDate.toDateString()}`);
+      const idealDueDate = new Date(baseDate);
+      idealDueDate.setDate(baseDate.getDate() + dueInDays);
+      idealDueDate.setHours(15, 0, 0, 0);
+
+      taskAssignments.push({ taskId, dueDate, idealDueDate }); // 🔧 Fixed typo: .push instead of .puhave sh
+      console.log(`✔ Task '${taskName}' scheduled for ${dueDate.toDateString()} (ideal: ${idealDueDate.toDateString()})`);
+
+   
     };
 
     // Step 5: Assignment Logic (Algorithm A)
@@ -98,16 +106,16 @@ const assignTasksToPatient = async (patientId) => {
     if(patient.is_guardianship_financial || patient.is_guardianship_person ){
         if(patient.is_guardianship_emergency){
             assignTask("Appropriate Office Contacted ASAP",1);
-            assignTask("Court Petition Initiated",2);
+            assignTask("Emergency Court Petition Initiated",2);
         }
         else{
-            assignTask("Identify Guardian",3)
+            assignTask("Identify Guardian",3);
             assignTask("Appropriate Office Contacted ASAP",5);
-            assignTask("Court Petition Initiated",7);
+            assignTask("Permanent Court Petition Initiated",7)
         }
     }
     if(patient.is_guardianship_financial){
-        assignTask("Financial inventory of patient assets required",2);
+        assignTask("Financial inventory of patient assets required",1);
     }
 
     if(patient.is_ltc){
@@ -128,20 +136,22 @@ const assignTasksToPatient = async (patientId) => {
     // Sort by dueDate for order
     taskAssignments.sort((a, b) => a.dueDate - b.dueDate);
 
-    const values = taskAssignments.map(({ taskId, dueDate }) => [
+    const values = taskAssignments.map(({ taskId, dueDate, idealDueDate }) => [
       patient.id,
       taskId,
       patient.assigned_staff_id,
       "Pending",
-      dueDate
+      dueDate,
+      idealDueDate,
     ]);
+    
 
     const insertQuery = `
-      INSERT INTO patient_tasks (patient_id, task_id, assigned_staff_id, status, due_date)
-      VALUES ${values.map((_, i) =>
-        `($${i * 5 + 1}, $${i * 5 + 2}, $${i * 5 + 3}, $${i * 5 + 4}, $${i * 5 + 5})`
-      ).join(", ")}
-    `;
+    INSERT INTO patient_tasks (patient_id, task_id, assigned_staff_id, status, due_date, ideal_due_date)
+    VALUES ${values.map((_, i) =>
+      `($${i * 6 + 1}, $${i * 6 + 2}, $${i * 6 + 3}, $${i * 6 + 4}, $${i * 6 + 5}, $${i * 6 + 6})`
+    ).join(", ")}
+  `;  
 
     await pool.query(insertQuery, values.flat());
     console.log(`✅ ${taskAssignments.length} tasks assigned to patient.`);

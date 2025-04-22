@@ -5,6 +5,7 @@ import DailyReport from "../components/DailyReport";
 import PriorityReport from "../components/PriorityReport";
 import TransitionCareReport from "../components/TransitionCareReport";
 import HistoricalTimelineReport from "../components/HistoricalTimelineReport";
+import ProjectedTimelineReport from "../components/ProjectedTimelineReport";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import logo from "../assets/logo.png";
@@ -15,14 +16,14 @@ import {
   fetchPriorityReport,
   fetchTransitionReport,
   fetchHistoricalTimelineReport,
+  fetchProjectedTimelineReport
 } from "../redux/slices/reportSlice";
 
 const ReportPage = () => {
   const dispatch = useDispatch();
   const { patients } = useSelector((state: RootState) => state.patients);
-  const { transitionReport } = useSelector((state: RootState) => state.reports);
-  const { historicalReport } = useSelector((state: RootState) => state.reports);
-  const [selectedReport, setSelectedReport] = useState<"daily" | "priority" | "transition" | "historical"| null>(null);
+  const { transitionReport, historicalReport, projectedTimelineReport } = useSelector((state: RootState) => state.reports);
+  const [selectedReport, setSelectedReport] = useState<"daily" | "priority" | "transition" | "historical"| "projected" | null>(null);
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split("T")[0]);
   const [selectedPatientId, setSelectedPatientId] = useState<number | null>(null);
 
@@ -31,17 +32,26 @@ const ReportPage = () => {
   }, [dispatch]);
 
   useEffect(() => {
+    if ((selectedReport === "transition" || selectedReport === "historical" || selectedReport === "projected") && !selectedPatientId) return;
+
     if (selectedReport === "daily") {
       dispatch(fetchDailyReport(selectedDate) as any);
     } else if (selectedReport === "priority") {
       dispatch(fetchPriorityReport(selectedDate) as any);
     } else if (selectedReport === "transition" && selectedPatientId) {
       dispatch(fetchTransitionReport(selectedPatientId) as any);
-    }
-    else if (selectedReport === "historical" && selectedPatientId) {
+    } else if (selectedReport === "historical" && selectedPatientId) {
       dispatch(fetchHistoricalTimelineReport(selectedPatientId) as any);
+    } else if (selectedReport === "projected" && selectedPatientId) {
+      dispatch(fetchProjectedTimelineReport(selectedPatientId) as any);
     }
   }, [selectedReport, selectedDate, selectedPatientId, dispatch]);
+
+  useEffect(() => {
+    if (selectedReport === "transition" || selectedReport === "historical" || selectedReport === "projected") {
+      setSelectedPatientId(null);
+    }
+  }, [selectedReport]);
 
   const handlePrint = () => {
     const content = document.getElementById("report-content");
@@ -49,63 +59,86 @@ const ReportPage = () => {
 
     if (content && printWindow) {
       const reportTitle =
-        selectedReport === "daily"
-          ? "DAILY REPORT"
-          : selectedReport === "priority"
-          ? "PRIORITY REPORT"
-          : selectedReport === "transition"
-          ? "TRANSITIONAL CARE REPORT"
-          : selectedReport === "historical"
-          ? "HISTORICAL TIMELINE REPORT"
-          :"REPORT";
-          
+        selectedReport === "daily" ? "DAILY REPORT" :
+        selectedReport === "priority" ? "PRIORITY REPORT" :
+        selectedReport === "transition" ? "TRANSITIONAL CARE REPORT" :
+        selectedReport === "historical" ? "HISTORICAL TIMELINE REPORT" :
+        selectedReport === "projected" ? "PROJECTED TIMELINE REPORT" :
+        "REPORT";
 
       const printStyles = `
         <style>
-          @media print {
-            body {
-              font-family: Arial, sans-serif;
-              margin: 1in;
-            }
-            #report-header h1 {
-              font-size: 2.5rem;
-              color: #FF7F00;
-              margin: 0;
-              text-align: center;
-            }
-            .date {
-              text-align: right;
-              font-size: 0.9rem;
-              color: #555;
-            }
-            .logo {
-              height: 20%;
-              width: auto;
-              margin: 0 auto;
-              display: block;
-            }
-            table {
-              width: 100%;
-              border-collapse: collapse;
-              margin-top: 20px;
-            }
-            th {
-              background-color: #FF7F00;
-              color: white;
-              padding: 8px;
-              text-align: left;
-            }
-            td {
-              padding: 8px;
-              border-bottom: 1px solid #ddd;
-            }
-            .no-print {
-              display: none;
-            }
-            .only-print {
-              display: block;
-            }
+          body {
+            font-family: Arial, sans-serif;
+            margin: 1in;
           }
+          #report-header h1 {
+            font-size: 2.5rem;
+            color: #FF7F00;
+            margin: 0;
+            text-align: center;
+          }
+          .date {
+            text-align: right;
+            font-size: 0.9rem;
+            color: #555;
+          }
+          .logo {
+            height: 120px;
+            width: auto;
+            margin: 0 auto 1rem;
+            display: block;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+          }
+          th {
+            background-color: #FF7F00;
+            color: white;
+            padding: 8px;
+            text-align: left;
+          }
+          td {
+            padding: 8px;
+            border-bottom: 1px solid #ddd;
+          }
+          .no-print { display: none; }
+          .only-print { display: block; }
+          .workflow-section { margin-top: 2rem; }
+          .timeline-container {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: flex-start;
+            gap: 8px;
+            margin-top: 1rem;
+            background-color: #fefefe;
+          }
+          .task-box {
+            min-width: 150px;
+            max-width: 200px;
+            padding: 8px 10px;
+            border-radius: 6px;
+            background-color: #f9f9f9;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            font-size: 11px;
+            word-wrap: break-word;
+          }
+          .meta {
+            font-size: 11px;
+            margin-top: 2px;
+          }
+          .arrow {
+            font-size: 18px;
+            color: #888;
+          }
+          .bg-green { background-color: #d1fae5; color: #065f46; }
+          .bg-yellow { background-color: #fef3c7; color: #92400e; }
+          .bg-red { background-color: #fee2e2; color: #991b1b; }
+          .bg-blue { background-color: #dbeafe; color: #1e3a8a; }
+          .bg-purple { background-color: #ede9fe; color: #5b21b6; }
+          .italic { font-style: italic; color: #b91c1c; }
         </style>
       `;
 
@@ -139,7 +172,6 @@ const ReportPage = () => {
       <div className="container p-6 mx-auto">
         <h1 className="text-3xl font-bold mb-6">Reports</h1>
 
-        {/* Date Picker */}
         <div className="mb-4">
           <label className="text-lg">Select Date:</label>
           <input
@@ -150,37 +182,19 @@ const ReportPage = () => {
           />
         </div>
 
-        {/* Report Type Selection */}
         <div className="space-x-4 mb-4 no-print">
-          <button
-            className={`btn ${selectedReport === "daily" ? "btn-primary" : "btn-outline"}`}
-            onClick={() => setSelectedReport("daily")}
-          >
-            Daily Report
-          </button>
-          <button
-            className={`btn ${selectedReport === "priority" ? "btn-primary" : "btn-outline"}`}
-            onClick={() => setSelectedReport("priority")}
-          >
-            Priority Report
-          </button>
-          <button
-            className={`btn ${selectedReport === "transition" ? "btn-primary" : "btn-outline"}`}
-            onClick={() => setSelectedReport("transition")}
-          >
-            Transitional Care Report
-          </button>
-          <button
-            className={`btn ${selectedReport === "historical" ? "btn-primary" : "btn-outline"}`}
-            onClick={() => setSelectedReport("historical")}
-          >
-            Historical Timeline Report
-          </button>
-
+          {["daily", "priority", "transition", "historical", "projected"].map((type) => (
+            <button
+              key={type}
+              className={`btn ${selectedReport === type ? "btn-primary" : "btn-outline"}`}
+              onClick={() => setSelectedReport(type as any)}
+            >
+              {type.charAt(0).toUpperCase() + type.slice(1)} Report
+            </button>
+          ))}
         </div>
 
-        {/* Patient Selector for Transitional Care */}
-        {(selectedReport === "transition" || selectedReport === "historical") && (
+        {(selectedReport === "transition" || selectedReport === "historical" || selectedReport === "projected") && (
           <div className="mb-4">
             <label className="text-lg mr-2">Select Patient:</label>
             <select
@@ -198,7 +212,6 @@ const ReportPage = () => {
           </div>
         )}
 
-        {/* Print Button */}
         {selectedReport && (
           <div className="mb-6">
             <button onClick={handlePrint} className="btn btn-secondary">
@@ -208,22 +221,19 @@ const ReportPage = () => {
           </div>
         )}
 
-        {/* Report Display */}
         <div id="report-content" className="bg-white rounded-lg shadow p-6 min-h-[150px]">
           {!selectedReport && <p className="text-gray-500">Select a report to view.</p>}
-
           {selectedReport === "daily" && <DailyReport date={selectedDate} />}
           {selectedReport === "priority" && <PriorityReport date={selectedDate} />}
-          {selectedReport === "transition" && transitionReport && (
-  <TransitionCareReport report={transitionReport} />
-)}
-{selectedReport === "historical" && historicalReport && (
-  <>
-  
-  <HistoricalTimelineReport report={historicalReport} />
-  </>
-  
-)}
+          {selectedReport === "transition" && selectedPatientId && transitionReport && (
+            <TransitionCareReport report={transitionReport} />
+          )}
+          {selectedReport === "historical" && selectedPatientId && historicalReport && (
+            <HistoricalTimelineReport report={historicalReport} />
+          )}
+          {selectedReport === "projected" && selectedPatientId && projectedTimelineReport && (
+            <ProjectedTimelineReport data={projectedTimelineReport} />
+          )}
         </div>
       </div>
       <Footer />

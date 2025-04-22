@@ -4,6 +4,7 @@ const isoWeek = require('dayjs/plugin/isoWeek');
 dayjs.extend(isoWeek);
 
 
+
 // Daily Report Controller
 const getDailyReport = async (req, res) => {
     const { date } = req.query; // Get date from the query parameter
@@ -109,7 +110,7 @@ const getTransitionCareReport = async (req, res) => {
   try {
     // Get patient info
     const patientQuery = await pool.query(`
-      SELECT id, name, mrn, birth_date, created_at AS admitted_date,
+      SELECT id, name, mrn, birth_date,  admitted_date,
         CASE
           WHEN is_behavioral THEN 'Behavioral'
           WHEN is_guardianship THEN 'Guardianship'
@@ -183,7 +184,7 @@ const getHistoricalTimelineReport = async (req, res) => {
 
   try {
     const patientQuery = await pool.query(
-      `SELECT id, name, birth_date, created_at AS admitted_date FROM patients WHERE id = $1`,
+      `SELECT id, name, birth_date, admitted_date, mrn FROM patients WHERE id = $1`,
       [patientId]
     );
 
@@ -192,7 +193,7 @@ const getHistoricalTimelineReport = async (req, res) => {
     }
 
     const patient = patientQuery.rows[0];
-    const admittedDate = dayjs(patient.admitted_date);
+    const admittedDate = dayjs(patient.admitted_date).startOf('day');
 
     const tasksQuery = await pool.query(
       `SELECT t.name AS task_name, pt.completed_at
@@ -232,6 +233,7 @@ const getHistoricalTimelineReport = async (req, res) => {
       patient: {
         name: patient.name,
         admitted_date: admittedDate.format('MM.DD.YY'),
+        mrn: patient.mrn || 'N/A',
       },
       timeline,
     });
@@ -239,8 +241,174 @@ const getHistoricalTimelineReport = async (req, res) => {
     console.error('❌ Error generating historical timeline report:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
+  };
+
+  const getProjectedTimelineReport = async (req, res) => {
+    try {
+      const patientId = req.params.id;
+  
+      // Fetch all relevant tasks
+      const result = await pool.query(`
+        SELECT 
+          pt.id AS patient_task_id,
+          pt.task_id,
+          t.name AS task_name,
+          t.algorithm,
+          t.is_non_blocking,
+          t.is_repeating,
+          pt.status,
+          pt.due_date,
+          pt.completed_at,
+          pt.ideal_due_date,
+          pt.status_history,
+          p.is_guardianship_emergency,
+          p.admitted_date
+        FROM patient_tasks pt
+        JOIN tasks t ON pt.task_id = t.id
+        JOIN patients p ON pt.patient_id = p.id
+        WHERE pt.patient_id = $1
+          AND t.algorithm IN ('Guardianship', 'LTC')
+        ORDER BY pt.completed_at NULLS LAST, pt.due_date
+      `, [patientId]);
+      
+      const tasks = result.rows;
+      if (tasks.length === 0) return res.json({ projected: {}, actual: {}, grouped: {} });
+      const parseStatusHistory = (history) => {
+        try {
+          // Directly use it since it's already JSON (not a string)
+          const completed = history.find(h => h.status === "Completed");
+      
+          const missed = [...history].reverse().find(h => h.status === "Missed" && h.reason) ||
+                         [...history].reverse().find(h => h.status === "Missed");
+      
+          return {
+            completedAt: completed?.timestamp || null,
+            missedAt: missed?.timestamp || null,
+            missedReason: missed?.reason || null,
+          };
+        } catch (err) {
+          console.error("❌ Failed to read status_history:", err);
+          return { completedAt: null, missedAt: null, missedReason: null };
+        }
+      };
+      
+      
+      
+      
+      const grouped = { Guardianship: [], LTC: [] };
+      const actualEnd = { Guardianship: null, LTC: null };
+      const missedCounts = { Guardianship: 0, LTC: 0 };
+      
+      tasks.forEach(task => {
+        if (task.is_non_blocking || task.is_repeating) return;
+      
+        const { missedAt, missedReason } = parseStatusHistory(task.status_history);
+      
+        let label = "⏳ Pending";
+        if (task.status === "Completed") {
+          label = new Date(task.completed_at) < new Date(task.ideal_due_date) ? "✅ On Time" : "⚠️ Late";
+        } else if (task.status === "Missed") {
+          label = "❌ Missed";
+          missedCounts[task.algorithm]++;
+        }
+      
+        grouped[task.algorithm].push({
+          task_name: task.task_name,
+          status: task.status,
+          label,
+          due_date: task.due_date,
+          ideal_due_date: task.ideal_due_date, 
+          completed_at: task.completed_at,
+          missed_reason: missedReason,
+        });
+      });
+      
+      // Sort completed first by completed_at, then due_date
+      for (const alg in grouped) {
+        const completed = grouped[alg].filter(t => t.status === "Completed")
+          .sort((a, b) => new Date(a.completed_at) - new Date(b.completed_at));
+      
+        const remaining = grouped[alg].filter(t => t.status !== "Completed")
+          .sort((a, b) => new Date(a.due_date) - new Date(b.due_date));
+      
+        grouped[alg] = [...completed, ...remaining];
+      }
+      
+      const patient = tasks[0];
+      const safeDateString = (date) => {
+        const d = new Date(date);
+        return d instanceof Date && !isNaN(d) ? d.toISOString().split('T')[0] : null;
+      };
+      
+      const projected = {
+        Guardianship: safeDateString(
+          grouped.Guardianship
+            .map(t => t.ideal_due_date)
+            .filter(Boolean)
+            .map(d => new Date(d))
+            .sort((a, b) => b - a)[0]
+        ),
+        LTC: safeDateString(
+          grouped.LTC
+            .map(t => t.ideal_due_date)
+            .filter(Boolean)
+            .map(d => new Date(d))
+            .sort((a, b) => b - a)[0]
+        ),
+      };
+      const allCompleted = (tasks) => tasks.length > 0 && tasks.every(t => t.status === "Completed");
+
+const actual = {
+  Guardianship: allCompleted(grouped.Guardianship)
+    ? safeDateString(
+        grouped.Guardianship
+          .map(t => t.completed_at)
+          .filter(Boolean)
+          .map(d => new Date(d))
+          .sort((a, b) => b - a)[0]
+      )
+    : safeDateString(
+        grouped.Guardianship
+          .map(t => t.due_date)
+          .filter(Boolean)
+          .map(d => new Date(d))
+          .sort((a, b) => b - a)[0]
+      ),
+  
+  LTC: allCompleted(grouped.LTC)
+    ? safeDateString(
+        grouped.LTC
+          .map(t => t.completed_at)
+          .filter(Boolean)
+          .map(d => new Date(d))
+          .sort((a, b) => b - a)[0]
+      )
+    : safeDateString(
+        grouped.LTC
+          .map(t => t.due_date)
+          .filter(Boolean)
+          .map(d => new Date(d))
+          .sort((a, b) => b - a)[0]
+      ),
 };
 
+      
+      
+      
+      
+      res.json({
+        projected,
+        actual,
+        grouped,
+      });
+      
+    } catch (err) {
+      console.error("❌ Projected Timeline Report Error:", err);
+      res.status(500).json({ error: "Internal Server Error" });
+    }
+  };
+  
 
 
-module.exports = { getDailyReport, getPriorityReport,getTransitionCareReport ,getHistoricalTimelineReport};
+
+module.exports = { getDailyReport, getPriorityReport,getTransitionCareReport ,getHistoricalTimelineReport,getProjectedTimelineReport};

@@ -36,6 +36,7 @@ interface PatientState {
 const initialState: PatientState = {
   patients: [],
   dischargedPatients: [],
+  searchResults: [],
   selectedPatient: null, 
   loading: false,
   error: null,
@@ -84,7 +85,9 @@ export const fetchPatientById = createAsyncThunk(
       const res = await axios.get(`http://localhost:5001/patients/${patientId}`, {
         withCredentials: true,
       });
+     
       return res.data;
+      
     } catch (err: any) {
       return rejectWithValue(err.response?.data || 'Failed to fetch patient');
     }
@@ -121,6 +124,40 @@ export const fetchDischargedPatients = createAsyncThunk(
     }
   }
 );
+
+export const updatePatient = createAsyncThunk(
+  "patients/updatePatient",
+  async (
+    { id, data }: { id: number | string; data: any },
+    { rejectWithValue }
+  ) => {
+    try {
+      const res = await axios.patch(
+        `http://localhost:5001/patients/${id}/update`,
+        data,
+        { withCredentials: true }
+      );
+      return res.data.patient;
+    } catch (err: any) {
+      console.error("❌ Update error:", err?.response?.data || err.message);
+      return rejectWithValue(err?.response?.data || { error: "Failed to update patient" });
+    }
+  }
+);
+export const searchPatients = createAsyncThunk(
+  "patients/search",
+  async (query: string, { rejectWithValue }) => {
+    try {
+      const res = await axios.get(`http://localhost:5001/patients/search?q=${encodeURIComponent(query)}`, {
+        withCredentials: true,
+      });
+      return res.data;
+    } catch (err: any) {
+      return rejectWithValue(err.response?.data || "Search failed");
+    }
+  }
+);
+
 
 
 const patientsSlice = createSlice({
@@ -202,6 +239,32 @@ const patientsSlice = createSlice({
         state.error = typeof action.payload === 'string'
           ? action.payload
           : action.payload?.error || 'Failed to fetch discharged patients';
+      })
+      .addCase(updatePatient.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(updatePatient.fulfilled, (state, action) => {
+        state.loading = false;
+        const updated = action.payload;
+        const index = state.patients.findIndex((p) => p.id === updated.id);
+        if (index !== -1) state.patients[index] = updated;
+      })
+      .addCase(updatePatient.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload as string;
+      })
+      .addCase(searchPatients.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(searchPatients.fulfilled, (state, action) => {
+        state.searchResults = action.payload;
+        state.loading = false;
+      })
+      .addCase(searchPatients.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload as string;
       });
       
 

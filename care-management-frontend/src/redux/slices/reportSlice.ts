@@ -6,6 +6,7 @@ const initialState = {
   priorityReport: [],
   transitionReport: null,
   historicalReport: null,
+  projectedTimelineReport: null,
   loading: false,
   error: null,
 };
@@ -56,6 +57,18 @@ export const fetchHistoricalTimelineReport = createAsyncThunk(
       return response.data;
     } catch (error) {
       return rejectWithValue(error.response?.data || "Failed to fetch timeline report");
+    }
+  }
+);
+
+export const fetchProjectedTimelineReport = createAsyncThunk(
+  "reports/fetchProjectedTimelineReport",
+  async (patientId, { rejectWithValue }) => {
+    try {
+      const response = await axios.get(`http://localhost:5001/reports/patients/${patientId}/projected-timeline-report`);
+      return response.data;
+    } catch (error) {
+      return rejectWithValue(error.response?.data || "Failed to fetch projected timeline report");
     }
   }
 );
@@ -112,6 +125,18 @@ const reportSlice = createSlice({
         state.historicalReport = action.payload;
       })
       .addCase(fetchHistoricalTimelineReport.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      .addCase(fetchProjectedTimelineReport.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(fetchProjectedTimelineReport.fulfilled, (state, action) => {
+        state.loading = false;
+        state.projectedTimelineReport = action.payload;
+      })
+      .addCase(fetchProjectedTimelineReport.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
       });

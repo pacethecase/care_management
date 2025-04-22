@@ -5,6 +5,8 @@ import taskReducer from "../slices/taskSlice";
 import noteReducer from "../slices/noteSlice";
 import reportReducer from "../slices/reportSlice";
 import algorithmReducer from '../slices/algorithmSlice'; 
+import notificatinReducer from '../slices/notificationSlice';
+
 export const store = configureStore({
   reducer: {
     user: userReducer,
@@ -13,5 +15,6 @@ export const store = configureStore({
     notes: noteReducer,
     reports: reportReducer, 
     algorithms: algorithmReducer,
+    notifications: notificatinReducer,
   },
 });
