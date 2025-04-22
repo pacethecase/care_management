@@ -1,6 +1,14 @@
 import React from "react";
 
-const AlgorithmSelection = ({ formData, setFormData }) => {
+interface AlgorithmSelectionProps<T extends { age: number }> {
+  formData: T;
+  setFormData: React.Dispatch<React.SetStateAction<T>>;
+}
+
+const AlgorithmSelection = <T extends { age: number }>({
+  formData,
+  setFormData,
+}: AlgorithmSelectionProps<T>) => {
   const algorithms = [
     {
       key: "is_behavioral",
@@ -28,16 +36,19 @@ const AlgorithmSelection = ({ formData, setFormData }) => {
       subOptions: [
         { key: "is_guardianship_financial", label: "Financial Requirement" },
         { key: "is_guardianship_person", label: "Person Requirement" },
-        {key: "is_guardianship_emergency",label:"Emergency Required"},
+        { key: "is_guardianship_emergency", label: "Emergency Required" },
       ],
     },
   ];
 
-  const handleSelection = (event, key) => {
+  const handleSelection = (
+    event: React.MouseEvent<HTMLButtonElement>,
+    key: keyof T
+  ) => {
     event.preventDefault();
     setFormData((prev) => {
       const newValue = !prev[key];
-      const updatedData = { ...prev, [key]: newValue };
+      const updatedData: Record<string, any> = { ...prev, [key]: newValue };
 
       if (!newValue) {
         const algo = algorithms.find((a) => a.key === key);
@@ -46,21 +57,21 @@ const AlgorithmSelection = ({ formData, setFormData }) => {
         });
       }
 
-      return updatedData;
+      return updatedData as T;
     });
   };
 
-  const handleSubOptionChange = (event) => {
+  const handleSubOptionChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const { name, checked } = event.target;
 
     setFormData((prev) => {
-      const updatedData = { ...prev, [name]: checked };
+      const updatedData: Record<string, any> = { ...prev, [name]: checked };
 
       if (name === "is_geriatric_psych_available" && prev.age <= 65) {
         updatedData[name] = false;
       }
 
-      return updatedData;
+      return updatedData as T;
     });
   };
 
@@ -73,22 +84,20 @@ const AlgorithmSelection = ({ formData, setFormData }) => {
           <button
             key={key}
             className={`tab px-6 py-2 rounded-lg font-semibold transition-all duration-300 focus:outline-none border ${
-              formData[key]
+              formData[key as keyof T]
                 ? "border-[var(--funky-orange)] bg-[var(--hover-tab)] text-[var(--funky-orange)] shadow"
                 : "border-transparent hover:bg-[var(--hover-tab)]"
             }`}
-            onClick={(e) => handleSelection(e, key)}
+            onClick={(e) => handleSelection(e, key as keyof T)}
           >
             {label}
           </button>
         ))}
       </div>
 
-      {/* Suboptions for each algorithm */}
       {algorithms.map(
         (alg) =>
-          formData[alg.key] &&
-          alg.subOptions.length > 0 && (
+          formData[alg.key as keyof T] && (
             <div
               key={alg.key}
               className="p-5 mb-5 bg-white rounded-md border border-[var(--border-muted)] shadow-sm"
@@ -97,7 +106,7 @@ const AlgorithmSelection = ({ formData, setFormData }) => {
                 {alg.label} Details:
               </p>
 
-              <div className="flex flex-row">
+              <div className="flex flex-row gap-6 flex-wrap">
                 {alg.subOptions.map(({ key, label }) => (
                   <label
                     key={key}
@@ -106,7 +115,7 @@ const AlgorithmSelection = ({ formData, setFormData }) => {
                     <input
                       type="checkbox"
                       name={key}
-                      checked={formData[key] || false}
+                      checked={!!formData[key as keyof T]}
                       onChange={handleSubOptionChange}
                       disabled={key === "is_geriatric_psych_available" && formData.age <= 65}
                       className="w-4 h-4 text-[var(--funky-orange)] border-gray-300 rounded"

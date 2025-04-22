@@ -1,13 +1,22 @@
 import React from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { FaEdit, FaUserSlash } from "react-icons/fa";
 import { useDispatch } from "react-redux";
 import { dischargePatient } from "../redux/slices/patientSlice";
 import { toast } from "react-toastify";
-import { useNavigate } from "react-router-dom";
 
-const PatientCard = ({ patient, user,showDischargeInfo = false }) => {
-  const dispatch = useDispatch();
+import type { AppDispatch } from '../redux/store';
+import type { Patient } from "../redux/types";
+import type { UserInfo } from "../redux/types";
+
+interface PatientCardProps {
+  patient: Patient;
+  user: UserInfo | null;
+  showDischargeInfo?: boolean;
+}
+
+const PatientCard: React.FC<PatientCardProps> = ({ patient, user, showDischargeInfo = false }) => {
+  const dispatch = useDispatch<AppDispatch>();
   const navigate = useNavigate();
 
   const handleEdit = () => {

@@ -1,16 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import  { useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { RootState } from '../redux/store';
 import Footer from "../components/Footer";
 import Navbar from "../components/Navbar";
-
+import type { AppDispatch } from '../redux/store';
 import DischargeBarriers from "../components/DischargeBarriers"; 
 
 import { loadPatientCountsByAlgorithm } from "../redux/slices/algorithmSlice"; 
 const HomePage = () => {
 
   const { user } = useSelector((state: RootState) => state.user); 
-  const dispatch = useDispatch();
+
+
+  const dispatch = useDispatch<AppDispatch>();
   // Log the user data whenever it changes
   useEffect(() => {
     dispatch(loadPatientCountsByAlgorithm());

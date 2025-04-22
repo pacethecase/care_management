@@ -1,7 +1,14 @@
 import React, { useState } from "react";
 import PatientCard from "./PatientCard";
+import type { Patient } from "../redux/types";
+import type { UserInfo } from "../redux/types";
 
-const PatientsList = ({ patients, user }) => {
+interface PatientsListProps {
+  patients: Patient[];
+  user: UserInfo | null;
+}
+
+const PatientsList: React.FC<PatientsListProps> = ({ patients, user }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 9;
 

@@ -1,7 +1,20 @@
-import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import axios from 'axios';
+// src/redux/slices/reportSlice.ts
+import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
+import axios from "axios";
 
-const initialState = {
+
+const BASE_URL = "http://localhost:5001";
+interface ReportState {
+  dailyReport: any[];
+  priorityReport: any[];
+  transitionReport: any | null;
+  historicalReport: any | null;
+  projectedTimelineReport: any | null;
+  loading: boolean;
+  error: string | null;
+}
+
+const initialState: ReportState = {
   dailyReport: [],
   priorityReport: [],
   transitionReport: null,
@@ -11,71 +24,72 @@ const initialState = {
   error: null,
 };
 
-// Fetch Daily Report by date
-export const fetchDailyReport = createAsyncThunk(
-  'reports/fetchDailyReport',
+export const fetchDailyReport = createAsyncThunk<any[], string, { rejectValue: string }>(
+  "reports/fetchDailyReport",
   async (date, { rejectWithValue }) => {
     try {
-      const response = await axios.get(`http://localhost:5001/reports/daily-report?date=${date}`);
+      const response = await axios.get(`${BASE_URL}/reports/daily-report?date=${date}`);
       return response.data;
-    } catch (error) {
-      return rejectWithValue(error.response?.data || 'Failed to fetch daily report');
+    } catch (error: any) {
+      return rejectWithValue(error.response?.data || "Failed to fetch daily report");
     }
   }
 );
 
-// Fetch Priority Report by date
-export const fetchPriorityReport = createAsyncThunk(
-  'reports/fetchPriorityReport',
+export const fetchPriorityReport = createAsyncThunk<any[], string, { rejectValue: string }>(
+  "reports/fetchPriorityReport",
   async (date, { rejectWithValue }) => {
     try {
-      const response = await axios.get(`http://localhost:5001/reports/daily-priority-report?date=${date}`);
+      const response = await axios.get(`${BASE_URL}/reports/daily-priority-report?date=${date}`);
       return response.data;
-    } catch (error) {
-      return rejectWithValue(error.response?.data || 'Failed to fetch priority report');
+    } catch (error: any) {
+      return rejectWithValue(error.response?.data || "Failed to fetch priority report");
     }
   }
 );
-export const fetchTransitionReport = createAsyncThunk(
-  'reports/fetchTransitionReport',
+
+export const fetchTransitionReport = createAsyncThunk<any, number, { rejectValue: string }>(
+  "reports/fetchTransitionReport",
   async (patientId, { rejectWithValue }) => {
     try {
-      const response = await axios.get(`http://localhost:5001/reports/patients/${patientId}/transition-report`);
+      const response = await axios.get(`${BASE_URL}/reports/patients/${patientId}/transition-report`);
       return response.data;
-    } catch (error) {
-      return rejectWithValue(error.response?.data || 'Failed to fetch transition report');
+    } catch (error: any) {
+      return rejectWithValue(error.response?.data || "Failed to fetch transition report");
     }
   }
 );
-export const fetchHistoricalTimelineReport = createAsyncThunk(
+
+export const fetchHistoricalTimelineReport = createAsyncThunk<any, number, { rejectValue: string }>(
   "reports/fetchHistoricalTimelineReport",
   async (patientId, { rejectWithValue }) => {
     try {
       const response = await axios.get(
-        `http://localhost:5001/reports/patients/${patientId}/historical-timeline-report`
+        `${BASE_URL}/reports/patients/${patientId}/historical-timeline-report`
       );
       return response.data;
-    } catch (error) {
+    } catch (error: any) {
       return rejectWithValue(error.response?.data || "Failed to fetch timeline report");
     }
   }
 );
 
-export const fetchProjectedTimelineReport = createAsyncThunk(
+export const fetchProjectedTimelineReport = createAsyncThunk<any, number, { rejectValue: string }>(
   "reports/fetchProjectedTimelineReport",
   async (patientId, { rejectWithValue }) => {
     try {
-      const response = await axios.get(`http://localhost:5001/reports/patients/${patientId}/projected-timeline-report`);
+      const response = await axios.get(
+       `${BASE_URL}/reports/patients/${patientId}/projected-timeline-report`
+      );
       return response.data;
-    } catch (error) {
+    } catch (error: any) {
       return rejectWithValue(error.response?.data || "Failed to fetch projected timeline report");
     }
   }
 );
 
-
 const reportSlice = createSlice({
-  name: 'reports',
+  name: "reports",
   initialState,
   reducers: {},
   extraReducers: (builder) => {
@@ -84,61 +98,61 @@ const reportSlice = createSlice({
         state.loading = true;
         state.error = null;
       })
-      .addCase(fetchDailyReport.fulfilled, (state, action) => {
+      .addCase(fetchDailyReport.fulfilled, (state, action: PayloadAction<any[]>) => {
         state.loading = false;
         state.dailyReport = action.payload;
       })
       .addCase(fetchDailyReport.rejected, (state, action) => {
         state.loading = false;
-        state.error = action.payload;
+        state.error = action.payload as string;
       })
       .addCase(fetchPriorityReport.pending, (state) => {
         state.loading = true;
         state.error = null;
       })
-      .addCase(fetchPriorityReport.fulfilled, (state, action) => {
+      .addCase(fetchPriorityReport.fulfilled, (state, action: PayloadAction<any[]>) => {
         state.loading = false;
         state.priorityReport = action.payload;
       })
       .addCase(fetchPriorityReport.rejected, (state, action) => {
         state.loading = false;
-        state.error = action.payload;
+        state.error = action.payload as string;
       })
       .addCase(fetchTransitionReport.pending, (state) => {
         state.loading = true;
         state.error = null;
       })
-      .addCase(fetchTransitionReport.fulfilled, (state, action) => {
+      .addCase(fetchTransitionReport.fulfilled, (state, action: PayloadAction<any>) => {
         state.loading = false;
         state.transitionReport = action.payload;
       })
       .addCase(fetchTransitionReport.rejected, (state, action) => {
         state.loading = false;
-        state.error = action.payload;
+        state.error = action.payload as string;
       })
       .addCase(fetchHistoricalTimelineReport.pending, (state) => {
         state.loading = true;
         state.error = null;
       })
-      .addCase(fetchHistoricalTimelineReport.fulfilled, (state, action) => {
+      .addCase(fetchHistoricalTimelineReport.fulfilled, (state, action: PayloadAction<any>) => {
         state.loading = false;
         state.historicalReport = action.payload;
       })
       .addCase(fetchHistoricalTimelineReport.rejected, (state, action) => {
         state.loading = false;
-        state.error = action.payload;
+        state.error = action.payload as string;
       })
       .addCase(fetchProjectedTimelineReport.pending, (state) => {
         state.loading = true;
         state.error = null;
       })
-      .addCase(fetchProjectedTimelineReport.fulfilled, (state, action) => {
+      .addCase(fetchProjectedTimelineReport.fulfilled, (state, action: PayloadAction<any>) => {
         state.loading = false;
         state.projectedTimelineReport = action.payload;
       })
       .addCase(fetchProjectedTimelineReport.rejected, (state, action) => {
         state.loading = false;
-        state.error = action.payload;
+        state.error = action.payload as string;
       });
   },
 });

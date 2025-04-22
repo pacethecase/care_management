@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import  { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchDischargedPatients } from "../redux/slices/patientSlice";
 import { fetchHistoricalTimelineReport } from "../redux/slices/reportSlice";
@@ -7,9 +7,10 @@ import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import PatientCard from "../components/PatientCard";
 import HistoricalTimelineReport from "../components/HistoricalTimelineReport";
+import type { AppDispatch } from '../redux/store';
 
 const DischargedPatients = () => {
-  const dispatch = useDispatch();
+const dispatch = useDispatch<AppDispatch>();
   const { dischargedPatients, loading, error } = useSelector(
     (state: RootState) => state.patients
   );
@@ -19,6 +20,7 @@ const DischargedPatients = () => {
 
   const [expandedPatientId, setExpandedPatientId] = useState<number | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const { user } = useSelector((state: RootState) => state.user);
   const itemsPerPage = 9;
 
   useEffect(() => {
@@ -76,7 +78,7 @@ const DischargedPatients = () => {
               >
                 <PatientCard
                   patient={patient}
-                  user={{ is_admin: true }}
+                  user={user}
                   showDischargeInfo={true}
                 />
               </div>

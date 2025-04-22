@@ -7,9 +7,10 @@ import { RootState } from "../redux/store";
 import { Mail, Lock } from "lucide-react";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
+import type { AppDispatch } from '../redux/store';
 
 const Login = () => {
-  const dispatch = useDispatch();
+  const dispatch = useDispatch<AppDispatch>();  
   const navigate = useNavigate();
   const { user, loading, error } = useSelector((state: RootState) => state.user);
 

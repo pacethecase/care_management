@@ -1,10 +1,27 @@
-// src/redux/slices/taskSlice.ts
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
+import type { Task } from "../types";
 
 const BASE_URL = "http://localhost:5001";
 
-// ✅ Thunks
+interface TaskState {
+  patientTasks: Task[];
+  priorityTasks: Task[];
+  missedTasks: Task[];
+  loading: boolean;
+  error: string | null;
+  taskError: string | null;
+}
+
+const initialState: TaskState = {
+  patientTasks: [],
+  priorityTasks: [],
+  missedTasks: [],
+  loading: false,
+  error: null,
+  taskError: null,
+};
+
 export const loadPatientTasks = createAsyncThunk(
   "tasks/loadPatientTasks",
   async (patientId: number, { rejectWithValue }) => {
@@ -13,26 +30,24 @@ export const loadPatientTasks = createAsyncThunk(
         withCredentials: true,
       });
       return res.data;
-    
     } catch (err: any) {
       return rejectWithValue(err.response?.data || "Failed to load patient tasks");
     }
   }
 );
+
 export const loadPriorityTasks = createAsyncThunk(
   "tasks/loadPriorityTasks",
   async (patientId: number | null, { rejectWithValue }) => {
     try {
       const url = patientId
-        ? `${BASE_URL}/tasks/priority?patientId=${patientId}` // Include patientId in query if available
-        : `${BASE_URL}/tasks/priority`; // No patientId, get all tasks
+        ? `${BASE_URL}/tasks/priority?patientId=${patientId}`
+        : `${BASE_URL}/tasks/priority`;
 
       const res = await axios.get(url, {
         withCredentials: true,
       });
-      console.log(res.data);
       return res.data;
-      
     } catch (err: any) {
       return rejectWithValue(err.response?.data || "Failed to load priority tasks");
     }
@@ -44,8 +59,8 @@ export const loadMissedTasks = createAsyncThunk(
   async (patientId: number | null, { rejectWithValue }) => {
     try {
       const url = patientId
-        ? `${BASE_URL}/tasks/missed?patientId=${patientId}` // Include patientId in query if available
-        : `${BASE_URL}/tasks/missed`; // No patientId, get all tasks
+        ? `${BASE_URL}/tasks/missed?patientId=${patientId}`
+        : `${BASE_URL}/tasks/missed`;
 
       const res = await axios.get(url, {
         withCredentials: true,
@@ -74,22 +89,20 @@ export const startTask = createAsyncThunk(
 );
 
 export const completeTask = createAsyncThunk(
-    "tasks/completeTask",
-    async ({ taskId, court_date }: { taskId: number; court_date?: string }, { rejectWithValue }) => {
-      try {
-        await axios.post(
-          `${BASE_URL}/tasks/${taskId}/complete`,
-          court_date ? { court_date } : {},
-          { withCredentials: true }
-        );
-        
-        return taskId;
-      } catch (err: any) {
-        return rejectWithValue("Failed to complete task");
-      }
+  "tasks/completeTask",
+  async ({ taskId, court_date }: { taskId: number; court_date?: string }, { rejectWithValue }) => {
+    try {
+      await axios.post(
+        `${BASE_URL}/tasks/${taskId}/complete`,
+        court_date ? { court_date } : {},
+        { withCredentials: true }
+      );
+      return taskId;
+    } catch (err: any) {
+      return rejectWithValue("Failed to complete task");
     }
-  );
-  
+  }
+);
 
 export const markTaskAsMissed = createAsyncThunk(
   "tasks/markTaskAsMissed",
@@ -110,8 +123,6 @@ export const markTaskAsMissed = createAsyncThunk(
   }
 );
 
-
-
 export const followUpTask = createAsyncThunk(
   "tasks/followUpTask",
   async (
@@ -119,31 +130,21 @@ export const followUpTask = createAsyncThunk(
     { rejectWithValue }
   ) => {
     try {
-      // Send the follow-up reason along with the taskId in the request body
       await axios.post(
         `${BASE_URL}/tasks/${taskId}/follow-up`,
-        { followUpReason }, // Send the follow-up reason here
+        { followUpReason },
         { withCredentials: true }
       );
-      return taskId; // Return taskId on success
+      return taskId;
     } catch (err: any) {
-      return rejectWithValue("Failed to follow up"); // Handle errors
+      return rejectWithValue("Failed to follow up");
     }
   }
 );
 
-
-// ✅ Slice
 const taskSlice = createSlice({
   name: "tasks",
-  initialState: {
-    patientTasks: [],
-    priorityTasks: [],
-    missedTasks: [],
-    loading: false,
-    error: null,
-    taskError: null, 
-  },
+  initialState,
   reducers: {},
   extraReducers: (builder) => {
     builder
@@ -157,10 +158,10 @@ const taskSlice = createSlice({
       })
       .addCase(loadPatientTasks.rejected, (state, action) => {
         state.loading = false;
-        state.patientTasks = []; 
+        state.patientTasks = [];
         state.taskError = typeof action.payload === 'string'
           ? action.payload
-          : action.payload?.error || 'Failed to fetch tasks';
+          : (action.payload as any)?.error|| 'Failed to fetch tasks';
       })
       .addCase(loadPriorityTasks.fulfilled, (state, action) => {
         state.priorityTasks = action.payload;
@@ -168,7 +169,6 @@ const taskSlice = createSlice({
       .addCase(loadMissedTasks.fulfilled, (state, action) => {
         state.missedTasks = action.payload;
       })
-
       .addCase(followUpTask.pending, (state) => {
         state.loading = true;
       })

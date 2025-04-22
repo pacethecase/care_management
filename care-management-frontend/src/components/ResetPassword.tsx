@@ -5,14 +5,16 @@ import { resetPassword } from "../redux/slices/userSlice";
 import { RootState } from "../redux/store";
 import Navbar from "./Navbar";
 import Footer from "./Footer";
+import type { AppDispatch } from '../redux/store';
 
 const ResetPassword = () => {
-  const dispatch = useDispatch();
+  const dispatch = useDispatch<AppDispatch>();
   const { loading, error, message } = useSelector((state: RootState) => state.user);
 
   const [searchParams] = useSearchParams();
-  const token = searchParams.get("token");
-  const email = searchParams.get("email");
+  const token = searchParams.get("token") ?? "";
+  const email = searchParams.get("email") ?? "";
+  
 
   const [newPassword, setNewPassword] = useState("");
 

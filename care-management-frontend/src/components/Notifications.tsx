@@ -1,19 +1,26 @@
+// src/components/Notifications.tsx
 import { useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import socket from '../utils/socket';
 import { RootState } from '../redux/store';
 import { addNotification } from '../redux/slices/notificationSlice';
+import socket from '../utils/socket'; 
+import type { AppDispatch } from '../redux/store';
+
+interface NotificationPayload {
+  title: string;
+  message: string;
+}
 
 const Notifications = () => {
-  const dispatch = useDispatch();
+  const dispatch = useDispatch<AppDispatch>();
   const { user } = useSelector((state: RootState) => state.user);
 
   useEffect(() => {
-    if (!user || !user.id) return; // ✅ ensure user exists
+    if (!user?.id) return;
+
     socket.emit('join', `user-${user.id}`);
 
-    socket.on('notification', (data) => {
-      console.log("📩 Received notification:", data);
+    const handleNotification = (data: NotificationPayload) => {
       dispatch(addNotification({
         id: Date.now().toString(),
         title: data.title,
@@ -21,12 +28,14 @@ const Notifications = () => {
         created_at: new Date().toISOString(),
         read: false,
       }));
-    });
+    };
+
+    socket.on('notification', handleNotification);
 
     return () => {
-      socket.off('notification');
+      socket.off('notification', handleNotification);
     };
-  }, [user?.id]);
+  }, [user?.id, dispatch]);
 
   return null;
 };

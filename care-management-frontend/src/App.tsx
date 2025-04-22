@@ -12,6 +12,7 @@
   import './index.css'; 
   import { useEffect } from "react";
   import { useDispatch, useSelector } from "react-redux";
+  import type { AppDispatch } from './redux/store';
   import { fetchCurrentUser } from "./redux/slices/userSlice";
   import { RootState } from "./redux/store";
   import PrivateRoute from "./components/PrivateRoute";
@@ -22,11 +23,9 @@
   import ResetPassword from './components/ResetPassword';
   import Notifications from './components/Notifications';
   import EditPatientPage from './pages/EditPatientPage';
-  import HistoricalTimelineReport from './components/HistoricalTimelineReport';
-  import Notification from './components/Notification';
   import { fetchNotifications } from './redux/slices/notificationSlice';
   function App() {
-    const dispatch = useDispatch(); 
+    const dispatch = useDispatch<AppDispatch>();
 
     const { user, authLoaded, loading } = useSelector((state: RootState) => state.user);
 

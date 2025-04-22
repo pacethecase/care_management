@@ -5,9 +5,10 @@ import { toast } from "react-toastify";
 import { Eye, EyeOff } from "lucide-react";
 import { RootState } from "../redux/store";
 import { updateUserProfile } from "../redux/slices/userSlice";
+import type { AppDispatch } from '../redux/store';
 
 const EditProfile = () => {
-  const dispatch = useDispatch();
+  const dispatch = useDispatch<AppDispatch>();
   const navigate = useNavigate();
   const { user, loading } = useSelector((state: RootState) => state.user);
 

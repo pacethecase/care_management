@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import  { useEffect, useState } from 'react';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import PatientsList from '../components/PatientsList';
@@ -6,9 +6,10 @@ import { useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchPatients, searchPatients } from '../redux/slices/patientSlice';
 import { RootState } from '../redux/store';
+import type { AppDispatch } from '../redux/store';
 
 const Patients = () => {
-  const dispatch = useDispatch();
+const dispatch = useDispatch<AppDispatch>();
   const navigate = useNavigate();
 
   const { patients, searchResults, loading, error } = useSelector((state: RootState) => state.patients);
@@ -28,13 +29,7 @@ const Patients = () => {
   }, [searchTerm, dispatch]);
   
 
-  const handleSearch = async () => {
-    if (searchTerm.trim()) {
-      await dispatch(searchPatients(searchTerm));
-    } else {
-      dispatch(fetchPatients());
-    }
-  };
+  
 
   return (
     <div className="flex flex-col min-h-screen bg-[var(--bg-light)] text-[var(--text-dark)]">

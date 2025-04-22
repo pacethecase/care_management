@@ -1,13 +1,12 @@
-import { useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '../redux/store';
-import { clearNotifications, fetchNotifications, markAllRead } from '../redux/slices/notificationSlice';
+import { fetchNotifications, markAllRead } from '../redux/slices/notificationSlice';
+import type { AppDispatch } from '../redux/store';
+import type { Notification } from '../redux/types';
 
 const NotificationPanel = () => {
-  const dispatch = useDispatch();
+  const dispatch = useDispatch<AppDispatch>();
   const { items: notifications, loading } = useSelector((state: RootState) => state.notifications);
-
-
 
   return (
     <div className="w-80 bg-white rounded-lg shadow-lg p-3 z-50 max-h-[60vh] overflow-y-auto">
@@ -17,9 +16,8 @@ const NotificationPanel = () => {
           className="text-xs text-blue-600 hover:underline"
           onClick={async () => {
             await dispatch(markAllRead());
-            dispatch(fetchNotifications()); // Add this line
+            dispatch(fetchNotifications());
           }}
-          
         >
           Mark All Read
         </button>
@@ -30,7 +28,7 @@ const NotificationPanel = () => {
       ) : notifications.length === 0 ? (
         <p className="text-gray-500 text-sm">No notifications</p>
       ) : (
-        notifications.map((n) => (
+        notifications.map((n: Notification) => (
           <div
             key={n.id}
             className={`mb-3 p-3 border rounded-md ${

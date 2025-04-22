@@ -13,8 +13,21 @@ const textColors = {
   "❌ Missed": "#991b1b",
   "⏳ Pending": "#1e3a8a",
 };
-
-const ProjectedTimelineReport = ({ data }) => {
+type Task = {
+    task_name: string;
+    label: "✅ On Time" | "⚠️ Late" | "❌ Missed" | "⏳ Pending";
+    due_date: string;
+    completed_at?: string;
+    missed_reason?: string;
+  };
+  
+  type ReportData = {
+    projected: Record<string, string>;
+    actual: Record<string, string>;
+    grouped: Record<string, Task[]>;
+  };
+  
+const ProjectedTimelineReport = ({ data }: { data: ReportData }) => {
   if (!data || !data.grouped) return <p>No timeline data available.</p>;
 
   const { projected, actual, grouped } = data;

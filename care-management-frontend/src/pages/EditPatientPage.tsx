@@ -6,9 +6,10 @@ import { fetchStaffs } from '../redux/slices/userSlice';
 import { RootState } from '../redux/store';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
+import type { AppDispatch } from '../redux/store';
 
 const EditPatientPage = () => {
-  const dispatch = useDispatch();
+  const dispatch = useDispatch<AppDispatch>();
   const navigate = useNavigate();
   const { patientId } = useParams<{ patientId: string }>(); 
 
@@ -47,7 +48,7 @@ const EditPatientPage = () => {
         bedId: patient.bed_id || '',
         mrn: patient.mrn || '',
         medical_info: patient.medical_info || '',
-        assignedStaffId: patient.assigned_staff_id || '',
+        assignedStaffId: String(patient.assigned_staff_id || ""),
       });
     }
   }, [patient]);

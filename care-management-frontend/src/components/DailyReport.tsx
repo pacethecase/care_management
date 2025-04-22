@@ -1,24 +1,34 @@
 import React, { useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { fetchDailyReport } from '../redux/slices/reportSlice'; // Redux action
+import type { AppDispatch, RootState } from '../redux/store';
+import { fetchDailyReport } from '../redux/slices/reportSlice';
 
-const DailyReport = ({ date }) => {
-  const dispatch = useDispatch();
-  const { dailyReport, loading, error } = useSelector(state => state.reports);
+interface Props {
+  date: string;
+}
+
+interface ReportTask {
+  patient_id: number;
+  patient_name: string;
+  task_name: string;
+  missed_reason?: string;
+  staff_name?: string;
+}
+
+const DailyReport: React.FC<Props> = ({ date }) => {
+  const dispatch = useDispatch<AppDispatch>();
+  const { dailyReport, loading, error } = useSelector((state: RootState) => state.reports);
 
   useEffect(() => {
-    dispatch(fetchDailyReport(date)); // Pass the date for filtering
+    dispatch(fetchDailyReport(date));
   }, [dispatch, date]);
 
   return (
     <div>
       <h2 className="text-2xl font-semibold mb-4 text-center text-orange no-print">Daily Report</h2>
-
-      {/* Loading or Error */}
       {loading && <p className="text-center text-gray-600">Loading...</p>}
       {error && <p className="text-center text-red-500">{error}</p>}
 
-      {/* Check if dailyReport is an array and has data */}
       {Array.isArray(dailyReport) && dailyReport.length > 0 ? (
         <div className="overflow-x-auto">
           <table className="min-w-full bg-white rounded-lg shadow-lg">
@@ -31,7 +41,7 @@ const DailyReport = ({ date }) => {
               </tr>
             </thead>
             <tbody>
-              {dailyReport.map((task) => (
+              {dailyReport.map((task: ReportTask) => (
                 <tr key={`${task.patient_id}-${task.task_name}`} className="border-b">
                   <td className="p-3">{task.patient_name}</td>
                   <td className="p-3">{task.task_name}</td>

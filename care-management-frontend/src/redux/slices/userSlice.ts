@@ -1,21 +1,15 @@
-import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
+import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
+import type { UserInfo } from "../types";
 
-interface UserInfo {
-  id: number | null;
-  name: string;
-  email: string;
-  is_admin: boolean;
-  is_staff: boolean;
-  is_verified: boolean;
-}
-
+const BASE_URL = "http://localhost:5001";
 interface UserState {
   user: UserInfo | null;
   staffs: UserInfo[];
   loading: boolean;
   error: string | null;
   authLoaded: boolean;
+  message?: string;
 }
 
 const initialState: UserState = {
@@ -31,7 +25,7 @@ export const signupUser = createAsyncThunk(
   "user/signupUser",
   async (data: any, { rejectWithValue }) => {
     try {
-      const response = await axios.post("http://localhost:5001/auth/signup", data);
+      const response = await axios.post(`${BASE_URL}/auth/signup`, data);
       return response.data;
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.error || "Signup failed");
@@ -43,7 +37,7 @@ export const loginUser = createAsyncThunk(
   "user/loginUser",
   async (data: any, { rejectWithValue }) => {
     try {
-      const response = await axios.post("http://localhost:5001/auth/login", data, {
+      const response = await axios.post(`${BASE_URL}/auth/login`, data, {
         withCredentials: true,
       });
       return response.data;
@@ -53,49 +47,50 @@ export const loginUser = createAsyncThunk(
   }
 );
 
-
 export const sendResetLink = createAsyncThunk(
   "auth/sendResetLink",
   async (email: string, { rejectWithValue }) => {
     try {
-      const res = await axios.post("http://localhost:5001/auth/forgot-password", { email });
-      return res.data.message;
+      const res = await axios.post(`${BASE_URL}/auth/forgot-password`, { email });
+      return res.data.message as string;
     } catch (err: any) {
       return rejectWithValue(err.response?.data?.error || "Failed to send reset link");
     }
   }
 );
+
 export const resetPassword = createAsyncThunk(
   "auth/resetPassword",
-  async ({ token, email, newPassword }: { token: string; email: string; newPassword: string }, { rejectWithValue }) => {
+  async (
+    { token, email, newPassword }: { token: string; email: string; newPassword: string },
+    { rejectWithValue }
+  ) => {
     try {
-      const res = await axios.post("http://localhost:5001/auth/reset-password", {
+      const res = await axios.post(`${BASE_URL}/auth/reset-password`, {
         token,
         email,
         newPassword,
       });
-      return res.data.message;
+      return res.data.message as string;
     } catch (err: any) {
       return rejectWithValue(err.response?.data?.error || "Failed to reset password");
     }
   }
 );
 
-
-
 export const fetchCurrentUser = createAsyncThunk(
   "user/fetchCurrentUser",
   async (_, { rejectWithValue }) => {
     try {
-      const response = await axios.get("http://localhost:5001/auth/me", {
+      const response = await axios.get(`${BASE_URL}/auth/me`, {
         withCredentials: true,
       });
-      return response.data.user;
+      return response.data.user as UserInfo;
     } catch (error: any) {
       if (error.response?.status === 401 || error.response?.status === 404) {
-        return null; 
+        return null;
       }
-      return rejectWithValue(error.response?.data || "Failed to fetch user");
+      return rejectWithValue(error.response?.data?.error || "Failed to fetch user");
     }
   }
 );
@@ -104,12 +99,12 @@ export const fetchStaffs = createAsyncThunk(
   "user/fetchStaffs",
   async (_, { rejectWithValue }) => {
     try {
-      const response = await axios.get("http://localhost:5001/users/staffs", {
+      const response = await axios.get(`${BASE_URL}/users/staffs`, {
         withCredentials: true,
       });
-      return response.data;
+      return response.data as UserInfo[];
     } catch (error: any) {
-      return rejectWithValue(error.response?.data || "Failed to fetch staffs");
+      return rejectWithValue(error.response?.data?.error || "Failed to fetch staffs");
     }
   }
 );
@@ -118,32 +113,33 @@ export const logoutUser = createAsyncThunk(
   "user/logoutUser",
   async (_, { rejectWithValue }) => {
     try {
-      await axios.post("http://localhost:5001/auth/logout", {}, { withCredentials: true });
+      await axios.post(`${BASE_URL}/auth/logout`, {}, { withCredentials: true });
       return true;
     } catch (error: any) {
-      return rejectWithValue(error.response?.data || "Logout failed");
+      return rejectWithValue(error.response?.data?.error || "Logout failed");
     }
   }
 );
 
 export const updateUserProfile = createAsyncThunk(
   "user/updateUserProfile",
-  async ({ id, name, password }: { id: number; name: string; password?: string }, { rejectWithValue }) => {
+  async (
+    { id, name, password }: { id: number; name: string; password?: string },
+    { rejectWithValue }
+  ) => {
     try {
-      const response = await axios.put(`http://localhost:5001/users/${id}`, {
-        name,
-        password,
-      }, {
-        withCredentials: true,
-      });
-      return response.data.user;
+      const response = await axios.put(
+        `${BASE_URL}/users/${id}`,
+        { name, password },
+        { withCredentials: true }
+      );
+      return response.data.user as UserInfo;
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.error || "Failed to update profile");
     }
   }
 );
 
-// Slice
 const userSlice = createSlice({
   name: "user",
   initialState,
@@ -153,6 +149,7 @@ const userSlice = createSlice({
       state.staffs = [];
       state.error = null;
       state.loading = false;
+      state.message = undefined;
     },
   },
   extraReducers: (builder) => {
@@ -179,7 +176,7 @@ const userSlice = createSlice({
         state.error = null;
       })
       .addCase(fetchCurrentUser.fulfilled, (state, action) => {
-        state.user = action.payload || null; 
+        state.user = action.payload || null;
         state.authLoaded = true;
         state.loading = false;
       })
@@ -209,11 +206,11 @@ const userSlice = createSlice({
       })
       .addCase(sendResetLink.fulfilled, (state, action) => {
         state.loading = false;
-        state.message = action.payload;
+        state.message = action.payload as string;
       })
       .addCase(sendResetLink.rejected, (state, action) => {
         state.loading = false;
-        state.error = action.payload;
+        state.error = action.payload as string;
       })
       .addCase(resetPassword.pending, (state) => {
         state.loading = true;
@@ -221,11 +218,11 @@ const userSlice = createSlice({
       })
       .addCase(resetPassword.fulfilled, (state, action) => {
         state.loading = false;
-        state.message = action.payload;
+        state.message = action.payload as string;
       })
       .addCase(resetPassword.rejected, (state, action) => {
         state.loading = false;
-        state.error = action.payload;
+        state.error = action.payload as string;
       })
       .addCase(updateUserProfile.fulfilled, (state, action) => {
         state.user = action.payload;

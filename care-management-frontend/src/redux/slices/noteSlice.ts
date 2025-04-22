@@ -1,18 +1,8 @@
-// src/redux/slices/noteSlice.ts
-import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
+import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
+import type { Note } from "../types";
 
 const BASE_URL = "http://localhost:5001";
-
-// 🧾 Types
-interface Note {
-  id: number;
-  patient_id: number;
-  staff_id: number;
-  nurse_name?: string;
-  note_text: string;
-  created_at: string;
-}
 
 interface NoteState {
   notes: Note[];
@@ -27,14 +17,18 @@ const initialState: NoteState = {
 };
 
 // ✅ Fetch Notes for a Patient
-export const fetchPatientNotes = createAsyncThunk(
+export const fetchPatientNotes = createAsyncThunk<
+  Note[],                         // Return type
+  number,                         // patientId
+  { rejectValue: string }         // Reject value
+>(
   "notes/fetchPatientNotes",
-  async (patientId: number, { rejectWithValue }) => {
+  async (patientId, { rejectWithValue }) => {
     try {
       const res = await axios.get(`${BASE_URL}/notes/${patientId}`, {
         withCredentials: true,
       });
-      return res.data as Note[];
+      return res.data;
     } catch (err: any) {
       return rejectWithValue(err.response?.data?.error || "Failed to fetch notes");
     }
@@ -42,43 +36,41 @@ export const fetchPatientNotes = createAsyncThunk(
 );
 
 // ✅ Add Note to Patient
-export const addPatientNote = createAsyncThunk(
+export const addPatientNote = createAsyncThunk<
+  Note,
+  { patientId: number; staff_id: number; note_text: string },
+  { rejectValue: string }
+>(
   "notes/addPatientNote",
-  async (
-    {
-      patientId,
-      staff_id,
-      note_text,
-    }: { patientId: number; staff_id: number; note_text: string },
-    { rejectWithValue }
-  ) => {
+  async ({ patientId, staff_id, note_text }, { rejectWithValue }) => {
     try {
       const res = await axios.post(
         `${BASE_URL}/notes/${patientId}`,
         { staff_id, note_text },
         { withCredentials: true }
       );
-      return res.data as Note;
+      return res.data;
     } catch (err: any) {
       return rejectWithValue(err.response?.data?.error || "Failed to add note");
     }
   }
 );
 
-// ✅ Update Existing Note (Optional)
-export const updatePatientNote = createAsyncThunk(
+// ✅ Update Existing Note
+export const updatePatientNote = createAsyncThunk<
+  Note,
+  { noteId: number; note_text: string },
+  { rejectValue: string }
+>(
   "notes/updatePatientNote",
-  async (
-    { noteId, note_text }: { noteId: number; note_text: string },
-    { rejectWithValue }
-  ) => {
+  async ({ noteId, note_text }, { rejectWithValue }) => {
     try {
       const res = await axios.put(
         `${BASE_URL}/notes/${noteId}`,
         { note_text },
         { withCredentials: true }
       );
-      return res.data as Note;
+      return res.data;
     } catch (err: any) {
       return rejectWithValue(err.response?.data?.error || "Failed to update note");
     }
@@ -102,28 +94,28 @@ const noteSlice = createSlice({
         state.loading = true;
         state.error = null;
       })
-      .addCase(fetchPatientNotes.fulfilled, (state, action: PayloadAction<Note[]>) => {
+      .addCase(fetchPatientNotes.fulfilled, (state, action) => {
         state.loading = false;
         state.notes = action.payload;
       })
       .addCase(fetchPatientNotes.rejected, (state, action) => {
         state.loading = false;
-        state.error = action.payload as string;
+        state.error = typeof action.payload === "string" ? action.payload : "Failed to fetch notes";
       })
 
-      .addCase(addPatientNote.fulfilled, (state, action: PayloadAction<Note>) => {
-        state.notes.unshift(action.payload); // add new note to top
+      .addCase(addPatientNote.fulfilled, (state, action) => {
+        state.notes.unshift(action.payload);
       })
       .addCase(addPatientNote.rejected, (state, action) => {
-        state.error = action.payload as string;
+        state.error = typeof action.payload === "string" ? action.payload : "Failed to add note";
       })
 
-      .addCase(updatePatientNote.fulfilled, (state, action: PayloadAction<Note>) => {
+      .addCase(updatePatientNote.fulfilled, (state, action) => {
         const idx = state.notes.findIndex((n) => n.id === action.payload.id);
         if (idx !== -1) state.notes[idx] = action.payload;
       })
       .addCase(updatePatientNote.rejected, (state, action) => {
-        state.error = action.payload as string;
+        state.error = typeof action.payload === "string" ? action.payload : "Failed to update note";
       });
   },
 });

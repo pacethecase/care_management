@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import  { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import {
@@ -22,16 +22,19 @@ import {
 } from "lucide-react";
 import { toast } from "react-toastify";
 import { useNavigate } from 'react-router-dom';
+import type { AppDispatch } from '../redux/store';
+import type { Task } from  "../redux/types";
+import type { Note } from  "../redux/types";
+
 
 const PatientTasks = () => {
-  const { patientId } = useParams();
-  const dispatch = useDispatch();
+  const { patientId } = useParams<{ patientId: string }>();
+  const dispatch = useDispatch<AppDispatch>();
 
   const [selectedTab, setSelectedTab] = useState<
     "Pending" | "In Progress" | "Completed" | "All Tasks" | "Notes"
   >("All Tasks");
   const [newNote, setNewNote] = useState("");
-  const [followUpReason, setFollowUpReason] = useState<string>("");
   const { patientTasks, loading: taskLoading } = useSelector((state: RootState) => state.tasks);
   const { selectedPatient: patient, loading: patientLoading } = useSelector((state: RootState) => state.patients);
   const { notes } = useSelector((state: RootState) => state.notes);
@@ -134,7 +137,7 @@ const PatientTasks = () => {
 
   const getStatusBadge = (status: string) => {
     const base = "badge";
-    const statusMap = {
+    const statusMap: Record<string, string> = {
       Pending: "badge-pending",
       "In Progress": "badge-inprogress",
       Completed: "badge-completed",
@@ -148,8 +151,8 @@ const PatientTasks = () => {
       : patientTasks.filter((task) => task.status === selectedTab);
 
   const renderTasks = () =>
-    filteredTasks.map((task) => {
-      const borderColor = algoColorMap[task.algorithm] || "var(--border-muted)";
+    filteredTasks.map((task: Task)  => {
+      const borderColor = algoColorMap[task.algorithm as keyof typeof algoColorMap] || "var(--border-muted)";
       const today = new Date();
       const idealDue = task.ideal_due_date ? new Date(task.ideal_due_date) : null;
       const completedAt = task.completed_at ? new Date(task.completed_at) : null;
@@ -261,7 +264,7 @@ const PatientTasks = () => {
         <Plus className="inline w-4 h-4 mr-1" /> Add Note
       </button>
       <div className="mt-4 space-y-3">
-        {notes.map((note) => (
+      {notes.map((note: Note) => (
           <div key={note.id} className="border-b pb-2">
             <p>{note.note_text}</p>
             <span className="text-xs text-gray-400">
@@ -294,7 +297,7 @@ const PatientTasks = () => {
           <h3 className="text-md mb-1">Staff:{patient.staff_name}</h3>
           <p className="text-sm text-[var(--text-muted)]">
           • Age {patient.age} • Bed {patient.bed_id} • Admitted on{" "}
-            {new Date(patient.created_at).toLocaleDateString()}  • MRN {patient.mrn}
+          {patient.created_at ? new Date(patient.created_at).toLocaleDateString() : "N/A"} • MRN {patient.mrn}
           </p>
           <div className="text-xs text-[var(--text-muted)] mt-2 space-y-1">
             {patient.is_behavioral && (
@@ -331,7 +334,7 @@ const PatientTasks = () => {
           {["Pending", "In Progress", "Completed", "All Tasks", "Notes"].map((tab) => (
             <button
               key={tab}
-              onClick={() => setSelectedTab(tab as any)}
+              onClick={() => setSelectedTab(tab as "Pending" | "In Progress" | "Completed" | "All Tasks" | "Notes")}
               className={`tab ${selectedTab === tab ? "tab-active" : ""}`}
             >
               {tab}

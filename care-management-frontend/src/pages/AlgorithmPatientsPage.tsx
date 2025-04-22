@@ -1,22 +1,16 @@
-import React, { useEffect, useState } from "react";
+import  { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { loadPatientsByAlgorithm } from "../redux/slices/algorithmSlice"; // Import action
 import { RootState } from "../redux/store";
-import Navbar from "../components/NavBar";
+import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
+import type { AppDispatch } from '../redux/store';
 
-interface Patient {
-  id: number;
-  name: string;
-  birth_date: string;
-  bed_id: string;
-  admitted_on: string; // Add Admitted On field
-}
 
 const AlgorithmPatients = () => {
   const { algorithm } = useParams();
-  const dispatch = useDispatch();
+  const dispatch = useDispatch<AppDispatch>();
   const navigate = useNavigate();
   const { patientsByAlgorithm, loading, error } = useSelector(
     (state: RootState) => state.algorithms
@@ -75,7 +69,8 @@ const AlgorithmPatients = () => {
               <div className="text-sm text-gray-600 mt-3">
                 <p>Bed: {p.bed_id}</p>
                 <p>DOB: {new Date(p.birth_date).toLocaleDateString()}</p>
-                <p>Admitted On: {new Date(p.created_at).toLocaleDateString()}</p>
+                <p>Admitted On: {p.created_at ? new Date(p.created_at).toLocaleDateString() : "N/A"}</p>
+                handleSearch
               </div>
             </div>
           ))}

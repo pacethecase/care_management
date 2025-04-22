@@ -1,22 +1,43 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect, ChangeEvent } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate, Link } from 'react-router-dom';
 import { addPatient } from '../redux/slices/patientSlice';
 import { fetchStaffs } from '../redux/slices/userSlice';
-import { RootState } from '../redux/store';
+import { RootState, AppDispatch } from '../redux/store';
 import AlgorithmSelection from "../components/AlgorithmSelection";
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 
+interface FormData {
+  name: string;
+  birth_date: string;
+  age: number;
+  bedId: string;
+  mrn: string;
+  medical_info: string;
+  assignedStaffId: string;
+  is_behavioral: boolean;
+  is_restrained: boolean;
+  is_geriatric_psych_available: boolean;
+  is_behavioral_team: boolean;
+  is_ltc: boolean;
+  is_ltc_medical: boolean;
+  is_ltc_financial: boolean;
+  is_guardianship: boolean;
+  is_guardianship_financial: boolean;
+  is_guardianship_person: boolean;
+  is_guardianship_emergency: boolean;
+}
+
 const AddPatientPage = () => {
-  const dispatch = useDispatch();
+  const dispatch = useDispatch<AppDispatch>();
   const navigate = useNavigate();
   const staffs = useSelector((state: RootState) => state.user.staffs);
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<FormData>({
     name: '',
     birth_date: '',
-    age: '',
+    age: 0,
     bedId: '',
     mrn: '',
     medical_info: '',
@@ -47,53 +68,31 @@ const AddPatientPage = () => {
       );
       setFormData((prev) => ({
         ...prev,
-        age: calculatedAge >= 0 ? calculatedAge : '',
+        age: calculatedAge >= 0 ? calculatedAge : 0,
         is_geriatric_psych_available: calculatedAge > 65 ? prev.is_geriatric_psych_available : false,
       }));
     }
   }, [formData.birth_date]);
 
   const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
+    e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
   ) => {
-    const { name, value, type, checked } = e.target;
+    const { name, value, type } = e.target;
+    const isCheckbox = type === 'checkbox';
+
     setFormData((prev) => ({
       ...prev,
-      [name]: type === 'checkbox' ? checked : value,
+      [name]: isCheckbox ? (e.target as HTMLInputElement).checked : value,
     }));
   };
 
   const handleSubmit = async () => {
     try {
       await dispatch(addPatient(formData)).unwrap();
-      setFormData({
-        name: '',
-        birth_date: '',
-        age: '',
-        bedId: '',
-        mrn:'',
-        medical_info: '',
-        assignedStaffId: '',
-        is_behavioral: false,
-        is_restrained: false,
-        is_geriatric_psych_available: false,
-        is_behavioral_team: false,
-        is_ltc: false,
-        is_ltc_medical: false,
-        is_ltc_financial: false,
-        is_guardianship: false,
-        is_guardianship_financial: false,
-        is_guardianship_person: false,
-        is_guardianship_emergency:false,
-      });
       navigate('/patients');
-    } catch (err) {
-      if (err && err.message) {
-        alert(`Error: ${err.message}`);
-        console.error("Submit failed:", err.message);
-      } else {
-        console.error("Submit failed (unknown):", err);
-      }
+    } catch (err: any) {
+      alert(`Error: ${err?.message || 'Failed to add patient'}`);
+      console.error("Submit failed:", err);
     }
   };
 
@@ -117,7 +116,6 @@ const AddPatientPage = () => {
                 name="name"
                 value={formData.name}
                 onChange={handleChange}
-                placeholder="Enter patient name"
                 required
               />
             </div>
@@ -141,21 +139,19 @@ const AddPatientPage = () => {
                 value={formData.age}
                 readOnly
                 className="bg-gray-100 cursor-not-allowed"
-                placeholder="Auto-calculated"
-                required
               />
             </div>
+
             <div>
-              <label className="block font-medium">MRN (Medical Record Number)</label>
+              <label className="block font-medium">MRN</label>
               <input
                 type="text"
                 name="mrn"
                 value={formData.mrn}
                 onChange={handleChange}
-                placeholder="Enter MRN"
-                required
               />
             </div>
+
             <div>
               <label className="block font-medium">Bed ID*</label>
               <input
@@ -163,10 +159,9 @@ const AddPatientPage = () => {
                 name="bedId"
                 value={formData.bedId}
                 onChange={handleChange}
-                placeholder="Enter Bed ID"
                 required
               />
-            </div>  
+            </div>
 
             <div className="md:col-span-2">
               <label className="block font-medium">Medical Information</label>
@@ -174,7 +169,6 @@ const AddPatientPage = () => {
                 name="medical_info"
                 value={formData.medical_info}
                 onChange={handleChange}
-                placeholder="Enter medical details"
               />
             </div>
 

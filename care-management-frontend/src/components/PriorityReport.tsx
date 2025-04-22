@@ -1,10 +1,16 @@
 import React, { useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchPriorityReport } from '../redux/slices/reportSlice'; // import the action
+import type { AppDispatch } from '../redux/store';
+import { RootState } from "../redux/store";
 
-const PriorityReport = ({ date }) => {
-  const dispatch = useDispatch();
-  const { priorityReport, loading, error } = useSelector((state) => state.reports);
+interface PriorityReportProps {
+  date: string;
+}
+
+const PriorityReport: React.FC<PriorityReportProps> = ({ date }) => {
+  const dispatch = useDispatch<AppDispatch>();
+  const { priorityReport, loading, error } = useSelector((state: RootState) => state.reports);
 
   // Fetch priority report when component mounts
   useEffect(() => {
@@ -34,7 +40,7 @@ const PriorityReport = ({ date }) => {
               </tr>
             </thead>
             <tbody>
-              {priorityReport.map((task) => (
+              {priorityReport.map((task:any) => (
                 <tr key={`${task.patient_id}-${task.task_name}`} className="border-b">
                   <td className="p-3">{task.patient_name}</td>
                   <td className="p-3">{task.task_name}</td>

@@ -1,12 +1,29 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import axios from 'axios';
+import type { Patient, AlgorithmPatientCount } from "../types";
 
-const BASE_URL = 'http://localhost:5001'; // Base URL for your API
+const BASE_URL = 'http://localhost:5001';
 
-// Thunks
+interface AlgorithmState {
+  patientCounts: AlgorithmPatientCount[];
+  patientsByAlgorithm: Patient[];
+  loading: boolean;
+  error: string | null;
+}
 
-// Fetch the counts of patients by algorithm (Behavioral, Guardianship, LTC)
-export const loadPatientCountsByAlgorithm = createAsyncThunk(
+const initialState: AlgorithmState = {
+  patientCounts: [],
+  patientsByAlgorithm: [],
+  loading: false,
+  error: null,
+};
+
+// ✅ Thunk: Fetch patient counts grouped by algorithm
+export const loadPatientCountsByAlgorithm = createAsyncThunk<
+  AlgorithmPatientCount[],             // Return type
+  void,                                // No input argument
+  { rejectValue: string }              // Reject type
+>(
   'algorithms/loadPatientCountsByAlgorithm',
   async (_, { rejectWithValue }) => {
     try {
@@ -20,10 +37,14 @@ export const loadPatientCountsByAlgorithm = createAsyncThunk(
   }
 );
 
-// Fetch patients by a specific algorithm (e.g., Behavioral, Guardianship, LTC)
-export const loadPatientsByAlgorithm = createAsyncThunk(
+// ✅ Thunk: Fetch patients filtered by algorithm
+export const loadPatientsByAlgorithm = createAsyncThunk<
+  Patient[],                           // Return type
+  string,                              // Input argument (algorithm)
+  { rejectValue: string }              // Reject type
+>(
   'algorithms/loadPatientsByAlgorithm',
-  async (algorithm: string, { rejectWithValue }) => {
+  async (algorithm, { rejectWithValue }) => {
     try {
       const response = await axios.get(`${BASE_URL}/algorithms/${algorithm}`, {
         withCredentials: true,
@@ -35,21 +56,16 @@ export const loadPatientsByAlgorithm = createAsyncThunk(
   }
 );
 
-// Slice
-
+// ✅ Slice
 const algorithmSlice = createSlice({
   name: 'algorithms',
-  initialState: {
-    patientCounts: [],
-    patientsByAlgorithm: [],
-    loading: false,
-    error: null,
-  },
+  initialState,
   reducers: {},
   extraReducers: (builder) => {
     builder
       .addCase(loadPatientCountsByAlgorithm.pending, (state) => {
         state.loading = true;
+        state.error = null;
       })
       .addCase(loadPatientCountsByAlgorithm.fulfilled, (state, action) => {
         state.loading = false;
@@ -57,10 +73,12 @@ const algorithmSlice = createSlice({
       })
       .addCase(loadPatientCountsByAlgorithm.rejected, (state, action) => {
         state.loading = false;
-        state.error = action.payload;
+        state.error = typeof action.payload === 'string' ? action.payload : 'Error loading algorithm counts';
       })
+
       .addCase(loadPatientsByAlgorithm.pending, (state) => {
         state.loading = true;
+        state.error = null;
       })
       .addCase(loadPatientsByAlgorithm.fulfilled, (state, action) => {
         state.loading = false;
@@ -68,7 +86,7 @@ const algorithmSlice = createSlice({
       })
       .addCase(loadPatientsByAlgorithm.rejected, (state, action) => {
         state.loading = false;
-        state.error = action.payload;
+        state.error = typeof action.payload === 'string' ? action.payload : 'Error loading patients';
       });
   },
 });

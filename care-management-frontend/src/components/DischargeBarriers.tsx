@@ -1,37 +1,41 @@
-import React, { useEffect } from "react";
+import { useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { loadPatientCountsByAlgorithm } from "../redux/slices/algorithmSlice"; // Import the action
-import { RootState } from "../redux/store";
+import { loadPatientCountsByAlgorithm } from "../redux/slices/algorithmSlice";
+import { RootState, AppDispatch } from "../redux/store";
 import { useNavigate } from "react-router-dom";
 
+interface AlgorithmCount {
+  algorithm: "Behavioral" | "Guardianship" | "LTC";
+  count: number;
+}
+
 const DischargeBarriers = () => {
-  const dispatch = useDispatch();
+  const dispatch = useDispatch<AppDispatch>();
   const navigate = useNavigate();
-  const { patientCounts, loading, error } = useSelector(
-    (state: RootState) => state.algorithms
-  );
+  const { patientCounts, loading, error } = useSelector((state: RootState) => state.algorithms);
 
   useEffect(() => {
     dispatch(loadPatientCountsByAlgorithm());
   }, [dispatch]);
 
   if (loading) return <div>Loading...</div>;
-  if (error) return <div>{error}</div>;
+  if (error) return <div className="text-red-600">{String(error)}</div>;
 
-  const handleClick = (algorithm: string) => {
-    navigate(`/algorithms/${algorithm}`);
-  };
-
-  const cssVarMap = {
+  const cssVarMap: Record<AlgorithmCount["algorithm"], string> = {
     Behavioral: "var(--algo-behavioral)",
     Guardianship: "var(--algo-guardianship)",
     LTC: "var(--algo-ltc)",
   };
+
+  const handleClick = (algorithm: AlgorithmCount["algorithm"]) => {
+    navigate(`/algorithms/${algorithm}`);
+  };
+
   return (
     <div className="p-6">
       <h2 className="text-xl font-bold mb-4">🏥 Discharge Barrier Summary</h2>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {patientCounts.map((item) => (
+        {patientCounts.map((item: AlgorithmCount) => (
           <div
             key={item.algorithm}
             className="bg-white shadow-md p-6 rounded-lg flex flex-col items-center justify-between"

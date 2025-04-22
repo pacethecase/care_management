@@ -1,6 +1,24 @@
-import React from 'react';
+type TransitionCareReportProps = {
+  report: {
+    patient: {
+      name: string;
+      mrn: string;
+      dob: string;
+      admitted_date: string;
+    };
+    date_of_report: string;
+    sections: {
+      algorithm: string;
+      contact_info: string;
+      tasks_completed: {
+        task_name: string;
+        completed_at: string;
+      }[];
+    }[];
+  } | null;
+};
 
-const TransitionCareReport = ({ report }) => {
+const TransitionCareReport = ({ report }: TransitionCareReportProps) => {
   if (!report) return null;
 
   const { patient, date_of_report, sections } = report;

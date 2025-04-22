@@ -1,20 +1,25 @@
+// src/redux/store/index.ts
 import { configureStore } from "@reduxjs/toolkit";
 import userReducer from "../slices/userSlice";
 import patientsReducer from "../slices/patientSlice";
 import taskReducer from "../slices/taskSlice";
 import noteReducer from "../slices/noteSlice";
 import reportReducer from "../slices/reportSlice";
-import algorithmReducer from '../slices/algorithmSlice'; 
-import notificatinReducer from '../slices/notificationSlice';
+import algorithmReducer from "../slices/algorithmSlice";
+import notificationReducer from "../slices/notificationSlice";
 
 export const store = configureStore({
   reducer: {
     user: userReducer,
-    patients: patientsReducer, 
+    patients: patientsReducer,
     tasks: taskReducer,
     notes: noteReducer,
-    reports: reportReducer, 
+    reports: reportReducer,
     algorithms: algorithmReducer,
-    notifications: notificatinReducer,
+    notifications: notificationReducer,
   },
 });
+
+// ✅ Use these in your components for proper typing
+export type RootState = ReturnType<typeof store.getState>;
+export type AppDispatch = typeof store.dispatch;

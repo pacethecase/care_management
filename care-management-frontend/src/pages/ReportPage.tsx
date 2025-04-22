@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import  { useState, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { FaPrint } from "react-icons/fa";
 import DailyReport from "../components/DailyReport";
@@ -10,45 +10,67 @@ import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import logo from "../assets/logo.png";
 import { RootState } from "../redux/store";
-import { fetchPatients } from "../redux/slices/patientSlice";
 import {
   fetchDailyReport,
   fetchPriorityReport,
   fetchTransitionReport,
   fetchHistoricalTimelineReport,
-  fetchProjectedTimelineReport
+  fetchProjectedTimelineReport,
 } from "../redux/slices/reportSlice";
+import { fetchPatients } from "../redux/slices/patientSlice";
+import type { AppDispatch } from "../redux/store";
+
+type ReportType = "daily" | "priority" | "transition" | "historical" | "projected";
 
 const ReportPage = () => {
-  const dispatch = useDispatch();
+  const dispatch = useDispatch<AppDispatch>();
   const { patients } = useSelector((state: RootState) => state.patients);
-  const { transitionReport, historicalReport, projectedTimelineReport } = useSelector((state: RootState) => state.reports);
-  const [selectedReport, setSelectedReport] = useState<"daily" | "priority" | "transition" | "historical"| "projected" | null>(null);
+  const { transitionReport, historicalReport, projectedTimelineReport } = useSelector(
+    (state: RootState) => state.reports
+  );
+
+  const [selectedReport, setSelectedReport] = useState<ReportType | null>(null);
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split("T")[0]);
   const [selectedPatientId, setSelectedPatientId] = useState<number | null>(null);
 
   useEffect(() => {
-    dispatch(fetchPatients() as any);
+    dispatch(fetchPatients());
   }, [dispatch]);
 
   useEffect(() => {
-    if ((selectedReport === "transition" || selectedReport === "historical" || selectedReport === "projected") && !selectedPatientId) return;
+    if (
+      (selectedReport === "transition" ||
+        selectedReport === "historical" ||
+        selectedReport === "projected") &&
+      !selectedPatientId
+    )
+      return;
 
-    if (selectedReport === "daily") {
-      dispatch(fetchDailyReport(selectedDate) as any);
-    } else if (selectedReport === "priority") {
-      dispatch(fetchPriorityReport(selectedDate) as any);
-    } else if (selectedReport === "transition" && selectedPatientId) {
-      dispatch(fetchTransitionReport(selectedPatientId) as any);
-    } else if (selectedReport === "historical" && selectedPatientId) {
-      dispatch(fetchHistoricalTimelineReport(selectedPatientId) as any);
-    } else if (selectedReport === "projected" && selectedPatientId) {
-      dispatch(fetchProjectedTimelineReport(selectedPatientId) as any);
+    switch (selectedReport) {
+      case "daily":
+        dispatch(fetchDailyReport(selectedDate));
+        break;
+      case "priority":
+        dispatch(fetchPriorityReport(selectedDate));
+        break;
+      case "transition":
+        if (selectedPatientId) dispatch(fetchTransitionReport(selectedPatientId));
+        break;
+      case "historical":
+        if (selectedPatientId) dispatch(fetchHistoricalTimelineReport(selectedPatientId));
+        break;
+      case "projected":
+        if (selectedPatientId) dispatch(fetchProjectedTimelineReport(selectedPatientId));
+        break;
     }
   }, [selectedReport, selectedDate, selectedPatientId, dispatch]);
 
   useEffect(() => {
-    if (selectedReport === "transition" || selectedReport === "historical" || selectedReport === "projected") {
+    if (
+      selectedReport === "transition" ||
+      selectedReport === "historical" ||
+      selectedReport === "projected"
+    ) {
       setSelectedPatientId(null);
     }
   }, [selectedReport]);
@@ -58,13 +80,15 @@ const ReportPage = () => {
     const printWindow = window.open("", "_blank");
 
     if (content && printWindow) {
-      const reportTitle =
-        selectedReport === "daily" ? "DAILY REPORT" :
-        selectedReport === "priority" ? "PRIORITY REPORT" :
-        selectedReport === "transition" ? "TRANSITIONAL CARE REPORT" :
-        selectedReport === "historical" ? "HISTORICAL TIMELINE REPORT" :
-        selectedReport === "projected" ? "PROJECTED TIMELINE REPORT" :
-        "REPORT";
+      const reportTitleMap: Record<ReportType, string> = {
+        daily: "DAILY REPORT",
+        priority: "PRIORITY REPORT",
+        transition: "TRANSITIONAL CARE REPORT",
+        historical: "HISTORICAL TIMELINE REPORT",
+        projected: "PROJECTED TIMELINE REPORT",
+      };
+
+      const reportTitle = reportTitleMap[selectedReport || "daily"];
 
       const printStyles = `
         <style>
@@ -183,18 +207,20 @@ const ReportPage = () => {
         </div>
 
         <div className="space-x-4 mb-4 no-print">
-          {["daily", "priority", "transition", "historical", "projected"].map((type) => (
+          {(["daily", "priority", "transition", "historical", "projected"] as ReportType[]).map((type) => (
             <button
               key={type}
               className={`btn ${selectedReport === type ? "btn-primary" : "btn-outline"}`}
-              onClick={() => setSelectedReport(type as any)}
+              onClick={() => setSelectedReport(type)}
             >
               {type.charAt(0).toUpperCase() + type.slice(1)} Report
             </button>
           ))}
         </div>
 
-        {(selectedReport === "transition" || selectedReport === "historical" || selectedReport === "projected") && (
+        {(selectedReport === "transition" ||
+          selectedReport === "historical" ||
+          selectedReport === "projected") && (
           <div className="mb-4">
             <label className="text-lg mr-2">Select Patient:</label>
             <select
@@ -225,15 +251,15 @@ const ReportPage = () => {
           {!selectedReport && <p className="text-gray-500">Select a report to view.</p>}
           {selectedReport === "daily" && <DailyReport date={selectedDate} />}
           {selectedReport === "priority" && <PriorityReport date={selectedDate} />}
-          {selectedReport === "transition" && selectedPatientId && transitionReport && (
-            <TransitionCareReport report={transitionReport} />
-          )}
-          {selectedReport === "historical" && selectedPatientId && historicalReport && (
-            <HistoricalTimelineReport report={historicalReport} />
-          )}
-          {selectedReport === "projected" && selectedPatientId && projectedTimelineReport && (
-            <ProjectedTimelineReport data={projectedTimelineReport} />
-          )}
+          {selectedReport === "transition" &&
+            selectedPatientId &&
+            transitionReport && <TransitionCareReport report={transitionReport} />}
+          {selectedReport === "historical" &&
+            selectedPatientId &&
+            historicalReport && <HistoricalTimelineReport report={historicalReport} />}
+          {selectedReport === "projected" &&
+            selectedPatientId &&
+            projectedTimelineReport && <ProjectedTimelineReport data={projectedTimelineReport} />}
         </div>
       </div>
       <Footer />

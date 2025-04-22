@@ -4,12 +4,12 @@ import Navbar from "../components/Navbar";
 import { User, Lock, Mail, UserCog, Stethoscope } from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
 import { signupUser, clearUser } from "../redux/slices/userSlice";
-import { RootState } from "../redux/store";
 import { toast } from "react-toastify";
 import { useNavigate } from "react-router-dom";
-
+import type { AppDispatch } from '../redux/store';
+import { RootState } from "../redux/store";
 const SignUp = () => {
-  const dispatch = useDispatch();
+  const dispatch = useDispatch<AppDispatch>();
   const navigate = useNavigate();
   const { loading, error } = useSelector((state: RootState) => state.user);
 
