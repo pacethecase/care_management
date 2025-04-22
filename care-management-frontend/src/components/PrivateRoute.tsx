@@ -12,7 +12,7 @@ const PrivateRoute: React.FC<PrivateRouteProps> = ({ children }) => {
 
   if (!authLoaded) return <p>Loading session...</p>; // Or a spinner
 
-  if (!user) return <Navigate to="/login" replace />;
+  if (!user) return <Navigate to="/" replace />;
 
   return children;
 };

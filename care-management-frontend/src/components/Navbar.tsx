@@ -22,7 +22,7 @@ const Navbar: React.FC = () => {
   const handleLogout = async () => {
     try {
       await dispatch(logoutUser()).unwrap();
-      navigate('/login');
+      navigate('/');
     } catch (err) {
       console.error('Logout error:', err);
     }
