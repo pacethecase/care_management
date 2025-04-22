@@ -32,9 +32,20 @@ app.use(cors({
   app.options("*", cors());
   const io = socketIo(server, {
     cors: {
-      origin: 'http://localhost:5173', // or your frontend domain
+      origin: function (origin, callback) {
+        const allowedOrigins = [
+          'http://localhost:5173',
+          'https://care-management-umber.vercel.app'
+        ];
+    
+        if (!origin || allowedOrigins.includes(origin)) {
+          callback(null, true);
+        } else {
+          callback(new Error('Not allowed by CORS'));
+        }
+      },
       credentials: true,
-    },
+    }
   });
   app.set('io', io);
   setupMissedTaskJob(io); 
