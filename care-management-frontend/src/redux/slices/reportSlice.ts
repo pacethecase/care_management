@@ -3,7 +3,9 @@ import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
 import axios from "axios";
 
 
-const BASE_URL = "http://localhost:5001";
+const BASE_URL = process.env.NODE_ENV === 'development'
+  ? 'http://localhost:5000'  // For local development
+  : 'http://your-environment-name.elasticbeanstalk.com';
 interface ReportState {
   dailyReport: any[];
   priorityReport: any[];

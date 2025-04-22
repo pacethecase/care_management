@@ -2,7 +2,9 @@ import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 import type { Note } from "../types";
 
-const BASE_URL = "http://localhost:5001";
+const BASE_URL = process.env.NODE_ENV === 'development'
+  ? 'http://localhost:5000'  // For local development
+  : 'my-node-app-env.eba-fmxdv3xt.us-east-1.elasticbeanstalk.com ';
 
 interface NoteState {
   notes: Note[];
