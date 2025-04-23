@@ -18,7 +18,7 @@ const setupMissedTaskJob = require('./controller/missedTaskJob');
 
 const app = express();
 const server = http.createServer(app);
-
+app.set('trust proxy', 1); 
 // Allowed Origins (both development and production)
 const allowedOrigins = [
   'http://localhost:5173', 
@@ -27,11 +27,18 @@ const allowedOrigins = [
 
 // CORS Middleware Setup
 app.use(cors({
-  origin: allowedOrigins,
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error("CORS not allowed"));
+    }
+  },
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
   allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true
 }));
+
 
 // Body Parser and Cookie Parser
 app.use(cookieParser());
