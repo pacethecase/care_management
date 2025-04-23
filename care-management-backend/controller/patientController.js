@@ -56,7 +56,7 @@ const addPatient = async (req, res) => {
       is_guardianship_financial,
       is_guardianship_person,
       is_guardianship_emergency,admitted_date)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,CURRENT_DATE) RETURNING *`,
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) RETURNING *`,
       [
         name,
         birth_date,
@@ -76,6 +76,7 @@ const addPatient = async (req, res) => {
         is_guardianship_financial,
         is_guardianship_person,
         is_guardianship_emergency,
+        req.body.admitted_date,
       ]
     );
     const newPatient = result.rows[0];

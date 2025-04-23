@@ -155,11 +155,12 @@ const PatientTasks = () => {
       const borderColor = algoColorMap[task.algorithm as keyof typeof algoColorMap] || "var(--border-muted)";
       const today = new Date();
       const idealDue = task.ideal_due_date ? new Date(task.ideal_due_date) : null;
-      const completedAt = task.completed_at ? new Date(task.completed_at) : null;
-      const isDelayed = idealDue
-        ? (completedAt && completedAt > idealDue) || (!completedAt && today > idealDue)
-        : false;
-      
+        const completedAt = task.completed_at ? new Date(task.completed_at) : null;
+        const now = new Date(); 
+
+        const isDelayed = idealDue
+          ? (completedAt && completedAt > idealDue) || (!completedAt && now > idealDue)
+          : false;
       return (
         <div
         key={task.task_id}

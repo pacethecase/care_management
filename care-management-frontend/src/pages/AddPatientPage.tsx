@@ -88,7 +88,9 @@ const AddPatientPage = () => {
 
   const handleSubmit = async () => {
     try {
-      await dispatch(addPatient(formData)).unwrap();
+      const admittedDate = new Date().toISOString(); 
+      dispatch(addPatient({ ...formData, admitted_date: admittedDate }));
+
       navigate('/patients');
     } catch (err: any) {
       alert(`Error: ${err?.message || 'Failed to add patient'}`);
