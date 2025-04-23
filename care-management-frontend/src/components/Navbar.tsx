@@ -42,12 +42,12 @@ const Navbar: React.FC = () => {
         <h1 className="text-lg text-orange font-semibold tracking-wide">Case Management</h1>
 
         <div className="flex space-x-4 items-center">
-          <Link to="/homepage" className="tab transition">Home</Link>
-          <Link to="/patients" className="tab transition">Patients</Link>
-
-          {user?.is_staff && <Link to="/tasks" className="tab transition">Tasks</Link>}
-          {user?.is_admin && <Link to="/reports" className="tab transition">Reports</Link>}
-
+          <div className="hidden sm:flex space-x-4">
+              <Link to="/homepage" className="tab transition">Home</Link>
+              <Link to="/patients" className="tab transition">Patients</Link>
+              {user?.is_staff && <Link to="/tasks" className="tab transition">Tasks</Link>}
+              {user?.is_admin && <Link to="/reports" className="tab transition">Reports</Link>}
+          </div>
           {/* Notifications */}
           <div className="relative">
             <button
@@ -76,18 +76,27 @@ const Navbar: React.FC = () => {
             </button>
 
             {isDropdownOpen && (
-              <div className="absolute right-0 mt-2 w-44 bg-white rounded shadow-lg z-50">
-                <Link to="/edit-profile" className="block px-4 py-2 hover:bg-gray-100 transition">
-                  Edit Profile
-                </Link>
-                <button
-                  onClick={handleLogout}
-                  className="block w-full text-left px-4 py-2 hover:bg-gray-100 transition"
-                >
-                  Logout
-                </button>
+            <div className="absolute right-0 mt-2 w-48 bg-white text-black rounded shadow-lg z-50">
+              {/* Mobile Nav Links */}
+              <div className="block sm:hidden">
+                <Link to="/homepage" className="block px-4 py-2 hover:bg-gray-100">Home</Link>
+                <Link to="/patients" className="block px-4 py-2 hover:bg-gray-100">Patients</Link>
+                {user?.is_staff && <Link to="/tasks" className="block px-4 py-2 hover:bg-gray-100">Tasks</Link>}
+                {user?.is_admin && <Link to="/reports" className="block px-4 py-2 hover:bg-gray-100">Reports</Link>}
+                <hr className="my-1" />
               </div>
-            )}
+
+              {/* Always shown */}
+              <Link to="/edit-profile" className="block px-4 py-2 hover:bg-gray-100">Edit Profile</Link>
+              <button
+                onClick={handleLogout}
+                className="block w-full text-left px-4 py-2 hover:bg-gray-100 text-gray-500"
+              >
+                Logout
+              </button>
+            </div>
+          )}
+
           </div>
         </div>
       </nav>

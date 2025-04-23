@@ -28,7 +28,9 @@ export const fetchDailyReport = createAsyncThunk<any[], string, { rejectValue: s
   "reports/fetchDailyReport",
   async (date, { rejectWithValue }) => {
     try {
-      const response = await axios.get(`${BASE_URL}/reports/daily-report?date=${date}`);
+      const response = await axios.get(`${BASE_URL}/reports/daily-report?date=${date}`, {
+        withCredentials: true,
+      });
       return response.data;
     } catch (error: any) {
       return rejectWithValue(error.response?.data || "Failed to fetch daily report");
@@ -40,7 +42,9 @@ export const fetchPriorityReport = createAsyncThunk<any[], string, { rejectValue
   "reports/fetchPriorityReport",
   async (date, { rejectWithValue }) => {
     try {
-      const response = await axios.get(`${BASE_URL}/reports/daily-priority-report?date=${date}`);
+      const response = await axios.get(`${BASE_URL}/reports/daily-priority-report?date=${date}`, {
+        withCredentials: true,
+      });
       return response.data;
     } catch (error: any) {
       return rejectWithValue(error.response?.data || "Failed to fetch priority report");
@@ -52,7 +56,9 @@ export const fetchTransitionReport = createAsyncThunk<any, number, { rejectValue
   "reports/fetchTransitionReport",
   async (patientId, { rejectWithValue }) => {
     try {
-      const response = await axios.get(`${BASE_URL}/reports/patients/${patientId}/transition-report`);
+      const response = await axios.get(`${BASE_URL}/reports/patients/${patientId}/transition-report`, {
+        withCredentials: true,
+      });
       return response.data;
     } catch (error: any) {
       return rejectWithValue(error.response?.data || "Failed to fetch transition report");
@@ -66,7 +72,9 @@ export const fetchHistoricalTimelineReport = createAsyncThunk<any, number, { rej
     try {
       const response = await axios.get(
         `${BASE_URL}/reports/patients/${patientId}/historical-timeline-report`
-      );
+        , {
+          withCredentials: true,
+        });
       return response.data;
     } catch (error: any) {
       return rejectWithValue(error.response?.data || "Failed to fetch timeline report");
@@ -80,7 +88,9 @@ export const fetchProjectedTimelineReport = createAsyncThunk<any, number, { reje
     try {
       const response = await axios.get(
        `${BASE_URL}/reports/patients/${patientId}/projected-timeline-report`
-      );
+       , {
+        withCredentials: true,
+      });
       return response.data;
     } catch (error: any) {
       return rejectWithValue(error.response?.data || "Failed to fetch projected timeline report");

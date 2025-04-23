@@ -49,8 +49,8 @@ const createTables = async () => {
         is_staff BOOLEAN DEFAULT TRUE,
         is_verified BOOLEAN DEFAULT FALSE,
         reset_token TEXT,
-        reset_token_expires TIMESTAMP,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        reset_token_expires TIMESTAMP  WITH TIME ZONE,
+        created_at TIMESTAMP  WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
 
   CREATE TABLE IF NOT EXISTS patients (
@@ -62,10 +62,10 @@ const createTables = async () => {
           medical_info TEXT,
           status VARCHAR(50) DEFAULT 'Admitted',
           assigned_staff_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
-          discharge_date TIMESTAMP,
+          discharge_date TIMESTAMP WITH TIME ZONE,
           discharge_note TEXT,
           mrn VARCHAR(50),
-          admitted_date DATE, 
+          admitted_date TIMESTAMP WITH TIME ZONE,
 
           is_behavioral BOOLEAN DEFAULT FALSE,
           is_restrained BOOLEAN DEFAULT FALSE, 
@@ -81,8 +81,8 @@ const createTables = async () => {
           is_guardianship_financial BOOLEAN DEFAULT FALSE,
           is_guardianship_person  BOOLEAN DEFAULT FALSE,
           is_guardianship_emergency BOOLEAN DEFAULT FALSE,
-          court_date DATE DEFAULT NULL,
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          court_date  TIMESTAMP WITH TIME ZONE  DEFAULT NULL,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
 
       CREATE TABLE IF NOT EXISTS tasks (
@@ -96,7 +96,7 @@ const createTables = async () => {
           category VARCHAR(100),  -- e.g., "Medication", "Psychiatry", "Documentation"
           due_in_days_after_dependency INTEGER DEFAULT NULL,
           is_non_blocking BOOLEAN DEFAULT FALSE,
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          created_at TIMESTAMP  WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
           algorithm VARCHAR(50)
       );
 
@@ -107,19 +107,19 @@ const createTables = async () => {
           task_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
          assigned_staff_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
           status VARCHAR(50) DEFAULT 'Pending',  -- Pending, In Progress, Completed, Missed, FollowUp
-          due_date TIMESTAMP,
-          completed_at TIMESTAMP,
-           ideal_due_date TIMESTAMP,
+          due_date TIMESTAMP  WITH TIME ZONE ,
+          completed_at TIMESTAMP  WITH TIME ZONE ,
+           ideal_due_date TIMESTAMP  WITH TIME ZONE ,
           status_history JSONB DEFAULT '[]',
-          started_at TIMESTAMP,
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          started_at TIMESTAMP  WITH TIME ZONE ,
+          created_at TIMESTAMP  WITH TIME ZONE  DEFAULT CURRENT_TIMESTAMP
       );
 CREATE TABLE IF NOT EXISTS notes (
     id SERIAL PRIMARY KEY,
     patient_id INTEGER REFERENCES patients(id) ON DELETE CASCADE,
     staff_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
     note_text TEXT NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP  WITH TIME ZONE  DEFAULT CURRENT_TIMESTAMP
 );
 CREATE TABLE task_dependencies (
   task_id INTEGER REFERENCES tasks(id) ON DELETE CASCADE,
@@ -132,7 +132,7 @@ CREATE TABLE notifications (
   user_id INTEGER REFERENCES users(id),
   title TEXT NOT NULL,
   message TEXT NOT NULL,
-  created_at TIMESTAMP DEFAULT NOW(),
+  created_at TIMESTAMP  WITH TIME ZONE DEFAULT NOW(),
   read BOOLEAN DEFAULT FALSE
 );
 

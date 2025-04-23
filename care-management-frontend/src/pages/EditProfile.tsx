@@ -6,6 +6,8 @@ import { Eye, EyeOff } from "lucide-react";
 import { RootState } from "../redux/store";
 import { updateUserProfile } from "../redux/slices/userSlice";
 import type { AppDispatch } from '../redux/store';
+import Footer from "../components/Footer";
+import Navbar from "../components/Navbar";
 
 const EditProfile = () => {
   const dispatch = useDispatch<AppDispatch>();
@@ -42,7 +44,9 @@ const EditProfile = () => {
   };
 
   return (
-    <div className="min-h-screen bg-hospital-neutral p-6">
+    <div className="flex flex-col min-h-screen bg-[var(--bg-light)] text-[var(--text-dark)]">
+      <Navbar />
+    <div className="bg-hospital-neutral p-6">
       <div className="card max-w-md mx-auto">
         <h2 className="text-xl font-bold mb-4">Edit Profile</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -86,6 +90,8 @@ const EditProfile = () => {
           </button>
         </form>
       </div>
+    </div>
+    <Footer />
     </div>
   );
 };
