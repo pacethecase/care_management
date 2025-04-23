@@ -170,7 +170,7 @@ const login = async (req, res) => {
         [token, expires, normalizedEmail]
       );
   
-      const resetLink = `https://care-management-roan.vercel.app/reset-password?token=${token}&email=${normalizedEmail}`;
+      const resetLink = `http://care-management-nine.vercel.app/reset-password?token=${token}&email=${normalizedEmail}`;
       console.log(`📨 Password reset link: ${resetLink}`);
       await transporter.sendMail({
         from: `"Care Management" <${process.env.EMAIL_USERNAME}>`,

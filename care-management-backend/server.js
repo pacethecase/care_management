@@ -22,7 +22,7 @@ const server = http.createServer(app);
 // Allowed Origins (both development and production)
 const allowedOrigins = [
   'http://localhost:5173', // Localhost for development
-  'https://care-management-roan.vercel.app'
+  'http://care-management-nine.vercel.app',
 ];
 
 // CORS Middleware Setup
