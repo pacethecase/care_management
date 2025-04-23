@@ -76,7 +76,7 @@ const addPatient = async (req, res) => {
         is_guardianship_financial,
         is_guardianship_person,
         is_guardianship_emergency,
-        req.body.admitted_date,
+        admitted_date
       ]
     );
     const newPatient = result.rows[0];
