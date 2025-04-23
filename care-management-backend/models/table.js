@@ -37,6 +37,8 @@ const createDatabase = async () => {
 // Step 2: Create tables inside the target database
 const createTables = async () => {
   try {
+    await pool.query(`CREATE EXTENSION IF NOT EXISTS citext;`);
+
     await pool.query(`
       CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
@@ -148,7 +150,6 @@ CREATE TABLE notifications (
 
 // Step 3: Run init
 const init = async () => {
-  await createDatabase();
   await createTables();
 };
 
