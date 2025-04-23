@@ -153,7 +153,6 @@ const PatientTasks = () => {
   const renderTasks = () =>
     filteredTasks.map((task: Task)  => {
       const borderColor = algoColorMap[task.algorithm as keyof typeof algoColorMap] || "var(--border-muted)";
-      const today = new Date();
       const idealDue = task.ideal_due_date ? new Date(task.ideal_due_date) : null;
         const completedAt = task.completed_at ? new Date(task.completed_at) : null;
         const now = new Date(); 
