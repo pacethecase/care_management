@@ -44,7 +44,7 @@ const PatientCard: React.FC<PatientCardProps> = ({ patient, user, showDischargeI
       .unwrap()
       .then((res) => {
         toast.success(res.message);
-       
+       dispatch(fetchPatients());
       })
       .catch((err) => {
         toast.error(err?.error || "Failed to discharge patient");
