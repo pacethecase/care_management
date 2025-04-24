@@ -40,8 +40,8 @@ const addPatient = async (req, res) => {
       is_guardianship,
       is_guardianship_financial,
       is_guardianship_person,
-      is_guardianship_emergency
-      
+      is_guardianship_emergency,
+      admitted_date
     } = req.body;
 
     if (!name || !birth_date || !bedId || !age || !mrn) {
@@ -81,8 +81,8 @@ const addPatient = async (req, res) => {
     );
     const newPatient = result.rows[0];
 
-  
-    await assignTasksToPatient(newPatient.id); 
+    const timezone = req.headers['x-timezone'] || 'America/New_York';
+    await assignTasksToPatient(newPatient.id, timezone);
     if (assignedStaffId) {
       const io = req.app.get('io');
 

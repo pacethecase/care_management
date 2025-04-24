@@ -2,7 +2,7 @@ import React from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { FaEdit, FaUserSlash } from "react-icons/fa";
 import { useDispatch } from "react-redux";
-import { dischargePatient } from "../redux/slices/patientSlice";
+import { dischargePatient ,fetchPatients} from "../redux/slices/patientSlice";
 import { toast } from "react-toastify";
 
 import type { AppDispatch } from '../redux/store';
@@ -42,10 +42,14 @@ const PatientCard: React.FC<PatientCardProps> = ({ patient, user, showDischargeI
 
     dispatch(dischargePatient({ patientId: patient.id, dischargeNote: note }))
       .unwrap()
-      .then((res) => toast.success(res.message))
-      .catch((err) => toast.error(err?.error || "Failed to discharge patient"));
-  };
-
+      .then((res) => {
+        toast.success(res.message);
+       
+      })
+      .catch((err) => {
+        toast.error(err?.error || "Failed to discharge patient");
+      });
+    }
   return (
     <div className="bg-white w-full p-6 rounded-xl shadow-lg border border-[var(--border-muted)] transition-all duration-300 hover:shadow-xl hover:-translate-y-1 relative">
       {/* Discharge Icon - Admin only */}

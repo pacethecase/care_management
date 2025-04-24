@@ -24,6 +24,9 @@
   import Notifications from './components/Notifications';
   import EditPatientPage from './pages/EditPatientPage';
   import { fetchNotifications } from './redux/slices/notificationSlice';
+  import { getLocalTimezone } from "./utils/timezone";
+import axios from "axios";
+
   function App() {
     const dispatch = useDispatch<AppDispatch>();
 
@@ -31,6 +34,9 @@
 
     useEffect(() => {
       dispatch(fetchCurrentUser());
+      const timezone = getLocalTimezone();
+      axios.defaults.headers.common['x-timezone'] = timezone;
+       console.log("🌐 Timezone set in headers:", timezone);
     }, [dispatch]);
     
  

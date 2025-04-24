@@ -1,7 +1,8 @@
 const { assign } = require("nodemailer/lib/shared");
 const pool = require("../models/db");
+const { DateTime } = require('luxon');
 
-const assignTasksToPatient = async (patientId) => {
+const assignTasksToPatient = async (patientId,timezone) => {
   try {
     console.log(`🚀 Assigning tasks to patient ID: ${patientId}...`);
 
@@ -62,16 +63,14 @@ const assignTasksToPatient = async (patientId) => {
         console.log(`⏭️ Task "${taskName}" already assigned. Skipping.`);
         return;
       }
-      const baseDate = new Date(patient.admitted_date);
-      baseDate.setHours(15, 0, 0, 0); 
+      const baseLocal = DateTime.fromJSDate(new Date(patient.admitted_date)).setZone(timezone);
 
-      const dueDate = new Date(baseDate);
-      dueDate.setDate(baseDate.getDate() + dueInDays);
-      dueDate.setHours(15, 0, 0, 0);
 
-      const idealDueDate = new Date(baseDate);
-      idealDueDate.setDate(baseDate.getDate() + dueInDays);
-      idealDueDate.setHours(15, 0, 0, 0);
+        const dueLocal = baseLocal.plus({ days: dueInDays }).set({ hour: 15, minute: 0, second: 0, millisecond: 0 });
+
+      
+        const dueDate = dueLocal.toUTC().toJSDate();
+        const idealDueDate = dueLocal.toUTC().toJSDate();
 
       taskAssignments.push({ taskId, dueDate, idealDueDate }); // 🔧 Fixed typo: .push instead of .puhave sh
       console.log(`✔ Task '${taskName}' scheduled for ${dueDate.toDateString()} (ideal: ${idealDueDate.toDateString()})`);

@@ -1,4 +1,5 @@
 const pool = require("../models/db");
+const { DateTime } = require('luxon');
 
 const appendStatusHistory = async (taskId, newEntry) => {
   await pool.query(`
@@ -7,6 +8,7 @@ const appendStatusHistory = async (taskId, newEntry) => {
     WHERE id = $1
   `, [taskId, JSON.stringify([newEntry])]);
 };
+
 
 // 🚀 Start a Task
 const startTask = async (req, res) => {
@@ -55,13 +57,13 @@ const startTask = async (req, res) => {
   }
 };
 
-
 // ✅ Complete Task (handle repeat + dependency)
 const completeTask = async (req, res) => {
   try {
     const { taskId } = req.params;
     const { court_date } = req.body;
-
+    const timezone = req.headers['x-timezone'] || 'America/New_York';
+console.log(timezone);
     console.log("Completing task with ID:", taskId);
 
     // Step 1: Fetch task from patient_tasks
@@ -73,7 +75,6 @@ const completeTask = async (req, res) => {
 
     const task = taskRes.rows[0];
     const completedAt = new Date(); 
-
 
     // Step 2: Mark as completed in DB and update local object
     await pool.query(`
@@ -116,23 +117,15 @@ const completeTask = async (req, res) => {
     const isManualFollowUpTask = taskDetails.is_repeating && taskDetails.due_in_days_after_dependency !== null;
 
     // Step 4: Handle repeating task
-    if (taskDetails.is_repeating && taskDetails.recurrence_interval && patientStatus !== "Discharged" && !isManualFollowUpTask) {
-      const completedAt = taskDetails.completed_at
-        ? new Date(taskDetails.completed_at)
-        : new Date(); // fallback for first-time completion
+    if (taskDetails.is_repeating && taskDetails.recurrence_interval && patientStatus !== "Discharged" && !isManualFollowUpTask) {      
+      const completedAt = task.completed_at ? new Date(task.completed_at) : new Date();
+      const previousIdealDue = task.ideal_due_date ? new Date(task.ideal_due_date) : new Date();
     
-      const previousIdealDue = taskDetails.ideal_due_date
-        ? new Date(taskDetails.ideal_due_date)
-        : new Date(); // fallback if missing
+      const dueLocal = DateTime.fromJSDate(completedAt).setZone(timezone).plus({ days: taskDetails.recurrence_interval }).set({ hour: 15, minute: 0, second: 0, millisecond: 0 });
+      const idealLocal = DateTime.fromJSDate(previousIdealDue).setZone(timezone).plus({ days: taskDetails.recurrence_interval }).set({ hour: 15, minute: 0, second: 0, millisecond: 0 });
     
-      const ideal_due_date = new Date(previousIdealDue);
-      ideal_due_date.setDate(ideal_due_date.getDate() + taskDetails.recurrence_interval);
-      ideal_due_date.setHours(15, 0, 0, 0);
-    
-      const nextDue = new Date(completedAt);
-      nextDue.setDate(nextDue.getDate() + taskDetails.recurrence_interval);
-      nextDue.setHours(15, 0, 0, 0);
-    
+      const nextDue = dueLocal.toUTC().toJSDate();
+      const ideal_due_date = idealLocal.toUTC().toJSDate();
       await pool.query(
         `INSERT INTO patient_tasks (patient_id, task_id, assigned_staff_id, status, due_date, ideal_due_date)
          VALUES ($1, $2, $3, 'Pending', $4, $5)`,
@@ -196,31 +189,36 @@ const completeTask = async (req, res) => {
         console.log(`📌 Non-blocking dependent task '${dep.name}' scheduled without a due date`);
         continue;
       }
-      const idealBaseDate = new Date(task.ideal_due_date || task.due_date);
-      const due = new Date(task.completed_at);       // 🔁 GOOD
+      const idealBaseDateLocal = DateTime.fromJSDate(task.ideal_due_date).setZone(timezone);
+const dueBaseLocal = DateTime.fromJSDate(task.completed_at).setZone(timezone);
 
-      if (dep.is_repeating && dep.recurrence_interval != null && dep.due_in_days_after_dependency == null) {
-        due.setDate(due.getDate() + dep.recurrence_interval);
-        idealBaseDate.setDate(idealBaseDate.getDate() + dep.recurrence_interval);
-        due.setHours(15, 0, 0, 0);
-        idealBaseDate.setHours(15, 0, 0, 0);
-      } else if (dep.due_in_days_after_dependency != null) {
-        due.setDate(due.getDate() + dep.due_in_days_after_dependency);
-        idealBaseDate.setDate(idealBaseDate.getDate() + dep.due_in_days_after_dependency);
-        due.setHours(15, 0, 0, 0);
-        idealBaseDate.setHours(15, 0, 0, 0);
-      }
-      
-      
-      // Include ideal_due_date in your INSERT
-      await pool.query(
-        `INSERT INTO patient_tasks (patient_id, task_id, assigned_staff_id, status, due_date, ideal_due_date)
-         VALUES ($1, $2, $3, 'Pending', $4, $5)`,
-        [task.patient_id, dep.id, task.assigned_staff_id, due, idealBaseDate]
-      );
-      
+let due, idealBaseDate; // 🔧 Declare outside
 
-      console.log(`📌 Dependent task '${dep.name}' scheduled for ${due.toDateString()}`);
+if (dep.is_repeating && dep.recurrence_interval != null && dep.due_in_days_after_dependency == null) {
+  const dueDate = dueBaseLocal.plus({ days: dep.recurrence_interval }).set({ hour: 15, minute: 0, second: 0, millisecond: 0 });
+  const idealDate = idealBaseDateLocal.plus({ days: dep.recurrence_interval }).set({ hour: 15, minute: 0, second: 0, millisecond: 0 });
+  due = dueDate.toUTC().toJSDate();
+  idealBaseDate = idealDate.toUTC().toJSDate();
+} else if (dep.due_in_days_after_dependency != null) {
+  const dueDate = dueBaseLocal.plus({ days: dep.due_in_days_after_dependency }).set({ hour: 15, minute: 0, second: 0, millisecond: 0 });
+  const idealDate = idealBaseDateLocal.plus({ days: dep.due_in_days_after_dependency }).set({ hour: 15, minute: 0, second: 0, millisecond: 0 });
+  due = dueDate.toUTC().toJSDate();
+  idealBaseDate = idealDate.toUTC().toJSDate();
+}
+
+if (!due || !idealBaseDate) {
+  console.warn(`⚠️ Skipping '${dep.name}' due to missing date calculations`);
+  continue;
+}
+
+await pool.query(
+  `INSERT INTO patient_tasks (patient_id, task_id, assigned_staff_id, status, due_date, ideal_due_date)
+   VALUES ($1, $2, $3, 'Pending', $4, $5)`,
+  [task.patient_id, dep.id, task.assigned_staff_id, due, idealBaseDate]
+);
+
+console.log(`📌 Dependent task '${dep.name}' scheduled for ${due.toDateString()}`);
+
     }
     console.log("DOne")
     res.status(200).json({ message: "Task completed successfully" });
@@ -368,11 +366,9 @@ const followUpCourtTask = async (req, res) => {
       });
     }
 
-    // Step 3: Update the task with the new due date for follow-up
-    const now = new Date();
-    const nextDue = new Date(now);
-    nextDue.setDate(nextDue.getDate() + taskDetails.recurrence_interval); // Add recurrence interval (e.g., 7 days later)
-    nextDue.setHours(15, 0, 0, 0);
+    const nowLocal = DateTime.local().setZone(timezone);
+    const nextDueLocal = nowLocal.plus({ days: taskDetails.recurrence_interval }).set({ hour: 15, minute: 0, second: 0, millisecond: 0 });
+    const nextDue = nextDueLocal.toUTC().toJSDate();
 
     await pool.query(
       `UPDATE patient_tasks
