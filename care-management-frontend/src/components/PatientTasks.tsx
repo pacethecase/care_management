@@ -1,5 +1,5 @@
 import  { useState, useEffect } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link ,useLocation} from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import {
   loadPatientTasks,
@@ -30,7 +30,9 @@ import type { Note } from  "../redux/types";
 const PatientTasks = () => {
   const { patientId } = useParams<{ patientId: string }>();
   const dispatch = useDispatch<AppDispatch>();
-
+  const location = useLocation();
+  const backLink = location.state?.from || "/patients";
+  
   const [selectedTab, setSelectedTab] = useState<
     "Pending" | "In Progress" | "Completed" | "All Tasks" | "Notes"
   >("All Tasks");
@@ -284,12 +286,13 @@ const PatientTasks = () => {
       <Navbar />
       <main className="flex-grow w-full max-w-4xl mx-auto px-4 sm:px-6 overflow-y-auto">
 
-        <Link
-          to="/patients"
-          className="inline-flex items-center text-orange hover:underline mb-4"
-        >
-          <ArrowLeft className="w-4 h-4 mr-1" /> Back to Patients
-        </Link>
+      <Link
+        to={backLink}
+        className="inline-flex items-center text-orange hover:underline mb-4"
+      >
+        <ArrowLeft className="w-4 h-4 mr-1" /> Back
+      </Link>
+
 
         <div className="card mb-6">
           <h2 className="text-2xl font-bold mb-1">{patient.name}</h2>

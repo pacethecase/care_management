@@ -264,7 +264,7 @@ const getSearchedPatients = async (req, res) => {
 
     const query = `%${q.toLowerCase()}%`;
     const result = await pool.query(
-      `SELECT id, name, mrn, birth_date, admitted_date, status, created_at
+      `SELECT id, name, mrn, birth_date, admitted_date, status, created_at,bed_id,is_behavioral,is_ltc,is_guardianship
        FROM patients
        WHERE LOWER(name) LIKE $1 OR LOWER(mrn) LIKE $1
        ORDER BY created_at DESC`,

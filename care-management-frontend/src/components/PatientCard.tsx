@@ -1,5 +1,5 @@
 import React from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate ,useLocation} from "react-router-dom";
 import { FaEdit, FaUserSlash } from "react-icons/fa";
 import { useDispatch } from "react-redux";
 import { dischargePatient ,fetchPatients} from "../redux/slices/patientSlice";
@@ -18,7 +18,9 @@ interface PatientCardProps {
 const PatientCard: React.FC<PatientCardProps> = ({ patient, user, showDischargeInfo = false }) => {
   const dispatch = useDispatch<AppDispatch>();
   const navigate = useNavigate();
-
+  const location = useLocation();
+  const currentPath = location.pathname + location.search; 
+  
   const handleEdit = () => {
     navigate(`/patients/${patient.id}/edit`);
   };
@@ -89,8 +91,9 @@ const PatientCard: React.FC<PatientCardProps> = ({ patient, user, showDischargeI
 
       {/* CTA Button */}
       <div className="mt-4 flex justify-center">
-        <Link
+      <Link
           to={`/patients/${patient.id}/tasks`}
+          state={{ from: currentPath }}
           className="btn px-6 py-2 text-white bg-[var(--funky-orange)] hover:bg-orange-600 rounded-md transition-all duration-300"
         >
           View Tasks

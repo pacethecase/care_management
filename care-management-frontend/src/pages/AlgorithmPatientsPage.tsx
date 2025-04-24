@@ -1,5 +1,5 @@
 import  { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate,useLocation } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { loadPatientsByAlgorithm } from "../redux/slices/algorithmSlice"; // Import action
 import { RootState } from "../redux/store";
@@ -18,7 +18,9 @@ const AlgorithmPatients = () => {
   
   const [currentPage, setCurrentPage] = useState(1);
   const [patientsPerPage] = useState(9); // Max number of patients per page (9 for 3x3 grid)
-  
+  const location = useLocation();
+  const currentPath = location.pathname + location.search;
+
   useEffect(() => {
     if (algorithm) {
       dispatch(loadPatientsByAlgorithm(algorithm));
@@ -33,7 +35,9 @@ const AlgorithmPatients = () => {
   );
 
   const handleClick = (id: number) => {
-    navigate(`/patients/${id}/tasks`);
+    navigate(`/patients/${id}/tasks`,{
+      state: { from: currentPath }
+    });
   };
 
   const nextPage = () => {
@@ -70,7 +74,6 @@ const AlgorithmPatients = () => {
                 <p>Bed: {p.bed_id}</p>
                 <p>DOB: {new Date(p.birth_date).toLocaleDateString()}</p>
                 <p>Admitted On: {p.created_at ? new Date(p.created_at).toLocaleDateString() : "N/A"}</p>
-                handleSearch
               </div>
             </div>
           ))}
