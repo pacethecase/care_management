@@ -277,9 +277,10 @@ const getPriorityTasks = async (req, res) => {
       JOIN patients p ON pt.patient_id = p.id
       WHERE pt.assigned_staff_id = $1
         AND pt.status IN ('Pending', 'In Progress', 'Missed')
-        AND pt.due_date <= CURRENT_DATE + INTERVAL '1 day'
+        AND pt.due_date <= CURRENT_DATE + INTERVAL '2 day'
         AND p.status != 'Discharged'
     `;
+   
     const queryParams = [staffId];
 
     if (patientId) {
@@ -314,7 +315,6 @@ const getMissedTasks = async (req, res) => {
         AND NOT EXISTS (
           SELECT 1 FROM jsonb_array_elements(pt.status_history) elem
           WHERE elem->>'status' = 'Missed' AND elem ? 'reason'
-          
         )
     `;
     const queryParams = [staffId];
