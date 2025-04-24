@@ -43,26 +43,39 @@ const TransitionCareReport = ({ report }: TransitionCareReportProps) => {
             <h3 className="text-lg font-semibold mb-2 text-[var(--funky-orange)]">
               {section.algorithm}
             </h3>
-            <table className="w-full border-collapse text-sm">
-              <thead>
-                <tr className="bg-orange-500 text-white">
-                  <th className="p-3 text-left">Task Name</th>
-                  <th className="p-3 text-left">Completed Date</th>
-                  <th className="p-3 text-left">Contact Info</th>
-                </tr>
-              </thead>
-              <tbody>
-                {section.tasks_completed.map((task, i) => (
-                  <tr key={i} className="border-b">
-                    <td className="p-3">{task.task_name}</td>
-                    <td className="p-3">{task.completed_at || 'N/A'}</td>
-                    <td className="p-3">
-                      {section.contact_info || '—'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                
+                <div className="hidden md:block overflow-x-auto">
+      <table className="w-full border-collapse text-sm min-w-[600px]">
+        <thead>
+          <tr className="bg-orange-500 text-white">
+            <th className="p-3 text-left">Task Name</th>
+            <th className="p-3 text-left">Completed Date</th>
+            <th className="p-3 text-left">Contact Info</th>
+          </tr>
+        </thead>
+        <tbody>
+          {section.tasks_completed.map((task, i) => (
+            <tr key={i} className="border-b">
+              <td className="p-3">{task.task_name}</td>
+              <td className="p-3">{task.completed_at || 'N/A'}</td>
+              <td className="p-3">{section.contact_info || '—'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+
+    {/* MOBILE CARD VIEW */}
+    <div className="md:hidden space-y-4">
+      {section.tasks_completed.map((task, i) => (
+        <div key={i} className="border rounded-lg p-4 shadow-sm bg-gray-50">
+          <p className="font-semibold text-orange-500 mb-1">{task.task_name}</p>
+          <p className="text-sm"><strong>Completed Date:</strong> {task.completed_at || 'N/A'}</p>
+          <p className="text-sm"><strong>Contact Info:</strong> {section.contact_info || '—'}</p>
+        </div>
+      ))}
+</div>
+
           </div>
         ))
       ) : (

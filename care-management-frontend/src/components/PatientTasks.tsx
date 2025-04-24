@@ -168,12 +168,12 @@ const PatientTasks = () => {
         >
        <div className="relative mb-2">
     {/* Task Name */}
-    <h3 className="text-lg font-semibold w-[50%]  break-words whitespace-normal ">
+    <h3 className="text-lg font-semibold  max-w-[80%] sm:max-w-none break-words whitespace-normal ">
       {task.task_name}
     </h3>
 
     {/* Status Badge */}
-    <div className="absolute top-0 right-0">
+    <div className="absolute top-0 right-0 flex flex-wrap justify-end gap-1 max-w-[50%] sm:max-w-none">
       {getStatusBadge(task.status)}
       {isDelayed && (
     <span className="text-xs font-medium bg-[#e25e5ee0] text-white px-2 py-0.5 rounded-full">
@@ -282,9 +282,8 @@ const PatientTasks = () => {
   return (
     <div className="flex flex-col min-h-screen bg-[var(--bg-light)] text-[var(--text-dark)]">
       <Navbar />
+      <main className="flex-grow w-full max-w-4xl mx-auto px-4 sm:px-6 overflow-y-auto">
 
-      <main className="flex-grow max-h-[calc(100vh-120px)] overflow-y-auto p-6 max-w-4xl mx-auto">
-      
         <Link
           to="/patients"
           className="inline-flex items-center text-orange hover:underline mb-4"
@@ -330,7 +329,7 @@ const PatientTasks = () => {
           </div>
         </div>
 
-        <div className="flex space-x-2 border-b mb-6">
+        <div className="flex flex-wrap sm:flex-nowrap gap-2 overflow-x-auto border-b mb-6 pb-2 no-scrollbar">
           {["Pending", "In Progress", "Completed", "All Tasks", "Notes"].map((tab) => (
             <button
               key={tab}

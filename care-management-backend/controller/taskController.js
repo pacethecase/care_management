@@ -63,7 +63,6 @@ const completeTask = async (req, res) => {
     const { taskId } = req.params;
     const { court_date } = req.body;
     const timezone = req.headers['x-timezone'] || 'America/New_York';
-console.log(timezone);
     console.log("Completing task with ID:", taskId);
 
     // Step 1: Fetch task from patient_tasks

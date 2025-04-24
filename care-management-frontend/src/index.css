@@ -222,3 +222,7 @@ input:focus, select:focus, textarea:focus {
   border-radius: 4px;
 }
 
+
+html, body {
+  overflow-x: hidden;
+}
