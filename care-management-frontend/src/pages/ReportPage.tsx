@@ -30,7 +30,11 @@ const ReportPage = () => {
   );
 
   const [selectedReport, setSelectedReport] = useState<ReportType | null>(null);
-  const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split("T")[0]);
+  const getLocalDateString = () =>
+    new Date().toLocaleDateString("sv-SE"); 
+  
+  const [selectedDate, setSelectedDate] = useState<string>(getLocalDateString());
+  
   const [selectedPatientId, setSelectedPatientId] = useState<number | null>(null);
 
   useEffect(() => {
