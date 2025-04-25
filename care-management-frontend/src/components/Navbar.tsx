@@ -18,7 +18,7 @@ const Navbar: React.FC = () => {
 
   const { user } = useSelector((state: RootState) => state.user);
   const { items: notifications } = useSelector((state: RootState) => state.notifications);
-
+console.log(user);
   const handleLogout = async () => {
     try {
       await dispatch(logoutUser()).unwrap();
@@ -39,7 +39,14 @@ const Navbar: React.FC = () => {
 
       {/* Navbar */}
       <nav className="navbar">
-        <h1 className="text-lg text-orange font-semibold tracking-wide">Case Management</h1>
+        
+      <h1 className="text-lg text-orange font-semibold tracking-wide">
+        {user?.is_admin
+          ? "Case Management: Admin Portal"
+          : user?.is_staff
+          ? "Case Management: Staff Portal"
+          : "Case Management"}
+      </h1>
 
         <div className="flex space-x-4 items-center">
           <div className="hidden sm:flex space-x-4">
