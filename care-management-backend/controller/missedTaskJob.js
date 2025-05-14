@@ -42,15 +42,33 @@ function setupMissedTaskJob(io) {
         console.log(`🚨 Task ${task.id} for patient ${task.patient_id} marked as missed`);
 
         if (task.assigned_staff_id) {
-          io.to(`user-${task.assigned_staff_id}`).emit('notification', {
-            title: 'Task Missed',
-            message: `A task for patient ${task.patient_name} was auto-marked as missed. Please review and add a reason.`,
-          });
-          await pool.query(`
-            INSERT INTO notifications (user_id, title, message)
-            VALUES ($1, $2, $3)
-          `, [task.assigned_staff_id, 'Task Missed', `A task for patient ${task.patient_name} was auto-marked as missed. Please review and add a reason.`]);
-          
+          // Check if the patient is still active
+          const patientStatusResult = await pool.query(
+            `SELECT status FROM patients WHERE id = $1`,
+            [task.patient_id]
+          );
+        
+          const isAdmitted = patientStatusResult.rows[0]?.status === 'Admitted';
+        
+          if (isAdmitted) {
+            // Emit real-time notification
+            io.to(`user-${task.assigned_staff_id}`).emit('notification', {
+              title: 'Task Missed',
+              message: `A task for patient ${task.patient_name} was auto-marked as missed. Please review and add a reason.`,
+            });
+        
+            // Save notification in DB
+            await pool.query(`
+              INSERT INTO notifications (user_id, title, message)
+              VALUES ($1, $2, $3)
+            `, [
+              task.assigned_staff_id,
+              'Task Missed',
+              `A task for patient ${task.patient_name} was auto-marked as missed. Please review and add a reason.`
+            ]);
+          } else {
+            console.log(`⚠️ Skipping notification: Patient ${task.patient_id} is not active.`);
+          }
         }
       }
 

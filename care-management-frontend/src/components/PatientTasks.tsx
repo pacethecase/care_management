@@ -301,9 +301,10 @@ const PatientTasks = () => {
           • Age {patient.age} • Bed {patient.bed_id} • Admitted on{" "}
           {patient.created_at ? new Date(patient.created_at).toLocaleDateString() : "N/A"} • MRN {patient.mrn}
           </p>
-          <div className="text-xs text-[var(--text-muted)] mt-2 space-y-1">
+          <div className="text-xs mt-2 space-y-1">
             {patient.is_behavioral && (
-              <p>
+              <p  className="p-3 rounded-md text-sm text-dark"
+              style={{ backgroundColor: "var(--algo-behavioral)" }}>
                 <strong>Algorithm:</strong> Behavioral Plan <br />
                 Restrained: {patient.is_restrained ? "Yes" : "No"} | Behavioral Team:{" "}
                 {patient.is_behavioral_team ? "Yes" : "No"} <br />
@@ -311,7 +312,8 @@ const PatientTasks = () => {
               </p>
             )}
             {patient.is_guardianship && (
-              <p>
+             <p  className="p-3 rounded-md text-sm text-white"
+             style={{ backgroundColor: "var(--algo-guardianship)" }}>
                 <strong>Algorithm:</strong> Guardianship Workflow <br />
                 Emergency: {patient.is_guardianship_emergency ? "Yes" : "No"} | Financial:{" "}
                 {patient.is_guardianship_financial ? "Yes" : "No"} | Person:{" "}
@@ -323,7 +325,8 @@ const PatientTasks = () => {
               </p>
             )}
             {patient.is_ltc && (
-              <p>
+              <p  className="p-3 rounded-md text-sm text-white"
+              style={{ backgroundColor: "var(--algo-ltc)" }}>
                 <strong>Algorithm:</strong> Long-Term Care (LTC) <br />
                 Financial: {patient.is_ltc_financial ? "Yes" : "No"} | Medical:{" "}
                 {patient.is_ltc_medical ? "Yes" : "No"}

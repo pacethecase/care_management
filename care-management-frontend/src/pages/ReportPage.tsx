@@ -3,7 +3,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { FaPrint } from "react-icons/fa";
 import DailyReport from "../components/DailyReport";
 import PriorityReport from "../components/PriorityReport";
-import TransitionCareReport from "../components/TransitionCareReport";
+import TransitionalCareReport from "../components/TransitionalCareReport";
 import HistoricalTimelineReport from "../components/HistoricalTimelineReport";
 import ProjectedTimelineReport from "../components/ProjectedTimelineReport";
 import Navbar from "../components/Navbar";
@@ -13,19 +13,19 @@ import { RootState } from "../redux/store";
 import {
   fetchDailyReport,
   fetchPriorityReport,
-  fetchTransitionReport,
+  fetchTransitionalReport,
   fetchHistoricalTimelineReport,
   fetchProjectedTimelineReport,
 } from "../redux/slices/reportSlice";
 import { fetchPatients } from "../redux/slices/patientSlice";
 import type { AppDispatch } from "../redux/store";
 
-type ReportType = "daily" | "priority" | "transition" | "historical" | "projected";
+type ReportType = "daily" | "priority" | "transitional" | "historical" | "projected";
 
 const ReportPage = () => {
   const dispatch = useDispatch<AppDispatch>();
   const { patients } = useSelector((state: RootState) => state.patients);
-  const { transitionReport, historicalReport, projectedTimelineReport } = useSelector(
+  const { transitionalReport, historicalReport, projectedTimelineReport } = useSelector(
     (state: RootState) => state.reports
   );
 
@@ -43,7 +43,7 @@ const ReportPage = () => {
 
   useEffect(() => {
     if (
-      (selectedReport === "transition" ||
+      (selectedReport === "transitional" ||
         selectedReport === "historical" ||
         selectedReport === "projected") &&
       !selectedPatientId
@@ -57,8 +57,8 @@ const ReportPage = () => {
       case "priority":
         dispatch(fetchPriorityReport(selectedDate));
         break;
-      case "transition":
-        if (selectedPatientId) dispatch(fetchTransitionReport(selectedPatientId));
+      case "transitional":
+        if (selectedPatientId) dispatch(fetchTransitionalReport(selectedPatientId));
         break;
       case "historical":
         if (selectedPatientId) dispatch(fetchHistoricalTimelineReport(selectedPatientId));
@@ -71,7 +71,7 @@ const ReportPage = () => {
 
   useEffect(() => {
     if (
-      selectedReport === "transition" ||
+      selectedReport === "transitional" ||
       selectedReport === "historical" ||
       selectedReport === "projected"
     ) {
@@ -87,7 +87,7 @@ const ReportPage = () => {
       const reportTitleMap: Record<ReportType, string> = {
         daily: "DAILY REPORT",
         priority: "PRIORITY REPORT",
-        transition: "TRANSITIONAL CARE REPORT",
+        transitional: "TRANSITIONAL CARE REPORT",
         historical: "HISTORICAL TIMELINE REPORT",
         projected: "PROJECTED TIMELINE REPORT",
       };
@@ -211,7 +211,7 @@ const ReportPage = () => {
         </div>
 
         <div className="space-x-4 mb-4 no-print">
-          {(["daily", "priority", "transition", "historical", "projected"] as ReportType[]).map((type) => (
+          {(["daily", "priority", "transitional", "historical", "projected"] as ReportType[]).map((type) => (
             <button
               key={type}
               className={`btn ${selectedReport === type ? "btn-primary" : "btn-outline"}`}
@@ -222,7 +222,7 @@ const ReportPage = () => {
           ))}
         </div>
 
-        {(selectedReport === "transition" ||
+        {(selectedReport === "transitional" ||
           selectedReport === "historical" ||
           selectedReport === "projected") && (
           <div className="mb-4">
@@ -255,9 +255,9 @@ const ReportPage = () => {
           {!selectedReport && <p className="text-gray-500">Select a report to view.</p>}
           {selectedReport === "daily" && <DailyReport date={selectedDate} />}
           {selectedReport === "priority" && <PriorityReport date={selectedDate} />}
-          {selectedReport === "transition" &&
+          {selectedReport === "transitional" &&
             selectedPatientId &&
-            transitionReport && <TransitionCareReport report={transitionReport} />}
+            transitionalReport && <TransitionalCareReport report={transitionalReport} />}
           {selectedReport === "historical" &&
             selectedPatientId &&
             historicalReport && <HistoricalTimelineReport report={historicalReport} />}

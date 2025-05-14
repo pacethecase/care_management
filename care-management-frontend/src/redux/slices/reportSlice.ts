@@ -7,7 +7,7 @@ const BASE_URL = import.meta.env.VITE_API_BASE_URL;
 interface ReportState {
   dailyReport: any[];
   priorityReport: any[];
-  transitionReport: any | null;
+  transitionalReport: any | null;
   historicalReport: any | null;
   projectedTimelineReport: any | null;
   loading: boolean;
@@ -17,7 +17,7 @@ interface ReportState {
 const initialState: ReportState = {
   dailyReport: [],
   priorityReport: [],
-  transitionReport: null,
+  transitionalReport: null,
   historicalReport: null,
   projectedTimelineReport: null,
   loading: false,
@@ -52,16 +52,16 @@ export const fetchPriorityReport = createAsyncThunk<any[], string, { rejectValue
   }
 );
 
-export const fetchTransitionReport = createAsyncThunk<any, number, { rejectValue: string }>(
-  "reports/fetchTransitionReport",
+export const fetchTransitionalReport = createAsyncThunk<any, number, { rejectValue: string }>(
+  "reports/fetchTransitionalReport",
   async (patientId, { rejectWithValue }) => {
     try {
-      const response = await axios.get(`${BASE_URL}/reports/patients/${patientId}/transition-report`, {
+      const response = await axios.get(`${BASE_URL}/reports/patients/${patientId}/transitional-report`, {
         withCredentials: true,
       });
       return response.data;
     } catch (error: any) {
-      return rejectWithValue(error.response?.data || "Failed to fetch transition report");
+      return rejectWithValue(error.response?.data || "Failed to fetch transitional report");
     }
   }
 );
@@ -128,15 +128,15 @@ const reportSlice = createSlice({
         state.loading = false;
         state.error = action.payload as string;
       })
-      .addCase(fetchTransitionReport.pending, (state) => {
+      .addCase(fetchTransitionalReport.pending, (state) => {
         state.loading = true;
         state.error = null;
       })
-      .addCase(fetchTransitionReport.fulfilled, (state, action: PayloadAction<any>) => {
+      .addCase(fetchTransitionalReport.fulfilled, (state, action: PayloadAction<any>) => {
         state.loading = false;
-        state.transitionReport = action.payload;
+        state.transitionalReport = action.payload;
       })
-      .addCase(fetchTransitionReport.rejected, (state, action) => {
+      .addCase(fetchTransitionalReport.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload as string;
       })

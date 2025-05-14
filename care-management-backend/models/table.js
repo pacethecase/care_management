@@ -130,6 +130,7 @@ CREATE TABLE task_dependencies (
 CREATE TABLE notifications (
   id SERIAL PRIMARY KEY,
   user_id INTEGER REFERENCES users(id),
+  patient_id INTEGER REFERENCES patients(id),
   title TEXT NOT NULL,
   message TEXT NOT NULL,
   created_at TIMESTAMP  WITH TIME ZONE DEFAULT NOW(),

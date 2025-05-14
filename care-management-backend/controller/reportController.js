@@ -107,7 +107,7 @@ const getPriorityReport = async (req, res) => {
 
 
 
-const getTransitionCareReport = async (req, res) => {
+const getTransitionalCareReport = async (req, res) => {
   const patientId = req.params.id;
 
   try {
@@ -176,8 +176,8 @@ const getTransitionCareReport = async (req, res) => {
 
     res.json(report);
   } catch (err) {
-    console.error("❌ Error generating transition report:", err);
-    res.status(500).json({ error: "Failed to generate transition care report" });
+    console.error("❌ Error generating transitional report:", err);
+    res.status(500).json({ error: "Failed to generate transitional care report" });
   }
 };
 
@@ -414,4 +414,4 @@ const actual = {
 
 
 
-module.exports = { getDailyReport, getPriorityReport,getTransitionCareReport ,getHistoricalTimelineReport,getProjectedTimelineReport};
+module.exports = { getDailyReport, getPriorityReport,getTransitionalCareReport ,getHistoricalTimelineReport,getProjectedTimelineReport};

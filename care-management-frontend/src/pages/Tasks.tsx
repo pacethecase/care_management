@@ -136,19 +136,50 @@ const Tasks = () => {
         </div>
 
         <div className="flex gap-4 mb-6 justify-center">
-          <button
-            onClick={() => setTab('priority')}
-            className={`px-4 py-2 rounded ${tab === 'priority' ? 'bg-blue-100 text-blue-700' : 'bg-white'}`}
-          >
-            <Flag className="inline mr-1 w-4 h-4" /> Priority Tasks
-          </button>
+        
           <button
             onClick={() => setTab('missed')}
             className={`px-4 py-2 rounded ${tab === 'missed' ? 'bg-red-100 text-red-700' : 'bg-white'}`}
           >
             <AlertTriangle className="inline mr-1 w-4 h-4" /> Missed Tasks
           </button>
+          <button
+            onClick={() => setTab('priority')}
+            className={`px-4 py-2 rounded ${tab === 'priority' ? 'bg-blue-100 text-blue-700' : 'bg-white'}`}
+          >
+            <Flag className="inline mr-1 w-4 h-4" /> Priority Tasks
+          </button>
         </div>
+
+        {tab === 'missed' && (
+          <div className="space-y-6">
+            {missedTasks.length === 0 && (
+              <p className="text-center text-gray-500">🎉 No missed tasks without reason</p>
+            )}
+            {missedTasks.map((task) => (
+              <div key={task.task_id} className="border p-5 rounded shadow-sm bg-white">
+                <h3 className="text-lg font-semibold text-red-600">{task.task_name}</h3>
+                <p className="text-sm text-gray-600">Patient: {task.patient_name}</p>
+                <p className="text-sm text-gray-600">
+                  <CalendarDays className="inline w-4 h-4 mr-1" />
+                  Due: {new Date(task.due_date).toLocaleDateString()}
+                </p>
+                <textarea
+                  className="w-full border rounded p-2 mt-2 text-sm"
+                  placeholder="Enter reason..."
+                  value={reasonInputs[task.task_id] || ''}
+                  onChange={(e) => handleReasonChange(task.task_id, e.target.value)}
+                />
+                <button
+                  onClick={() => handleMissed(task.task_id)}
+                  className="mt-2 btn btn-primary"
+                >
+                  Submit Reason
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
 
         {tab === 'priority' && (
           <div className="space-y-6">
@@ -180,7 +211,7 @@ const Tasks = () => {
                   </button>
                   <textarea
                     className="border rounded p-2 text-sm flex-1"
-                    placeholder="Optional: Reason for missing..."
+                    placeholder="Required: Reason for missing..."
                     onChange={(e) => handleReasonChange(task.task_id, e.target.value)}
                   />
                   <button
@@ -195,35 +226,7 @@ const Tasks = () => {
           </div>
         )}
 
-        {tab === 'missed' && (
-          <div className="space-y-6">
-            {missedTasks.length === 0 && (
-              <p className="text-center text-gray-500">🎉 No missed tasks without reason</p>
-            )}
-            {missedTasks.map((task) => (
-              <div key={task.task_id} className="border p-5 rounded shadow-sm bg-white">
-                <h3 className="text-lg font-semibold text-red-600">{task.task_name}</h3>
-                <p className="text-sm text-gray-600">Patient: {task.patient_name}</p>
-                <p className="text-sm text-gray-600">
-                  <CalendarDays className="inline w-4 h-4 mr-1" />
-                  Due: {new Date(task.due_date).toLocaleDateString()}
-                </p>
-                <textarea
-                  className="w-full border rounded p-2 mt-2 text-sm"
-                  placeholder="Enter reason..."
-                  value={reasonInputs[task.task_id] || ''}
-                  onChange={(e) => handleReasonChange(task.task_id, e.target.value)}
-                />
-                <button
-                  onClick={() => handleMissed(task.task_id)}
-                  className="mt-2 btn btn-primary"
-                >
-                  Submit Reason
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
+     
       </main>
       <Footer />
     </div>

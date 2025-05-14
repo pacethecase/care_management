@@ -2,7 +2,7 @@ import React from "react";
 import { Link, useNavigate ,useLocation} from "react-router-dom";
 import { FaEdit, FaUserSlash } from "react-icons/fa";
 import { useDispatch } from "react-redux";
-import { dischargePatient ,fetchPatients} from "../redux/slices/patientSlice";
+import { dischargePatient ,fetchPatients,reactivatePatient,fetchDischargedPatients} from "../redux/slices/patientSlice";
 import { toast } from "react-toastify";
 
 import type { AppDispatch } from '../redux/store';
@@ -52,10 +52,25 @@ const PatientCard: React.FC<PatientCardProps> = ({ patient, user, showDischargeI
         toast.error(err?.error || "Failed to discharge patient");
       });
     }
+    const handleReactivate = (id: number) => {
+      if (!window.confirm("Are you sure you want to reactivate this patient?")) return;
+    
+      dispatch(reactivatePatient(id))
+        .unwrap()
+        .then(() => {
+          toast.success("Patient reactivated!");
+          dispatch(fetchDischargedPatients());
+          dispatch(fetchPatients());
+        })
+        .catch((err) => {
+          toast.error(err || "Failed to reactivate patient.");
+        });
+    };
+    
   return (
     <div className="bg-white w-full p-6 rounded-xl shadow-lg border border-[var(--border-muted)] transition-all duration-300 hover:shadow-xl hover:-translate-y-1 relative">
       {/* Discharge Icon - Admin only */}
-      {user?.is_admin && (
+      {user?.is_admin && !showDischargeInfo && (
         <div className="absolute top-2 right-2 flex gap-3 text-lg">
         <FaEdit
         className="text-blue-600 cursor-pointer"
@@ -69,8 +84,20 @@ const PatientCard: React.FC<PatientCardProps> = ({ patient, user, showDischargeI
         title="Discharge patient"
         onClick={handleDischarge}
       />
+      
         </div>
       )}
+        {user?.is_admin && showDischargeInfo && (
+        <div className="absolute top-2 right-2 flex gap-3 text-lg">
+      <button
+        className="btn bg-green-600 text-white hover:bg-green-700 mt-4"
+        onClick={() => handleReactivate(patient.id)}
+      >
+        Reactivate Patient
+      </button>
+      </div>
+    )}
+    
 
       {/* Name */}
       <h3 className="text-xl font-bold text-[var(--funky-orange)] mb-1">{patient.name}</h3>
@@ -90,6 +117,7 @@ const PatientCard: React.FC<PatientCardProps> = ({ patient, user, showDischargeI
 
 
       {/* CTA Button */}
+      {!showDischargeInfo && (
       <div className="mt-4 flex justify-center">
       <Link
           to={`/patients/${patient.id}/tasks`}
@@ -99,6 +127,7 @@ const PatientCard: React.FC<PatientCardProps> = ({ patient, user, showDischargeI
           View Tasks
         </Link>
       </div>
+      )}
     </div>
   );
 };

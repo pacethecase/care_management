@@ -77,6 +77,22 @@ export const dischargePatient = createAsyncThunk(
   }
 );
 
+export const reactivatePatient = createAsyncThunk<
+  { patientId: number },
+  number,
+  { rejectValue: string }
+>('patients/reactivatePatient', async (patientId, { rejectWithValue }) => {
+  try {
+    await axios.patch(`${BASE_URL}/patients/${patientId}/reactivate`, {}, {
+      withCredentials: true,
+    });
+    return { patientId };
+  } catch (err: any) {
+    return rejectWithValue(err.response?.data?.error || 'Failed to reactivate patient');
+  }
+});
+
+
 export const fetchDischargedPatients = createAsyncThunk(
   'patients/fetchDischargedPatients',
   async (_, { rejectWithValue }) => {
@@ -169,6 +185,26 @@ const patientsSlice = createSlice({
       .addCase(searchPatients.fulfilled, (state, action) => {
         state.searchResults = action.payload;
         state.loading = false;
+      })
+      .addCase(reactivatePatient.fulfilled, (state, action) => {
+        const { patientId } = action.payload;
+      
+        // Remove from discharged
+        state.dischargedPatients = state.dischargedPatients.filter(p => p.id !== patientId);
+      
+        // Optional: refetch full list or mark patient as active again
+        const reactivated = state.patients.find(p => p.id === patientId);
+        if (reactivated) {
+          reactivated.status = 'Admitted';
+          reactivated.discharge_note = null;
+          reactivated.discharge_date = null;
+        }
+      
+        state.loading = false;
+      })
+      .addCase(reactivatePatient.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload as string;
       });
   },
 });

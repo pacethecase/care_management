@@ -1,4 +1,4 @@
-type TransitionCareReportProps = {
+type TransitionalCareReportProps = {
   report: {
     patient: {
       name: string;
@@ -18,7 +18,7 @@ type TransitionCareReportProps = {
   } | null;
 };
 
-const TransitionCareReport = ({ report }: TransitionCareReportProps) => {
+const TransitionalCareReport = ({ report }: TransitionalCareReportProps) => {
   if (!report) return null;
 
   const { patient, date_of_report, sections } = report;
@@ -85,4 +85,4 @@ const TransitionCareReport = ({ report }: TransitionCareReportProps) => {
   );
 };
 
-export default TransitionCareReport;
+export default TransitionalCareReport;

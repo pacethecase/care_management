@@ -42,7 +42,7 @@ console.log(user);
         
       <h1 className="text-lg text-orange font-semibold tracking-wide">
         {user?.is_admin
-          ? "Case Management: Admin Portal"
+          ? "Case Management: Leadership Portal"
           : user?.is_staff
           ? "Case Management: Staff Portal"
           : "Case Management"}

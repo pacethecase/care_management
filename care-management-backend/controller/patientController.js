@@ -161,7 +161,7 @@ const dischargePatient = async (req, res) => {
     if (patientRes.rows.length === 0) {
       return res.status(404).json({ error: "Patient not found" });
     }
-
+    const patient = patientRes.rows[0];
     // Update patient record
     await pool.query(
       `UPDATE patients 
@@ -171,12 +171,73 @@ const dischargePatient = async (req, res) => {
        WHERE id = $2`,
       [dischargeNote, patientId]
     );
+    const io = req.app.get('io');
+    if (patient.assigned_staff_id) {
+      io.to(`user-${patient.assigned_staff_id}`).emit('notification', {
+        title: 'Patient Discharged',
+        message: `${patient.name} has been discharged.`,
+      });
+
+      await pool.query(`
+        INSERT INTO notifications (user_id, patient_id, title, message)
+        VALUES ($1, $2, $3, $4)
+      `, [
+        patient.assigned_staff_id,
+        patient.id,
+        'Patient Discharged',
+        `${patient.name} has been discharged.`
+      ]);
+    }
 
     res.status(200).json({ message: "Patient discharged successfully" });
 
   } catch (err) {
     console.error("❌ Error discharging patient:", err);
     res.status(500).json({ error: "Internal Server Error" });
+  }
+};
+
+const reactivatePatient = async (req, res) => {
+  const { patientId } = req.params;
+
+  try {
+    const patientRes = await pool.query(`SELECT * FROM patients WHERE id = $1`, [patientId]);
+    if (patientRes.rows.length === 0) {
+      return res.status(404).json({ error: "Patient not found" });
+    }
+
+    const patient = patientRes.rows[0];
+    await pool.query(
+      `UPDATE patients
+       SET discharge_date = NULL,
+           discharge_note = NULL,
+           status = 'Admitted'
+       WHERE id = $1`,
+      [patientId]
+    );
+    const io = req.app.get('io');
+    if (patient.assigned_staff_id) {
+      io.to(`user-${patient.assigned_staff_id}`).emit('notification', {
+        title: 'Patient Reinstated',
+        message: `${patient.name} has been reinstated.`,
+      });
+
+      await pool.query(`
+        INSERT INTO notifications (user_id, patient_id, title, message)
+        VALUES ($1, $2, $3, $4)
+      `, [
+        patient.assigned_staff_id,
+        patient.id,
+        'Patient Reinstated',
+        `${patient.name} has been reinstated to active care.`
+      ]);
+    }
+
+
+    res.json({ message: 'Patient reactivated successfully' });
+  } catch (err) {
+    console.error("❌ Error reactivating patient:", err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 };
 
@@ -286,6 +347,7 @@ module.exports = {
   getPatientById,
   getPatientTasks,
   dischargePatient,
+  reactivatePatient,
   getDischargedPatients,
   updatePatient,
   getSearchedPatients
