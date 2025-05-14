@@ -39,6 +39,7 @@ const PatientTasks = () => {
   const [newNote, setNewNote] = useState("");
   const { patientTasks, loading: taskLoading } = useSelector((state: RootState) => state.tasks);
   const { selectedPatient: patient, loading: patientLoading } = useSelector((state: RootState) => state.patients);
+  const [selectedAlgorithm, setSelectedAlgorithm] = useState<string>("All");
   const { notes } = useSelector((state: RootState) => state.notes);
   const { user } = useSelector((state: RootState) => state.user);
   const { taskError } = useSelector((state: RootState) => state.tasks);
@@ -147,10 +148,14 @@ const PatientTasks = () => {
     return <span className={`${base} ${statusMap[status] || "bg-gray-200"}`}>{status}</span>;
   };
 
-  const filteredTasks =
-    selectedTab === "All Tasks"
-      ? patientTasks
-      : patientTasks.filter((task) => task.status === selectedTab);
+  const filteredTasks = patientTasks.filter((task) => {
+    const matchesStatus =
+      selectedTab === "All Tasks" || task.status === selectedTab;
+    const matchesAlgorithm =
+      selectedAlgorithm === "All" || task.algorithm === selectedAlgorithm;
+    return matchesStatus && matchesAlgorithm;
+  });
+  
 
   const renderTasks = () =>
     filteredTasks.map((task: Task)  => {
@@ -335,11 +340,12 @@ const PatientTasks = () => {
           </div>
         </div>
 
-        <div className="flex flex-wrap sm:flex-nowrap gap-2 overflow-x-auto border-b mb-6 pb-2 no-scrollbar">
+              {/* Tabs */}
+        <div className="flex flex-wrap gap-2 border-b pb-2 mb-4">
           {["Pending", "In Progress", "Completed", "All Tasks", "Notes"].map((tab) => (
             <button
               key={tab}
-              onClick={() => setSelectedTab(tab as "Pending" | "In Progress" | "Completed" | "All Tasks" | "Notes")}
+              onClick={() => setSelectedTab(tab as any)}
               className={`tab ${selectedTab === tab ? "tab-active" : ""}`}
             >
               {tab}
@@ -347,7 +353,29 @@ const PatientTasks = () => {
           ))}
         </div>
 
+        {/* Algorithm Filter */}
+        {selectedTab !== "Notes" && (
+          <div className="flex justify-end items-center mb-6">
+            <label htmlFor="algorithmFilter" className="text-sm font-medium mr-2">
+              Filter by Algorithm:
+            </label>
+            <select
+              id="algorithmFilter"
+              value={selectedAlgorithm}
+              onChange={(e) => setSelectedAlgorithm(e.target.value)}
+              className="border rounded px-3 py-1 text-sm shadow-sm"
+            >
+              <option value="All">All</option>
+              {patient.is_behavioral && <option value="Behavioral">Behavioral</option>}
+              {patient.is_guardianship && <option value="Guardianship">Guardianship</option>}
+              {patient.is_ltc && <option value="LTC">LTC</option>}
+            </select>
+          </div>
+        )}
+              
         {selectedTab === "Notes" ? renderNotes() : renderTasks()}
+       
+   
       </main>
 
       <Footer />

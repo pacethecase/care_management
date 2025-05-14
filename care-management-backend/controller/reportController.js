@@ -34,12 +34,11 @@ const getDailyReport = async (req, res) => {
         JOIN patients p ON pt.patient_id = p.id
         JOIN tasks t ON pt.task_id = t.id
         LEFT JOIN users u ON pt.assigned_staff_id = u.id 
-        WHERE pt.due_date >= $1::date
-        AND pt.due_date < ($1::date + INTERVAL '1 day')
-
-          AND pt.status IN ('Missed')
-          AND p.status != 'Discharged'
-        ORDER BY p.name;
+        WHERE 
+        pt.status IN ('Missed') 
+        OR (pt.status = 'Pending' AND pt.due_date::date <= $1::date)
+        AND p.status != 'Discharged'
+      ORDER BY p.name;
       `, [date]);
 
       if (result.rows.length === 0) {
@@ -84,7 +83,13 @@ const getPriorityReport = async (req, res) => {
         AND pt.due_date < ($1::date + INTERVAL '1 day')
           AND pt.status IN ('Pending', 'In Progress', 'Missed')
           AND p.status != 'Discharged'
-        ORDER BY pt.due_date ASC;
+       ORDER BY 
+        CASE pt.status
+          WHEN 'Missed' THEN 1
+          WHEN 'Pending' THEN 2
+          WHEN 'In Progress' THEN 3
+          ELSE 4
+        END;
       `, [date]);
 
       if (result.rows.length === 0) {

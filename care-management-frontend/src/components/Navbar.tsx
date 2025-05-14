@@ -56,25 +56,28 @@ console.log(user);
               {user?.is_admin && <Link to="/reports" className="tab transition">Reports</Link>}
           </div>
           {/* Notifications */}
-          <div className="relative">
-            <button
-              onClick={() => setShowNotifications((prev) => !prev)}
-              className="relative focus:outline-none"
-            >
-              <FiBell className="w-5 h-5" />
-              {unreadCount > 0 && (
-                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full px-1">
-                  {unreadCount}
-                </span>
-              )}
-            </button>
+          {user && (
+            <div className="relative">
+              <button
+                onClick={() => setShowNotifications((prev) => !prev)}
+                className="relative focus:outline-none"
+              >
+                <FiBell className="w-5 h-5" />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full px-1">
+                    {unreadCount}
+                  </span>
+                )}
+              </button>
 
-            {showNotifications && (
-              <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg p-3 z-50 max-h-[60vh] overflow-y-auto">
-                <NotificationPanel />
-              </div>
-            )}
-          </div>
+              {showNotifications && (
+                <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg p-3 z-50 max-h-[60vh] overflow-y-auto">
+                  <NotificationPanel />
+                </div>
+              )}
+            </div>
+          )}
+
 
           {/* Profile */}
           <div className="relative">

@@ -6,6 +6,7 @@ import { RootState } from "../redux/store";
 
 interface PriorityReportProps {
   date: string;
+  
 }
 
 const PriorityReport: React.FC<PriorityReportProps> = ({ date }) => {
@@ -35,6 +36,7 @@ const PriorityReport: React.FC<PriorityReportProps> = ({ date }) => {
                 <th className="p-3 text-left">Patient Name</th>
                 <th className="p-3 text-left">Task Name</th>
                 <th className="p-3 text-left">Staff</th>
+                <th className="p-3 text-left">Due Date</th>
                 <th className="p-3 text-left">Status</th>
               
               </tr>
@@ -45,6 +47,18 @@ const PriorityReport: React.FC<PriorityReportProps> = ({ date }) => {
                   <td className="p-3">{task.patient_name}</td>
                   <td className="p-3">{task.task_name}</td>
                   <td className="p-3">{task.staff_name || 'N/A'}</td>
+                  <td className="p-3">
+                    {task.due_date
+                      ? new Date(task.due_date).toLocaleString(undefined, {
+                          year: 'numeric',
+                          month: 'short',
+                          day: 'numeric',
+                          hour: 'numeric',
+                          minute: '2-digit',
+                          hour12: true,
+                        })
+                      : 'N/A'}
+                  </td>
                   <td className="p-3">{task.status || 'N/A'}</td>
                 </tr>
               ))}

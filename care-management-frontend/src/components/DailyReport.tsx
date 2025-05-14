@@ -13,6 +13,7 @@ interface ReportTask {
   task_name: string;
   missed_reason?: string;
   staff_name?: string;
+  due_date?: Date | string;
 }
 
 const DailyReport: React.FC<Props> = ({ date }) => {
@@ -37,6 +38,7 @@ const DailyReport: React.FC<Props> = ({ date }) => {
                 <th className="p-3 text-left">Patient Name</th>
                 <th className="p-3 text-left">Task Name</th>
                 <th className="p-3 text-left">Missed Reason</th>
+                <th className="p-3 text-left">Due Date</th>
                 <th className="p-3 text-left">Staff</th>
               </tr>
             </thead>
@@ -46,6 +48,18 @@ const DailyReport: React.FC<Props> = ({ date }) => {
                   <td className="p-3">{task.patient_name}</td>
                   <td className="p-3">{task.task_name}</td>
                   <td className="p-3">{task.missed_reason || 'N/A'}</td>
+                  <td className="p-3">
+  {task.due_date
+    ? new Date(task.due_date).toLocaleString(undefined, {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+      })
+    : 'N/A'}
+</td>
                   <td className="p-3">{task.staff_name || 'N/A'}</td>
                 </tr>
               ))}

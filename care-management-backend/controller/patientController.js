@@ -162,6 +162,7 @@ const dischargePatient = async (req, res) => {
       return res.status(404).json({ error: "Patient not found" });
     }
     const patient = patientRes.rows[0];
+  
     // Update patient record
     await pool.query(
       `UPDATE patients 
@@ -172,7 +173,9 @@ const dischargePatient = async (req, res) => {
       [dischargeNote, patientId]
     );
     const io = req.app.get('io');
+
     if (patient.assigned_staff_id) {
+    
       io.to(`user-${patient.assigned_staff_id}`).emit('notification', {
         title: 'Patient Discharged',
         message: `${patient.name} has been discharged.`,
