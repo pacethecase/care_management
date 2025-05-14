@@ -10,8 +10,8 @@ export interface Patient {
     status?: string;
     assigned_staff_id?: number | null;
     staff_name?: string;
-    discharge_date?: string;
-    discharge_note?: string;
+    discharge_note?: string | null;
+    discharge_date?: string | null;
     mrn?: string;
     admitted_date?: string;
     court_date?: string;
