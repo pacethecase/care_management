@@ -75,15 +75,6 @@ const completeTask = async (req, res) => {
     const task = taskRes.rows[0];
     const completedAt = new Date(); 
 
-    // Step 2: Mark as completed in DB and update local object
-    await pool.query(`
-      UPDATE patient_tasks 
-      SET status = 'Completed', completed_at = $1
-      WHERE id = $2
-    `, [completedAt, taskId]);
-
-    task.completed_at = completedAt;
-    await appendStatusHistory(taskId, { status: "Completed", timestamp: completedAt.toISOString() });
 
     // Step 3: Fetch metadata
     const [taskDetailsRes, patientRes, patientStatusRes] = await Promise.all([
@@ -102,10 +93,38 @@ const completeTask = async (req, res) => {
       if (!court_date) {
         return res.status(400).json({ error: "Court date is required to complete this task." });
       }
+      const utcString = new Date(
+        new Date(court_date).toLocaleString("en-US", { timeZone: timezone })
+      ).toISOString();
+      
+      const courtDateUTC = new Date(utcString);
+      
 
-      await pool.query(`UPDATE patients SET court_date = $1 WHERE id = $2`, [court_date, patient.id]);
-      console.log("Court date updated:", court_date);
+      await pool.query(`UPDATE patients SET guardianship_court_datetime = $1 WHERE id = $2`, [courtDateUTC, patient.id]);
     }
+    if (taskDetails.name === "Confirm date/time of States initial steps including Intake Interview: if not scheduled, follow-up with State") {
+      console.log("Court date check required for task:", taskDetails.name);
+      if (!court_date) {
+        return res.status(400).json({ error: "Court date is required to complete this task." });
+      }
+      const utcString = new Date(
+        new Date(court_date).toLocaleString("en-US", { timeZone: timezone })
+      ).toISOString();
+      
+      const courtDateUTC = new Date(utcString);
+
+      await pool.query(`UPDATE patients SET ltc_court_datetime = $1 WHERE id = $2`, [courtDateUTC, patient.id]);
+    }
+
+    // Step 2: Mark as completed in DB and update local object
+    await pool.query(`
+      UPDATE patient_tasks 
+      SET status = 'Completed', completed_at = $1
+      WHERE id = $2
+    `, [completedAt, taskId]);
+
+    task.completed_at = completedAt;
+    await appendStatusHistory(taskId, { status: "Completed", timestamp: completedAt.toISOString() });
 
     // Skip recurrence and dependency handling for non-blocking tasks
     if (taskDetails.is_non_blocking) {
@@ -125,9 +144,11 @@ const completeTask = async (req, res) => {
     
       const nextDue = dueLocal.toUTC().toJSDate();
       const ideal_due_date = idealLocal.toUTC().toJSDate();
+
+    
       await pool.query(
         `INSERT INTO patient_tasks (patient_id, task_id, assigned_staff_id, status, due_date, ideal_due_date)
-         VALUES ($1, $2, $3, 'Pending', $4, $5)`,
+         VALUES ($1, $2, $3, 'Pending', $4, $5,$6)`,
         [task.patient_id, taskDetails.id, task.assigned_staff_id, nextDue, ideal_due_date]
       );
     
@@ -189,9 +210,9 @@ const completeTask = async (req, res) => {
         continue;
       }
       const idealBaseDateLocal = DateTime.fromJSDate(task.ideal_due_date).setZone(timezone);
-const dueBaseLocal = DateTime.fromJSDate(task.completed_at).setZone(timezone);
+      const dueBaseLocal = DateTime.fromJSDate(task.completed_at).setZone(timezone);
 
-let due, idealBaseDate; // 🔧 Declare outside
+      let due, idealBaseDate; // 🔧 Declare outside
 
 if (dep.is_repeating && dep.recurrence_interval != null && dep.due_in_days_after_dependency == null) {
   const dueDate = dueBaseLocal.plus({ days: dep.recurrence_interval }).set({ hour: 15, minute: 0, second: 0, millisecond: 0 });
@@ -210,9 +231,10 @@ if (!due || !idealBaseDate) {
   continue;
 }
 
+
 await pool.query(
   `INSERT INTO patient_tasks (patient_id, task_id, assigned_staff_id, status, due_date, ideal_due_date)
-   VALUES ($1, $2, $3, 'Pending', $4, $5)`,
+   VALUES ($1, $2, $3, 'Pending', $4, $5,$6)`,
   [task.patient_id, dep.id, task.assigned_staff_id, due, idealBaseDate]
 );
 
@@ -338,7 +360,7 @@ const followUpCourtTask = async (req, res) => {
   try {
     const { taskId } = req.params;
     const { followUpReason } = req.body; // Get follow-up reason from the request body
-
+    const timezone = req.headers['x-timezone'] || 'America/New_York';
     // Check if the reason was provided
     if (!followUpReason || followUpReason.trim() === "") {
       return res.status(400).json({ error: "Follow-up reason is required." });
@@ -379,7 +401,7 @@ const followUpCourtTask = async (req, res) => {
     // Step 4: Append the follow-up reason to the task status history
     await appendStatusHistory(taskId, {
       status: "Follow Up",
-      timestamp: now.toISOString(),
+      timestamp: nowLocal.toUTC().toJSDate().toISOString(),
       note: followUpReason, // Use the provided follow-up reason
     });
 
@@ -393,11 +415,50 @@ const followUpCourtTask = async (req, res) => {
 };
 
 
+const updateTaskNote = async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const {
+      task_note,
+      include_note_in_report,
+      contact_info,
+    } = req.body;
+
+    const existingRes = await pool.query(`SELECT * FROM patient_tasks WHERE id = $1`, [taskId]);
+    if (existingRes.rows.length === 0) {
+      return res.status(404).json({ error: "Task not found" });
+    }
+
+    const current = existingRes.rows[0];
+
+    const result = await pool.query(
+      `UPDATE patient_tasks
+       SET task_note = $1,
+           include_note_in_report = $2,
+           contact_info = $4
+       WHERE id = $5
+       RETURNING *`,
+      [
+        task_note ?? current.task_note,
+        include_note_in_report ?? current.include_note_in_report,
+        contact_info ?? current.contact_info,
+        taskId
+      ]
+    );
+
+    res.status(200).json({ message: "Task metadata updated", task: result.rows[0] });
+  } catch (err) {
+    console.error("❌ Error updating task note/contact:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
 module.exports = {
   startTask,
   completeTask,
   markTaskAsMissed,
   getMissedTasks,
   getPriorityTasks,
-  followUpCourtTask
+  followUpCourtTask,
+  updateTaskNote
 };

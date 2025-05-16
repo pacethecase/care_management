@@ -38,7 +38,7 @@ const getDailyReport = async (req, res) => {
         pt.status IN ('Missed') 
         OR (pt.status = 'Pending' AND pt.due_date::date <= $1::date)
         AND p.status != 'Discharged'
-      ORDER BY p.name;
+      ORDER BY pt.due_date ASC;
       `, [date]);
 
       if (result.rows.length === 0) {
@@ -140,7 +140,8 @@ const getTransitionalCareReport = async (req, res) => {
       SELECT 
         t.name AS task_name,
         pt.completed_at,
-        t.algorithm
+        t.algorithm,
+        pt.contact_info
       FROM patient_tasks pt
       JOIN tasks t ON pt.task_id = t.id
       WHERE pt.patient_id = $1 AND pt.status = 'Completed'
@@ -151,7 +152,7 @@ const getTransitionalCareReport = async (req, res) => {
 
     for (const row of taskQuery.rows) {
       const algorithm = row.algorithm || "N/A";
-      const contact =  "";
+      const contact =  row.contact_info || "N/A";
 
       const key = `${algorithm}__${contact}`;
       if (!grouped[key]) {
@@ -204,7 +205,7 @@ const getHistoricalTimelineReport = async (req, res) => {
     const admittedDate = dayjs(patient.admitted_date).startOf('day');
 
     const tasksQuery = await pool.query(
-      `SELECT t.name AS task_name, pt.completed_at
+      `SELECT t.name AS task_name, pt.completed_at,pt.task_note,pt.include_note_in_report
        FROM patient_tasks pt
        JOIN tasks t ON pt.task_id = t.id
        WHERE pt.patient_id = $1 AND pt.status = 'Completed'
@@ -229,6 +230,8 @@ const getHistoricalTimelineReport = async (req, res) => {
       weeksMap[weekKey].push({
         task_name: row.task_name,
         completed_at: completedAt.format('MM.DD.YY'),
+        task_note: row.task_note,
+        include_note_in_report: row.include_note_in_report
       });
     });
 

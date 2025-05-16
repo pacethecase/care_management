@@ -141,6 +141,30 @@ export const followUpTask = createAsyncThunk(
     }
   }
 );
+export const updateTaskNoteMeta = createAsyncThunk<
+  any,
+  { taskId: number; data: {
+    task_note?: string;
+    include_note_in_report?: boolean;
+    contact_info?: string;
+  }},
+  { rejectValue: string }
+>(
+  'tasks/updateTaskNoteMeta',
+  async ({ taskId, data }, { rejectWithValue }) => {
+    try {
+      const res = await axios.patch(
+        `${import.meta.env.VITE_API_BASE_URL}/tasks/patient_tasks/${taskId}/note`,
+        data,
+        { withCredentials: true }
+      );
+      return res.data.task;
+    } catch (err: any) {
+      return rejectWithValue(err.response?.data?.error || 'Failed to update task note');
+    }
+  }
+);
+
 
 const taskSlice = createSlice({
   name: "tasks",
@@ -178,7 +202,21 @@ const taskSlice = createSlice({
       .addCase(followUpTask.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload as string;
+      })
+      .addCase(updateTaskNoteMeta.fulfilled, (state, action) => {
+        const updatedTask = action.payload;
+        const index = state.patientTasks.findIndex((t) => t.task_id === updatedTask.id);
+        if (index !== -1) {
+          state.patientTasks[index] = {
+            ...state.patientTasks[index],
+            ...updatedTask,
+          };
+        }
+      })
+      .addCase(updateTaskNoteMeta.rejected, (state, action) => {
+        state.error = action.payload as string;
       });
+      
   },
 });
 

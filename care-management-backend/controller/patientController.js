@@ -134,7 +134,7 @@ const getPatientTasks = async (req, res) => {
     }
 
     const result = await pool.query(
-      `SELECT pt.id AS task_id, t.name AS task_name, t.category, t.description, pt.status, pt.due_date,pt.completed_at, t.condition_required, t.is_repeating,t.due_in_days_after_dependency,t.is_non_blocking, t.algorithm,pt.ideal_due_date
+      `SELECT pt.id AS task_id, t.name AS task_name, t.category, t.description, pt.status, pt.due_date,pt.completed_at, t.condition_required, t.is_repeating,t.due_in_days_after_dependency,t.is_non_blocking, t.algorithm,pt.ideal_due_date, pt.task_note, pt.include_note_in_report, pt.contact_info
        FROM patient_tasks pt
        JOIN tasks t ON pt.task_id = t.id
        WHERE pt.patient_id = $1
@@ -344,6 +344,7 @@ const getSearchedPatients = async (req, res) => {
 
 
 
+
 module.exports = {
   getPatients,
   addPatient,
@@ -353,5 +354,6 @@ module.exports = {
   reactivatePatient,
   getDischargedPatients,
   updatePatient,
-  getSearchedPatients
+  getSearchedPatients,
+
 };

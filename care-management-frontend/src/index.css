@@ -229,3 +229,71 @@ input:focus, select:focus, textarea:focus {
 html, body {
   overflow-x: hidden;
 }
+
+
+/* index.css */
+
+.court-popup {
+  position: fixed;
+  top: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+  background: #eead9c;
+  border: 1px solid #ccc;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  padding: 20px;
+  width: fit-content;
+  min-width: 280px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  font-family: 'Inter', sans-serif;
+}
+
+.court-popup label {
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+}
+
+.court-popup input[type="datetime-local"] {
+  padding: 10px;
+  font-size: 14px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  width: 100%;
+}
+
+.court-popup-buttons {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.court-popup-submit {
+  padding: 8px 20px;
+  background-color: #f77f00;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.court-popup-submit:hover {
+  background-color: #e06600;
+}
+
+.court-popup-cancel {
+  padding: 8px 20px;
+  background-color: #ccc;
+  color: #333;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+}

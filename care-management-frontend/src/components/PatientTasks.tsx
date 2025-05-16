@@ -10,6 +10,7 @@ import {
 } from "../redux/slices/taskSlice";
 import { fetchPatientById } from "../redux/slices/patientSlice";
 import { fetchPatientNotes, addPatientNote } from "../redux/slices/noteSlice";
+import { updateTaskNoteMeta } from "../redux/slices/taskSlice";
 import { RootState } from "../redux/store";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
@@ -37,6 +38,12 @@ const PatientTasks = () => {
     "Pending" | "In Progress" | "Completed" | "All Tasks" | "Notes"
   >("All Tasks");
   const [newNote, setNewNote] = useState("");
+  const [expandedTaskId, setExpandedTaskId] = useState<number | null>(null);
+const [noteDrafts, setNoteDrafts] = useState<Record<number, {
+  task_note: string;
+  contact_info: string;
+  include_note_in_report: boolean;
+}>>({});
   const { patientTasks, loading: taskLoading } = useSelector((state: RootState) => state.tasks);
   const { selectedPatient: patient, loading: patientLoading } = useSelector((state: RootState) => state.patients);
   const [selectedAlgorithm, setSelectedAlgorithm] = useState<string>("All");
@@ -67,6 +74,22 @@ const PatientTasks = () => {
     
     }
   }, [dispatch, patientId, selectedTab,taskError]);
+      useEffect(() => {
+        if (expandedTaskId !== null && !noteDrafts[expandedTaskId]) {
+          const task = patientTasks.find(t => t.task_id === expandedTaskId);
+          if (task) {
+            setNoteDrafts(prev => ({
+              ...prev,
+              [task.task_id]: {
+                task_note: task.task_note || "",
+                contact_info: task.contact_info || "",
+                include_note_in_report: !!task.include_note_in_report,
+              }
+            }));
+          }
+        }
+      }, [expandedTaskId, noteDrafts, patientTasks]);
+  
 
   const handleStart = (taskId: number) => {
     dispatch(startTask(taskId))
@@ -80,22 +103,89 @@ const PatientTasks = () => {
 
   const handleComplete = async (taskId: number, taskName: string) => {
     try {
-      if (taskName === "Court date confirmed" || taskName === "Court Hearing Date Received if not follow up completed") {
-        const courtDate = prompt("Enter Court Date (YYYY-MM-DD):");
-        if (!courtDate) {
-          toast.error("Court date is required.");
-          return;
-        }
-        await dispatch(completeTask({ taskId, court_date: courtDate })).unwrap();
-      } else {
-        await dispatch(completeTask({ taskId })).unwrap();
+      const isCourtTask =
+        taskName === "Court date confirmed" ||
+        taskName === "Court Hearing Date Received if not follow up completed" ||
+        taskName === "Confirm date/time of States initial steps including Intake Interview: if not scheduled, follow-up with State";
+  
+      if (isCourtTask) {
+        // Container
+        const container = document.createElement("div");
+        container.className = "court-popup"; // Add styles for this class in index.css
+  
+        //  Label
+        const label = document.createElement("label");
+        label.textContent = "📅 Select court date & time";
+  
+        // Input
+        const input = document.createElement("input");
+        input.type = "datetime-local";
+  
+        //Buttons container
+        const buttonGroup = document.createElement("div");
+        buttonGroup.className = "court-popup-buttons";
+  
+        //Submit button
+        const submitBtn = document.createElement("button");
+        submitBtn.textContent = "Submit";
+        submitBtn.className = "court-popup-submit";
+  
+       
+        const cancelBtn = document.createElement("button");
+        cancelBtn.textContent = "Cancel";
+        cancelBtn.className = "court-popup-cancel";
+        cancelBtn.onclick = () => {
+          document.body.removeChild(container);
+        };
+  
+      
+        submitBtn.onclick = async () => {
+          const courtDate = input.value;
+          document.body.removeChild(container);
+  
+          if (!courtDate) {
+            toast.error("Court date is required.");
+            return;
+          }
+  
+          try {
+            await dispatch(completeTask({ taskId, court_date: courtDate })).unwrap();
+            toast.success("✅ Task completed");
+  
+            if (patientId) {
+              dispatch(fetchPatientById(Number(patientId)));
+              dispatch(loadPatientTasks(Number(patientId)));
+            }
+          } catch {
+            toast.error("❌ Failed to complete task");
+          }
+        };
+  
+        // 🧩 Assemble DOM
+        buttonGroup.appendChild(submitBtn);
+        buttonGroup.appendChild(cancelBtn);
+        container.appendChild(label);
+        container.appendChild(input);
+        container.appendChild(buttonGroup);
+        document.body.appendChild(container);
+  
+        return;
       }
+  
+    
+      await dispatch(completeTask({ taskId })).unwrap();
       toast.success("✅ Task completed");
-      dispatch(loadPatientTasks(Number(patientId)));
+  
+      if (patientId) {
+        dispatch(fetchPatientById(Number(patientId)));
+        dispatch(loadPatientTasks(Number(patientId)));
+      }
     } catch {
       toast.error("❌ Failed to complete task");
     }
   };
+  
+  
 
   const handleMissed = (taskId: number) => {
     const reason = prompt("Enter missed reason:");
@@ -157,8 +247,40 @@ const PatientTasks = () => {
   });
   
 
+
   const renderTasks = () =>
     filteredTasks.map((task: Task)  => {
+      console.log("🧠 Rendering task:", task.task_name, "Status:", task.status);
+      const isExpanded = expandedTaskId === task.task_id;
+      const draft = noteDrafts[task.task_id] || {
+        task_note: "",
+        contact_info: "",
+        include_note_in_report: false,
+      };
+  
+      const updateDraft = (field: keyof typeof draft, value: any) => {
+        setNoteDrafts((prev) => ({
+          ...prev,
+          [task.task_id]: {
+            ...prev[task.task_id],
+            [field]: value,
+          },
+        }));
+      };
+  
+      const handleSaveMeta = () => {
+        dispatch(updateTaskNoteMeta({
+          taskId: task.task_id,
+          data: draft,
+        }))
+          .unwrap()
+          .then(() => {
+            toast.success("Task note updated");
+            setExpandedTaskId(null); // collapse after save
+          })
+          .catch(() => toast.error("Failed to update task note"));
+      };
+  
       const borderColor = algoColorMap[task.algorithm as keyof typeof algoColorMap] || "var(--border-muted)";
       const idealDue = task.ideal_due_date ? new Date(task.ideal_due_date) : null;
         const completedAt = task.completed_at ? new Date(task.completed_at) : null;
@@ -170,92 +292,124 @@ const PatientTasks = () => {
       return (
         <div
         key={task.task_id}
-        className={`card w-full border border-[var(--border-muted)] p-4 mb-4 ${task.is_non_blocking ? 'non-blocking' : ''} ${task.status === "Missed"?'card-missed':''} ${task.status === "Completed"?'card-completed':''}`}
+        className={`card w-full border p-4 mb-4 ${
+          task.is_non_blocking ? "non-blocking" : ""
+        } ${task.status === "Missed" ? "card-missed" : ""} ${
+          task.status === "Completed" ? "card-completed" : ""
+        }`}
         style={{ borderLeft: `8px solid ${borderColor}` }}
-        >
-       <div className="relative mb-2">
-    {/* Task Name */}
-    <h3 className="text-lg font-semibold  max-w-[80%] sm:max-w-none break-words whitespace-normal ">
-      {task.task_name}
-    </h3>
-
-    {/* Status Badge */}
-    <div className="absolute top-0 right-0 flex flex-wrap justify-end gap-1 max-w-[50%] sm:max-w-none">
-      {getStatusBadge(task.status)}
-      {isDelayed && (
-    <span className="text-xs font-medium bg-[#e25e5ee0] text-white px-2 py-0.5 rounded-full">
-      Delayed
-    </span>
-  )}
-    </div>
-  </div>
-    
-      <p className="text-sm text-gray-600">{task.description}</p>
-    
-      <div className="flex items-center gap-3 mt-3 text-sm text-[var(--text-muted)]">
-        {task.is_non_blocking === true ? (
-          // For non-blocking tasks, display a reminder or message
-          <span className="text-blue-500 font-semibold">Reminder: Did you considered this????</span>
-        ) : (
-          <>
-            <Calendar className="w-4 h-4" />
-            Due: {new Date(task.due_date).toLocaleDateString()}
-          </>
-        )}
-      </div>
-
-      {/* Non-blocking task note */}
-      {task.is_non_blocking === true && (
-        <div className="text-sm text-gray-500 mt-2">
-          <strong>Note:</strong> This task can be completed without a specific due date.
-        </div>
-      )}
-
-
-      <div className="flex items-center gap-3 mt-3 text-sm text-[var(--text-muted)]">
-        {task.condition_required && (
-          <>
-            <Activity className="w-4 h-4 ml-2" />
-            {task.condition_required}
-          </>
-        )}
-      </div>
-    
-      {task.status === "Completed" && task.completed_at && (
-        <div className="flex items-center gap-2 mt-2 text-sm text-green-700">
-          <ClipboardCheck className="w-4 h-4" />
-          Completed on: {new Date(task.completed_at).toLocaleDateString()}
-        </div>
-      )}
-    
-      {/* Task Action Buttons */}
-      <div className="mt-4 min-h-[2rem]">
-        {task.status !== "Completed" && (
-          <div className="flex flex-wrap gap-2">
-            {task.status !== "In Progress" && (
-              <button onClick={() => handleStart(task.task_id)} className="btn">
-                Start
-              </button>
+      >
+        {/* Header */}
+        <div className="relative mb-2 flex justify-between">
+          <div>
+            <h3 className="text-lg font-semibold break-words">
+              {task.task_name}
+            </h3>
+            <p className="text-sm text-gray-600">{task.description}</p>
+          </div>
+          <div className="flex gap-2 items-start">
+            {getStatusBadge(task.status)}
+            {isDelayed && (
+              <span className="text-xs font-medium bg-[#e25e5ee0] text-white px-2 py-0.5 rounded-full">
+                Delayed
+              </span>
             )}
-            {task.is_repeating && task.due_in_days_after_dependency != null && (
-              <button onClick={() => handleFollowUp(task.task_id)} className="btn btn-outline">
-                Follow Up
+              <button
+                className="text-xs text-blue-500 underline"
+                onClick={() =>
+                  setExpandedTaskId(isExpanded ? null : task.task_id)
+                }
+              >
+                {isExpanded ? "Hide Note Options" : "Add/Edit Note or Contact Info"}
               </button>
-            )}
-            <button onClick={() => handleComplete(task.task_id, task.task_name)} className="btn btn-outline">
-              Complete
+          </div>
+        </div>
+
+        <div className="text-sm text-gray-500 mb-2">
+          <Calendar className="inline w-4 h-4 mr-1" />
+          Due: {new Date(task.due_date).toLocaleDateString()}
+        </div>
+        {task.status !== "Completed" &&( 
+        <p className="text-sm text-red-600">{task.task_note}</p>
+    )}
+      
+
+        {/* Expanded Note UI */}
+        {isExpanded && (
+          <div className="mt-3 p-3 border rounded  space-y-2" style={{ backgroundColor: "oklch(0.84 0.08 266.54)"}}>
+            <textarea
+              className="w-full border rounded p-2 text-sm"
+              placeholder="Enter task note..."
+              value={draft.task_note}
+              onChange={(e) => updateDraft("task_note", e.target.value)}
+            />
+            <input
+              type="text"
+              className="w-full border rounded p-2 text-sm"
+              placeholder="Contact info"
+              value={draft.contact_info}
+              onChange={(e) => updateDraft("contact_info", e.target.value)}
+            />
+            <div className="flex gap-4 items-center">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={draft.include_note_in_report}
+                  onChange={(e) =>
+                    updateDraft("include_note_in_report", e.target.checked)
+                  }
+                />
+                Include note in report
+              </label>
+              
+            </div>
+            <button onClick={handleSaveMeta} className="btn btn-sm">
+             Save Note Info
             </button>
-
-            {task.status != "Missed" && (
-             <button onClick={() => handleMissed(task.task_id)} className="btn bg-red-600 text-white">
-             Missed
-           </button>
-            )}
-           
           </div>
         )}
+
+        {/* Task Actions */}
+        <div className="mt-4 flex flex-wrap gap-2">
+          {task.status !== "Completed" && (
+            <>
+              {task.status !== "In Progress" && (
+                <button
+                  onClick={() => handleStart(task.task_id)}
+                  className="btn"
+                >
+                  Start
+                </button>
+              )}
+              {task.is_repeating &&
+                task.due_in_days_after_dependency != null && (
+                  <button
+                    onClick={() => handleFollowUp(task.task_id)}
+                    className="btn btn-outline"
+                  >
+                    Follow Up
+                  </button>
+                )}
+              <button
+                onClick={() =>
+                  handleComplete(task.task_id, task.task_name)
+                }
+                className="btn btn-outline"
+              >
+                Complete
+              </button>
+              {task.status !== "Missed" && (
+                <button
+                  onClick={() => handleMissed(task.task_id)}
+                  className="btn bg-red-600 text-white"
+                >
+                  Missed
+                </button>
+              )}
+            </>
+          )}
+        </div>
       </div>
-    </div>
     );
   });
 
@@ -322,10 +476,10 @@ const PatientTasks = () => {
                 <strong>Algorithm:</strong> Guardianship Workflow <br />
                 Emergency: {patient.is_guardianship_emergency ? "Yes" : "No"} | Financial:{" "}
                 {patient.is_guardianship_financial ? "Yes" : "No"} | Person:{" "}
-                {patient.is_guardianship_person ? "Yes" : "No"} <br />
+                {patient.is_guardianship_person ? "Yes" : "No"} | 
                 Court Date:{" "}
-                {patient.court_date
-                  ? new Date(patient.court_date).toLocaleDateString()
+                {patient.guardianship_court_datetime
+                  ? new Date(patient.guardianship_court_datetime).toLocaleString()
                   : "Not Set"}
               </p>
             )}
@@ -334,7 +488,12 @@ const PatientTasks = () => {
               style={{ backgroundColor: "var(--algo-ltc)" }}>
                 <strong>Algorithm:</strong> Long-Term Care (LTC) <br />
                 Financial: {patient.is_ltc_financial ? "Yes" : "No"} | Medical:{" "}
-                {patient.is_ltc_medical ? "Yes" : "No"}
+                {patient.is_ltc_medical ? "Yes" : "No"} |
+                Court Date:{" "}
+                {patient.ltc_court_datetime
+                  ? new Date(patient.ltc_court_datetime).toLocaleString()
+                  : "Not Set"}
+
               </p>
             )}
           </div>

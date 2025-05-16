@@ -3,6 +3,8 @@ import React from "react";
 interface TaskEntry {
   task_name: string;
   completed_at: string;
+  task_note:string;
+  include_note_in_report:boolean;
 }
 
 interface WeeklyTimeline {
@@ -45,6 +47,11 @@ const HistoricalTimelineReport: React.FC<HistoricalTimelineReportProps> = ({ rep
             {weekObj.tasks.map((task, taskIdx) => (
               <li key={taskIdx}>
                 <strong>{task.task_name}</strong> – {task.completed_at}
+                {task.include_note_in_report && task.task_note && (
+                <p className="ml-4 mt-1 text-sm  text-[var(--warm-orange)]">
+                  <strong>Note:</strong> {task.task_note}
+                </p>
+                )}
               </li>
             ))}
           </ul>

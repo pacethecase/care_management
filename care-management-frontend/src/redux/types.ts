@@ -14,7 +14,8 @@ export interface Patient {
     discharge_date?: string | null;
     mrn?: string;
     admitted_date?: string;
-    court_date?: string;
+    guardianship_court_datetime?: string;
+    ltc_court_datetime?: string;
     created_at?: string; 
 
     is_behavioral: boolean;
@@ -63,7 +64,7 @@ export interface Note {
     is_non_blocking?: boolean;
     is_repeating?: boolean;
     due_in_days_after_dependency?: number;
-    patient_name?: string;
+    task_note?:string
   }
   export interface Notification {
     id: string | number;
@@ -96,7 +97,9 @@ export interface PatientTask {
       status: string;
       timestamp: string;
       updated_by?: string;
+      
     }[];
+    
     // Extra fields for UI convenience
     task_name: string;
     description: string;
@@ -106,5 +109,9 @@ export interface PatientTask {
     due_in_days_after_dependency?: number | null;
     condition_required?: string | null;
     patient_name?: string;
+    task_note?: string;
+    contact_info?: string;
+    include_note_in_report?: boolean;
+  
   }
   

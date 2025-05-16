@@ -81,7 +81,8 @@ const createTables = async () => {
           is_guardianship_financial BOOLEAN DEFAULT FALSE,
           is_guardianship_person  BOOLEAN DEFAULT FALSE,
           is_guardianship_emergency BOOLEAN DEFAULT FALSE,
-          court_date  TIMESTAMP WITH TIME ZONE  DEFAULT NULL,
+          guardianship_court_datetime TIMESTAMP WITH TIME ZONE DEFAULT NULL,
+          ltc_court_datetime TIMESTAMP WITH TIME ZONE DEFAULT NULL,
           created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
 
@@ -112,30 +113,34 @@ const createTables = async () => {
            ideal_due_date TIMESTAMP  WITH TIME ZONE ,
           status_history JSONB DEFAULT '[]',
           started_at TIMESTAMP  WITH TIME ZONE ,
-          created_at TIMESTAMP  WITH TIME ZONE  DEFAULT CURRENT_TIMESTAMP
-      );
-CREATE TABLE IF NOT EXISTS notes (
-    id SERIAL PRIMARY KEY,
-    patient_id INTEGER REFERENCES patients(id) ON DELETE CASCADE,
-    staff_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
-    note_text TEXT NOT NULL,
-    created_at TIMESTAMP  WITH TIME ZONE  DEFAULT CURRENT_TIMESTAMP
-);
-CREATE TABLE task_dependencies (
-  task_id INTEGER REFERENCES tasks(id) ON DELETE CASCADE,
-  depends_on_task_id INTEGER REFERENCES tasks(id) ON DELETE CASCADE,
-  PRIMARY KEY (task_id, depends_on_task_id)
-);
+          created_at TIMESTAMP  WITH TIME ZONE  DEFAULT CURRENT_TIMESTAMP,
+          task_note TEXT,
+          include_note_in_report BOOLEAN DEFAULT false,
+          contact_info TEXT
+          );
 
-CREATE TABLE notifications (
-  id SERIAL PRIMARY KEY,
-  user_id INTEGER REFERENCES users(id),
-  patient_id INTEGER REFERENCES patients(id),
-  title TEXT NOT NULL,
-  message TEXT NOT NULL,
-  created_at TIMESTAMP  WITH TIME ZONE DEFAULT NOW(),
-  read BOOLEAN DEFAULT FALSE
-);
+        CREATE TABLE IF NOT EXISTS notes (
+            id SERIAL PRIMARY KEY,
+            patient_id INTEGER REFERENCES patients(id) ON DELETE CASCADE,
+            staff_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+            note_text TEXT NOT NULL,
+            created_at TIMESTAMP  WITH TIME ZONE  DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE task_dependencies (
+          task_id INTEGER REFERENCES tasks(id) ON DELETE CASCADE,
+          depends_on_task_id INTEGER REFERENCES tasks(id) ON DELETE CASCADE,
+          PRIMARY KEY (task_id, depends_on_task_id)
+        );
+
+        CREATE TABLE notifications (
+          id SERIAL PRIMARY KEY,
+          user_id INTEGER REFERENCES users(id),
+          patient_id INTEGER REFERENCES patients(id),
+          title TEXT NOT NULL,
+          message TEXT NOT NULL,
+          created_at TIMESTAMP  WITH TIME ZONE DEFAULT NOW(),
+          read BOOLEAN DEFAULT FALSE
+        );
 
 
 
