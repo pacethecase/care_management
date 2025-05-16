@@ -64,7 +64,10 @@ export interface Note {
     is_non_blocking?: boolean;
     is_repeating?: boolean;
     due_in_days_after_dependency?: number;
+    patient_name?:string;
     task_note?:string
+    contact_info?: string;
+    include_note_in_report?: boolean;
   }
   export interface Notification {
     id: string | number;

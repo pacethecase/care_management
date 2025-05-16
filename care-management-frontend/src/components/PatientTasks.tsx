@@ -17,8 +17,6 @@ import Footer from "../components/Footer";
 import {
   ArrowLeft,
   Calendar,
-  Activity,
-  ClipboardCheck,
   Plus,
 } from "lucide-react";
 import { toast } from "react-toastify";
