@@ -75,8 +75,30 @@ const Tasks = () => {
       }
       toast.success("✅ Task completed");
       dispatch(loadPriorityTasks(selectedPatient));
-    } catch (error) {
-      toast.error("❌ Failed to complete task");
+    } catch (err: any) {
+      // Handle error if task was previously missed and no reason was given
+      const message = err?.toString() || "";
+      if (message.includes("Please provide a reason")) {
+        const reason = prompt("📝 This task was marked as missed earlier. Please enter a reason to proceed:");
+        if (!reason || reason.trim() === "") {
+          toast.error("❌ Reason is required to complete this task.");
+          return;
+        }
+  
+        try {
+          await dispatch(markTaskAsMissed({ taskId, reason })).unwrap();
+          toast.success("✅ Reason recorded. Retrying completion...");
+  
+          await dispatch(completeTask({ taskId })).unwrap();
+          toast.success("✅ Task completed");
+  
+          dispatch(loadPriorityTasks(selectedPatient));
+        } catch {
+          toast.error("❌ Failed to complete task after saving reason");
+        }
+      } else {
+        toast.error("❌ Failed to complete task");
+      }
     }
   };
 

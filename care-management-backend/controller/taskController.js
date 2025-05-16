@@ -76,6 +76,15 @@ const completeTask = async (req, res) => {
     const completedAt = new Date(); 
 
 
+    if (task.status === 'Missed') {
+      const latestStatus = task.status_history?.slice(-1)[0];
+      const missedReason = latestStatus?.reason;
+    
+      if (!missedReason || missedReason.trim() === "") {
+        return res.status(400).json({ error: "Task was missed. Please provide a reason before completing." });
+      }
+    }
+    
     // Step 3: Fetch metadata
     const [taskDetailsRes, patientRes, patientStatusRes] = await Promise.all([
       pool.query(`SELECT * FROM tasks WHERE id = $1`, [task.task_id]),
@@ -148,7 +157,7 @@ const completeTask = async (req, res) => {
     
       await pool.query(
         `INSERT INTO patient_tasks (patient_id, task_id, assigned_staff_id, status, due_date, ideal_due_date)
-         VALUES ($1, $2, $3, 'Pending', $4, $5,$6)`,
+         VALUES ($1, $2, $3, 'Pending', $4, $5)`,
         [task.patient_id, taskDetails.id, task.assigned_staff_id, nextDue, ideal_due_date]
       );
     
@@ -234,7 +243,7 @@ if (!due || !idealBaseDate) {
 
 await pool.query(
   `INSERT INTO patient_tasks (patient_id, task_id, assigned_staff_id, status, due_date, ideal_due_date)
-   VALUES ($1, $2, $3, 'Pending', $4, $5,$6)`,
+   VALUES ($1, $2, $3, 'Pending', $4, $5)`,
   [task.patient_id, dep.id, task.assigned_staff_id, due, idealBaseDate]
 );
 
@@ -414,7 +423,6 @@ const followUpCourtTask = async (req, res) => {
   }
 };
 
-
 const updateTaskNote = async (req, res) => {
   try {
     const { taskId } = req.params;
@@ -433,10 +441,10 @@ const updateTaskNote = async (req, res) => {
 
     const result = await pool.query(
       `UPDATE patient_tasks
-       SET task_note = $1,
-           include_note_in_report = $2,
-           contact_info = $4
-       WHERE id = $5
+       SET task_note = $1::text,
+           include_note_in_report = $2::boolean,
+           contact_info = $3::text
+       WHERE id = $4
        RETURNING *`,
       [
         task_note ?? current.task_note,
@@ -452,6 +460,7 @@ const updateTaskNote = async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 };
+
 
 module.exports = {
   startTask,

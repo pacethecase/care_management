@@ -92,17 +92,19 @@ export const completeTask = createAsyncThunk(
   "tasks/completeTask",
   async ({ taskId, court_date }: { taskId: number; court_date?: string }, { rejectWithValue }) => {
     try {
-      await axios.post(
+      const res = await axios.post(
         `${BASE_URL}/tasks/${taskId}/complete`,
         court_date ? { court_date } : {},
         { withCredentials: true }
       );
-      return taskId;
+      return res.data;
     } catch (err: any) {
-      return rejectWithValue("Failed to complete task");
+      const message = err.response?.data?.error || "Failed to complete task";
+      return rejectWithValue(message);
     }
   }
 );
+
 
 export const markTaskAsMissed = createAsyncThunk(
   "tasks/markTaskAsMissed",

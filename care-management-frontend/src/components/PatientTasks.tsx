@@ -178,8 +178,33 @@ const [noteDrafts, setNoteDrafts] = useState<Record<number, {
         dispatch(fetchPatientById(Number(patientId)));
         dispatch(loadPatientTasks(Number(patientId)));
       }
-    } catch {
-      toast.error("❌ Failed to complete task");
+    } catch(err: any) {
+      if (err?.toString().includes("Please provide a reason")) {
+        const reason = prompt("📝 This task was missed earlier. Please enter a missed reason to proceed:");
+  
+        if (!reason || reason.trim() === "") {
+          toast.error("❌ Reason is required to complete this task.");
+          return;
+        }
+    
+
+        try {
+          await dispatch(markTaskAsMissed({ taskId, reason })).unwrap();
+          toast.success("✅ Missed reason recorded");
+    
+         
+          await dispatch(completeTask({ taskId })).unwrap();
+          toast.success("✅ Task completed after reason provided");
+          if (patientId) {
+            dispatch(fetchPatientById(Number(patientId)));
+            dispatch(loadPatientTasks(Number(patientId)));
+          }
+        } catch {
+          toast.error("❌ Failed to complete task even after reason");
+        }
+      } else {
+        toast.error("❌ Failed to complete task");
+      }
     }
   };
   
@@ -327,9 +352,9 @@ const [noteDrafts, setNoteDrafts] = useState<Record<number, {
           <Calendar className="inline w-4 h-4 mr-1" />
           Due: {new Date(task.due_date).toLocaleDateString()}
         </div>
-        {task.status !== "Completed" &&( 
+
         <p className="text-sm text-red-600">{task.task_note}</p>
-    )}
+
       
 
         {/* Expanded Note UI */}
