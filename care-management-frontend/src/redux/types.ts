@@ -10,6 +10,7 @@ export interface Patient {
     medical_info?: string;
     status?: string;
     assigned_staff_id?: number | null;
+    assigned_staff?: Staff[]; 
     staff_name?: string;
     discharge_note?: string | null;
     discharge_date?: string | null;
@@ -41,7 +42,12 @@ export interface Patient {
     token?: string;
   }
   
- 
+  export interface Staff {
+    id: number;
+    name: string;
+
+  }
+
 export interface Note {
     id: number;
     patient_id: number;
@@ -59,6 +65,7 @@ export interface Note {
     due_date: string;
     ideal_due_date?: string;
     completed_at?: string;
+    completed_by?: string;
     missed_reason?: string;
     status: string;
     condition_required?: string;

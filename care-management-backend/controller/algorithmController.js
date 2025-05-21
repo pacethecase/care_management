@@ -68,13 +68,13 @@ const getPatientsByAlgorithm = async (req, res) => {
 
     if (is_admin) {
       query = `
-        SELECT id, first_name || ' ' || last_name AS name, birth_date, bed_id, created_at
+        SELECT id, first_name, last_name, birth_date, bed_id, created_at
         FROM patients
         WHERE ${column} = true AND status != 'Discharged'
       `;
     } else {
       query = `
-        SELECT p.id, p.first_name || ' ' || p.last_name AS name, p.birth_date, p.bed_id, p.created_at
+        SELECT p.id, p.first_name , p.last_name AS name, p.birth_date, p.bed_id, p.created_at
         FROM patients p
         JOIN patient_staff ps ON p.id = ps.patient_id
         WHERE ${column} = true AND p.status != 'Discharged' AND ps.staff_id = $1
