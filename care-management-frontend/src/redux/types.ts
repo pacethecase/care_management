@@ -47,6 +47,11 @@ export interface Patient {
     name: string;
 
   }
+  interface OptionType {
+    label: string;
+    value: string | number;
+  }
+  
 
 export interface Note {
     id: number;
