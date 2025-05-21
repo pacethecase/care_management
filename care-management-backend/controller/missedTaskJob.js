@@ -17,9 +17,14 @@ function setupMissedTaskJob(io) {
       console.log("⏳ Running missed task job at", now.toFormat("HH:mm"));
 
       const overdueTasks = await pool.query(`
-        SELECT pt.id, pt.patient_id, pt.assigned_staff_id, p.name AS patient_name
+        SELECT 
+          pt.id, 
+          pt.patient_id, 
+          ps.staff_id AS assigned_staff_id, 
+          p.name AS patient_name
         FROM patient_tasks pt
         JOIN patients p ON pt.patient_id = p.id
+        LEFT JOIN patient_staff ps ON pt.patient_id = ps.patient_id
         WHERE pt.status IN ('Pending', 'In Progress')
           AND pt.due_date <= $1
       `, [cutoff.toUTC().toISO()]); 

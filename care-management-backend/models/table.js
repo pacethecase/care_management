@@ -55,13 +55,13 @@ const createTables = async () => {
 
   CREATE TABLE IF NOT EXISTS patients (
           id SERIAL PRIMARY KEY,
-          name VARCHAR(100) NOT NULL,
+          first_name VARCHAR(50) NOT NULL,
+          last_name VARCHAR(50) NOT NULL,
           birth_date DATE NOT NULL,
           age INTEGER, 
           bed_id VARCHAR(20),
           medical_info TEXT,
           status VARCHAR(50) DEFAULT 'Admitted',
-          assigned_staff_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
           discharge_date TIMESTAMP WITH TIME ZONE,
           discharge_note TEXT,
           mrn VARCHAR(50),
@@ -86,6 +86,14 @@ const createTables = async () => {
           created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
 
+
+      CREATE TABLE IF NOT EXISTS patient_staff (
+        patient_id INTEGER NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        staff_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        assigned_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (patient_id, staff_id)
+    );
+
       CREATE TABLE IF NOT EXISTS tasks (
           id SERIAL PRIMARY KEY,
           name VARCHAR(150) NOT NULL UNIQUE,
@@ -106,7 +114,6 @@ const createTables = async () => {
           id SERIAL PRIMARY KEY,
           patient_id INTEGER REFERENCES patients(id) ON DELETE CASCADE,
           task_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
-         assigned_staff_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
           status VARCHAR(50) DEFAULT 'Pending',  -- Pending, In Progress, Completed, Missed, FollowUp
           due_date TIMESTAMP  WITH TIME ZONE ,
           completed_at TIMESTAMP  WITH TIME ZONE ,

@@ -40,7 +40,7 @@ const SignUp = () => {
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-[var(--bg-light)] text-[var(--text-dark)]">
+    <div className="flex flex-col min-h-screen text-white">
       <Navbar />
       <main className="flex items-center justify-center p-6 flex-1">
         <div className="card w-full max-w-lg">
@@ -49,9 +49,9 @@ const SignUp = () => {
             <div>
               <label className="block mb-1 font-medium">Full Name</label>
               <div className="relative">
-                <User className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 text-black w-5 h-5" />
                 <input
-                  className="!pl-10"
+                  className="!pl-10 bg-white text-black placeholder-gray-400 border rounded py-2 px-3"
                   type="text"
                   name="name"
                   placeholder="Enter your name"
@@ -65,9 +65,9 @@ const SignUp = () => {
             <div>
               <label className="block mb-1 font-medium">Email</label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-black w-5 h-5" />
                 <input
-                  className="!pl-10"
+                  className="!pl-10 bg-white text-black placeholder-gray-400 border rounded py-2 px-3"
                   type="email"
                   name="email"
                   placeholder="Enter your email"
@@ -81,9 +81,9 @@ const SignUp = () => {
             <div>
               <label className="block mb-1 font-medium">Password</label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-black w-5 h-5" />
                 <input
-                  className="!pl-10"
+                  className="!pl-10 bg-white text-black placeholder-gray-400 border rounded py-2 px-3"
                   type="password"
                   name="password"
                   placeholder="Enter your password"
@@ -101,7 +101,7 @@ const SignUp = () => {
                   type="button"
                   className={`flex items-center gap-2 px-4 py-2 rounded-lg border-2 transition ${
                     formData.isStaff
-                      ? "border-[var(--prussian-blue)] bg-[var(--hover-tab)] text-[var(--prussian-blue)] font-semibold"
+                      ? "border-[var(--prussian-blue)] bg-white text-black font-semibold"
                       : "border-gray-300 bg-white text-gray-600"
                   }`}
                   onClick={() =>
@@ -116,7 +116,7 @@ const SignUp = () => {
                   type="button"
                   className={`flex items-center gap-2 px-4 py-2 rounded-lg border-2 transition ${
                     formData.isAdmin
-                      ? "border-[var(--prussian-blue)] bg-[var(--hover-tab)] text-[var(--prussian-blue)] font-semibold"
+                      ? "border-[var(--prussian-blue)] bg-white text-black font-semibold"
                       : "border-gray-300 bg-white text-gray-600"
                   }`}
                   onClick={() =>
@@ -128,7 +128,7 @@ const SignUp = () => {
                 </button>
               </div>
 
-              <p className="text-sm text-gray-500">
+              <p className="text-sm text-gray-300">
                 {formData.isStaff
                   ? "Staffs can manage patient aftercare plans"
                   : "Admins can manage staff and system settings"}
@@ -144,7 +144,7 @@ const SignUp = () => {
 
           <p className="text-center text-sm mt-6">
             Already have an account?{" "}
-            <a href="/" className="text-orange font-medium hover:underline">
+            <a href="/" className="font-medium hover:underline">
               Sign In
             </a>
           </p>

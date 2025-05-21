@@ -102,7 +102,7 @@ const ReportPage = () => {
           }
           #report-header h1 {
             font-size: 2.5rem;
-            color: #FF7F00;
+            color: #003049;
             margin: 0;
             text-align: center;
           }
@@ -123,7 +123,7 @@ const ReportPage = () => {
             margin-top: 20px;
           }
           th {
-            background-color: #FF7F00;
+            background-color: #003049;
             color: white;
             padding: 8px;
             text-align: left;
@@ -161,11 +161,7 @@ const ReportPage = () => {
             font-size: 18px;
             color: #888;
           }
-          .bg-green { background-color: #d1fae5; color: #065f46; }
-          .bg-yellow { background-color: #fef3c7; color: #92400e; }
-          .bg-red { background-color: #fee2e2; color: #991b1b; }
-          .bg-blue { background-color: #dbeafe; color: #1e3a8a; }
-          .bg-purple { background-color: #ede9fe; color: #5b21b6; }
+        
           .italic { font-style: italic; color: #b91c1c; }
         </style>
       `;
@@ -195,7 +191,7 @@ const ReportPage = () => {
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-hospital-neutral text-hospital-blue">
+    <div className="flex flex-col min-h-screen">
       <Navbar />
       <div className="container p-6 mx-auto">
         <h1 className="text-3xl font-bold mb-6">Reports</h1>
@@ -226,19 +222,23 @@ const ReportPage = () => {
           selectedReport === "historical" ||
           selectedReport === "projected") && (
           <div className="mb-4">
-            <label className="text-lg mr-2">Select Patient:</label>
+          <label className="text-lg mr-2">Select Patient:</label>
             <select
               value={selectedPatientId ?? ""}
               onChange={(e) => setSelectedPatientId(Number(e.target.value))}
               className="border rounded p-2"
             >
               <option value="">-- Select Patient --</option>
-              {patients.map((patient) => (
-                <option key={patient.id} value={patient.id}>
-                  {patient.name} – MRN {patient.mrn || "N/A"}
-                </option>
-              ))}
+              {patients
+                .slice() 
+                .sort((a, b) => a.last_name.localeCompare(b.last_name))
+                .map((patient) => (
+                  <option key={patient.id} value={patient.id}>
+                    {patient.last_name}, {patient.first_name} – MRN {patient.mrn || "N/A"}
+                  </option>
+                ))}
             </select>
+
           </div>
         )}
 

@@ -105,8 +105,8 @@ const login = async (req, res) => {
       // ✅ Set the token as httpOnly cookie
       res.cookie("token", token, {
         httpOnly: true,
-        secure: true,
-        sameSite: "None",
+        secure: false,
+        sameSite: "LAX",
         maxAge: 24 * 60 * 60 * 1000, // 1 day
       });
       
@@ -130,8 +130,8 @@ const login = async (req, res) => {
   const logout = (req, res) => {
     res.clearCookie("token", {
       httpOnly: true,
-      secure: true,
-      sameSite: "None",
+      secure: false,
+      sameSite: "LAX",
     });
     res.json({ message: "Logged out successfully" });
   };

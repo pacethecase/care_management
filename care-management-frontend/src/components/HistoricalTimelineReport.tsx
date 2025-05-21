@@ -30,11 +30,11 @@ const HistoricalTimelineReport: React.FC<HistoricalTimelineReportProps> = ({ rep
 
   return (
     <div className="bg-white rounded-xl shadow p-6 mt-6">
-      <h2 className="text-2xl font-semibold mb-4 text-center text-orange no-print">
+      <h2 className="text-2xl font-semibold mb-4 text-center no-print">
         Historical Timeline Report
       </h2>
 
-      <div className="text-sm text-gray-700 mb-6 space-y-1">
+      <div className="text-sm mb-6 space-y-1">
         <p><strong>Patient:</strong> {patient.name}</p>
         <p><strong>MRN:</strong> {patient.mrn || "N/A"}</p>
         <p><strong>Admitted:</strong> {patient.admitted_date}</p>
@@ -48,7 +48,7 @@ const HistoricalTimelineReport: React.FC<HistoricalTimelineReportProps> = ({ rep
               <li key={taskIdx}>
                 <strong>{task.task_name}</strong> – {task.completed_at}
                 {task.include_note_in_report && task.task_note && (
-                <p className="ml-4 mt-1 text-sm  text-[var(--warm-orange)]">
+                <p className="ml-4 mt-1 text-sm  text-[var(--prussian-blue)]">
                   <strong>Note:</strong> {task.task_note}
                 </p>
                 )}

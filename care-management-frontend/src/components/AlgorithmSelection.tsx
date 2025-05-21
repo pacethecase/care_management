@@ -77,15 +77,15 @@ const AlgorithmSelection = <T extends { age: number }>({
 
   return (
     <div className="md:col-span-2">
-      <p className="font-medium text-[var(--text-dark)] mb-3 text-lg">Patient Tags:</p>
+      <p className="font-medium  mb-3 text-lg">Patient Tags:</p>
 
-      <div className="flex flex-wrap gap-3 mb-6">
+      <div className="flex flex-wrap text-white gap-3 mb-6">
         {algorithms.map(({ key, label }) => (
           <button
             key={key}
             className={`tab px-6 py-2 rounded-lg font-semibold transition-all duration-300 focus:outline-none border ${
               formData[key as keyof T]
-                ? "border-[var(--funky-orange)] bg-[var(--hover-tab)] text-[var(--funky-orange)] shadow"
+                ? "shadow"
                 : "border-transparent hover:bg-[var(--hover-tab)]"
             }`}
             onClick={(e) => handleSelection(e, key as keyof T)}
@@ -100,9 +100,9 @@ const AlgorithmSelection = <T extends { age: number }>({
           formData[alg.key as keyof T] && (
             <div
               key={alg.key}
-              className="p-5 mb-5 bg-white rounded-md border border-[var(--border-muted)] shadow-sm"
+              className="p-5 mb-5 bg-white text-black rounded-md border border-[var(--border-muted)] shadow-sm"
             >
-              <p className="font-semibold text-[var(--text-dark)] mb-3">
+              <p className="font-semibold  mb-3">
                 {alg.label} Details:
               </p>
 

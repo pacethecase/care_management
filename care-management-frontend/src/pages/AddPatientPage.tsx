@@ -7,15 +7,19 @@ import { RootState, AppDispatch } from '../redux/store';
 import AlgorithmSelection from "../components/AlgorithmSelection";
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
+import Select from 'react-select';
+import { reactSelectStyles } from '../reactSelectStyles';
+
 
 interface FormData {
-  name: string;
+  first_name: string;
+  last_name:string;
   birth_date: string;
   age: number;
   bedId: string;
   mrn: string;
   medical_info: string;
-  assignedStaffId: string;
+  assignedStaffIds: string[]; 
   is_behavioral: boolean;
   is_restrained: boolean;
   is_geriatric_psych_available: boolean;
@@ -35,13 +39,14 @@ const AddPatientPage = () => {
   const staffs = useSelector((state: RootState) => state.user.staffs);
 
   const [formData, setFormData] = useState<FormData>({
-    name: '',
+    first_name: '',
+    last_name: '',
     birth_date: '',
     age: 0,
     bedId: '',
     mrn: '',
     medical_info: '',
-    assignedStaffId: '',
+    assignedStaffIds: [] as string[],
     is_behavioral: false,
     is_restrained: false,
     is_geriatric_psych_available: false,
@@ -99,12 +104,12 @@ const AddPatientPage = () => {
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-[var(--bg-light)] text-[var(--text-dark)]">
+    <div className="flex flex-col min-h-screen text-white">
       <Navbar />
       <main className="flex-grow container mx-auto px-6 py-10">
-        <div className="flex justify-between items-center mb-6">
-          <h3 className="text-3xl font-semibold text-[var(--deep-navy)]">Add New Patient</h3>
-          <Link to="/patients" className="text-[var(--funky-orange)] hover:underline font-medium text-sm">
+        <div className="flex justify-between items-center text-[var(--prussian-blue)] mb-6">
+          <h3 className="text-3xl font-semibold">Add New Patient</h3>
+          <Link to="/patients" className="hover:underline font-medium text-sm">
             ← Back to Patients
           </Link>
         </div>
@@ -112,11 +117,25 @@ const AddPatientPage = () => {
         <div className="card">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <label className="block font-medium">Patient Name*</label>
+              <label className="block font-medium">First Name*</label>
               <input
+                className="bg-white text-black placeholder-gray-400 border rounded py-2 px-3"
+                placeholder="Enter First Name"
                 type="text"
-                name="name"
-                value={formData.name}
+                name="first_name"
+                value={formData.first_name}
+                onChange={handleChange}
+                required
+              />
+            </div>
+            <div>
+              <label className="block font-medium">Last Name*</label>
+              <input
+              className="bg-white text-black placeholder-gray-400 border rounded py-2 px-3"
+                placeholder="Enter Last Name"
+                type="text"
+                name="last_name"
+                value={formData.last_name}
                 onChange={handleChange}
                 required
               />
@@ -126,6 +145,7 @@ const AddPatientPage = () => {
               <label className="block font-medium">Birth Date*</label>
               <input
                 type="date"
+                className="bg-white text-black placeholder-gray-400 border rounded py-2 px-3"
                 name="birth_date"
                 value={formData.birth_date}
                 onChange={handleChange}
@@ -137,10 +157,11 @@ const AddPatientPage = () => {
               <label className="block font-medium">Age*</label>
               <input
                 type="number"
+                className="bg-white text-black cursor-not-allowed placeholder-gray-400 border rounded py-2 px-3"
                 name="age"
                 value={formData.age}
                 readOnly
-                className="bg-gray-100 cursor-not-allowed"
+
               />
             </div>
 
@@ -148,6 +169,7 @@ const AddPatientPage = () => {
               <label className="block font-medium">MRN</label>
               <input
                 type="text"
+                className="bg-white text-black placeholder-gray-400 border rounded py-2 px-3"
                 name="mrn"
                 value={formData.mrn}
                 onChange={handleChange}
@@ -159,6 +181,7 @@ const AddPatientPage = () => {
               <input
                 type="text"
                 name="bedId"
+                 className="bg-white text-black placeholder-gray-400 border rounded py-2 px-3"
                 value={formData.bedId}
                 onChange={handleChange}
                 required
@@ -168,30 +191,32 @@ const AddPatientPage = () => {
             <div className="md:col-span-2">
               <label className="block font-medium">Medical Information</label>
               <textarea
+               className="bg-white text-black placeholder-gray-400 border rounded py-2 px-3"
                 name="medical_info"
                 value={formData.medical_info}
                 onChange={handleChange}
               />
             </div>
 
-            <div className="md:col-span-2">
-              <label className="block font-medium">Assign Staff</label>
-              <select
-                name="assignedStaffId"
-                value={formData.assignedStaffId}
-                onChange={handleChange}
-              >
-                <option value="">Select a Staff</option>
-                {staffs?.length > 0 ? (
-                  staffs.map((staff) => (
-                    <option key={staff.id} value={staff.id}>
-                      {staff.name}
-                    </option>
-                  ))
-                ) : (
-                  <option disabled>Loading staffs...</option>
-                )}
-              </select>
+            <div className="md:col-span-2 text-black">
+              <label className="block text-white font-medium">Assign Staff</label>
+                    <Select
+                    
+                      isMulti
+                      styles={reactSelectStyles}
+                      options={staffs.map(s => ({ value: s.id, label: s.name }))}
+                      value={staffs
+                        .filter(s => formData.assignedStaffIds.includes(String(s.id)))
+                        .map(s => ({ value: s.id, label: s.name }))}
+                      onChange={(selectedOptions) => {
+                        setFormData((prev) => ({
+                          ...prev,
+                          assignedStaffIds: selectedOptions.map((opt) => String(opt.value)),
+                        }));
+                      }}
+                    />
+
+
             </div>
 
             <div className="md:col-span-2">

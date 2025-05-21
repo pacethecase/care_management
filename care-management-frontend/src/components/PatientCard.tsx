@@ -13,9 +13,10 @@ interface PatientCardProps {
   patient: Patient;
   user: UserInfo | null;
   showDischargeInfo?: boolean;
+  onClick?: () => void;
 }
 
-const PatientCard: React.FC<PatientCardProps> = ({ patient, user, showDischargeInfo = false }) => {
+const PatientCard: React.FC<PatientCardProps> = ({ patient, user, showDischargeInfo = false,onClick }) => {
   const dispatch = useDispatch<AppDispatch>();
   const navigate = useNavigate();
   const location = useLocation();
@@ -68,22 +69,30 @@ const PatientCard: React.FC<PatientCardProps> = ({ patient, user, showDischargeI
     };
     
   return (
-    <div className="bg-white w-full p-6 rounded-xl shadow-lg border border-[var(--border-muted)] transition-all duration-300 hover:shadow-xl hover:-translate-y-1 relative">
+    <div className="bg-white p-6 rounded-xl shadow-lg border border-[var(--border-muted)] transition-all duration-300 hover:shadow-xl hover:-translate-y-1 relative"
+    onClick={onClick}>
       {/* Discharge Icon - Admin only */}
       {user?.is_admin && !showDischargeInfo && (
         <div className="absolute top-2 right-2 flex gap-3 text-lg">
-        <FaEdit
-        className="text-blue-600 cursor-pointer"
-        title="Edit patient"
-        onClick={handleEdit}
-      />
-      
-      {/* Discharge Icon */}
-      <FaUserSlash
-        className="text-red-500 cursor-pointer"
-        title="Discharge patient"
-        onClick={handleDischarge}
-      />
+        
+      <FaEdit
+      className="text-blue-600 cursor-pointer"
+      title="Edit patient"
+      onClick={(e) => {
+        e.stopPropagation();
+        handleEdit();
+      }}
+    />
+    
+    <FaUserSlash
+      className="text-red-500 cursor-pointer"
+      title="Discharge patient"
+      onClick={(e) => {
+        e.stopPropagation();
+        handleDischarge();
+      }}
+    />
+    
       
         </div>
       )}
@@ -100,13 +109,13 @@ const PatientCard: React.FC<PatientCardProps> = ({ patient, user, showDischargeI
     
 
       {/* Name */}
-      <h3 className="text-xl font-bold text-[var(--funky-orange)] mb-1">{patient.name}</h3>
+      <h3 className="text-xl font-bold mb-1">{patient.last_name},{patient.first_name}</h3>
 
       {/* Details */}
       <div className="text-sm text-[var(--text-dark)] space-y-1">
-        <p><span className="font-medium">Age:</span> {age} years</p>
-        <p><span className="font-medium">Bed:</span> {patient.bed_id || "N/A"}</p>
-        <p><span className="font-medium">Algorithm:</span> {algorithms.length > 0 ? algorithms.join(", ") : "Not Provided"}</p>
+        <p><span className="font-semibold">Age:</span> {age} years</p>
+        <p><span className="font-semibold">Bed:</span> {patient.bed_id || "N/A"}</p>
+        <p><span className="font-semibold">Workflow Map:</span> {algorithms.length > 0 ? algorithms.join(", ") : "Not Provided"}</p>
       </div>
             {showDischargeInfo && patient.discharge_date && (
         <div className="mt-2 text-sm text-gray-700">
@@ -122,12 +131,13 @@ const PatientCard: React.FC<PatientCardProps> = ({ patient, user, showDischargeI
       <Link
           to={`/patients/${patient.id}/tasks`}
           state={{ from: currentPath }}
-          className="btn px-6 py-2 text-white bg-[var(--funky-orange)] hover:bg-orange-600 rounded-md transition-all duration-300"
+          className="btn px-6 py-2 text-white bg-[var(--warm-orange)] hover:bg-orange-600 rounded-md font-semibold shadow-md transition-all duration-300"
         >
           View Tasks
         </Link>
       </div>
       )}
+      
     </div>
   );
 };

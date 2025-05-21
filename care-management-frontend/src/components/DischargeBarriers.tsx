@@ -33,7 +33,7 @@ const DischargeBarriers = () => {
 
   return (
     <div className="p-6">
-      <h2 className="text-xl font-bold mb-4">🏥 Discharge Barrier Summary</h2>
+      <h2 className="text-xl font-bold mb-4">Discharge Barrier Summary</h2>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {patientCounts.map((item: AlgorithmCount) => (
           <div

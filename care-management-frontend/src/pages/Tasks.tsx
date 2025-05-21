@@ -148,12 +148,15 @@ const Tasks = () => {
             onChange={handlePatientChange}
             value={selectedPatient || ''}
           >
-            <option value="">Select Patient</option>
-            {patients.map((patient) => (
-              <option key={patient.id} value={patient.id}>
-                {patient.name}
-              </option>
-            ))}
+          <option value="">-- Select Patient --</option>
+              {patients
+                .slice() 
+                .sort((a, b) => a.last_name.localeCompare(b.last_name))
+                .map((patient) => (
+                  <option key={patient.id} value={patient.id}>
+                    {patient.last_name}, {patient.first_name} – MRN {patient.mrn || "N/A"}
+                  </option>
+                ))}
           </select>
         </div>
 

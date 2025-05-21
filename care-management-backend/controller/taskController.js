@@ -133,7 +133,7 @@ const completeTask = async (req, res) => {
     `, [completedAt, taskId]);
 
     task.completed_at = completedAt;
-    await appendStatusHistory(taskId, { status: "Completed", timestamp: completedAt.toISOString() });
+    await appendStatusHistory(taskId, { status: "Completed", timestamp: completedAt.toISOString(), staff_id: req.user.id });
 
     // Skip recurrence and dependency handling for non-blocking tasks
     if (taskDetails.is_non_blocking) {
@@ -156,9 +156,9 @@ const completeTask = async (req, res) => {
 
     
       await pool.query(
-        `INSERT INTO patient_tasks (patient_id, task_id, assigned_staff_id, status, due_date, ideal_due_date)
-         VALUES ($1, $2, $3, 'Pending', $4, $5)`,
-        [task.patient_id, taskDetails.id, task.assigned_staff_id, nextDue, ideal_due_date]
+        `INSERT INTO patient_tasks (patient_id, task_id, status, due_date, ideal_due_date)
+         VALUES ($1, $2, 'Pending', $3,$4)`,
+        [task.patient_id, taskDetails.id, nextDue, ideal_due_date]
       );
     
       console.log(
@@ -211,9 +211,9 @@ const completeTask = async (req, res) => {
         console.log("⏭ Skipping due date for non-blocking dependent task.");
         // Insert dependent task without a due date
         await pool.query(
-          `INSERT INTO patient_tasks (patient_id, task_id, assigned_staff_id, status)
+          `INSERT INTO patient_tasks (patient_id, task_id, status)
            VALUES ($1, $2, $3, 'Pending')`,
-          [task.patient_id, dep.id, task.assigned_staff_id]
+          [task.patient_id, dep.id]
         );
         console.log(`📌 Non-blocking dependent task '${dep.name}' scheduled without a due date`);
         continue;
@@ -242,9 +242,9 @@ if (!due || !idealBaseDate) {
 
 
 await pool.query(
-  `INSERT INTO patient_tasks (patient_id, task_id, assigned_staff_id, status, due_date, ideal_due_date)
-   VALUES ($1, $2, $3, 'Pending', $4, $5)`,
-  [task.patient_id, dep.id, task.assigned_staff_id, due, idealBaseDate]
+  `INSERT INTO patient_tasks (patient_id, task_id, status, due_date, ideal_due_date)
+   VALUES ($1, $2, 'Pending', $3, $4)`,
+  [task.patient_id, dep.id, due, idealBaseDate]
 );
 
 console.log(`📌 Dependent task '${dep.name}' scheduled for ${due.toDateString()}`);
@@ -302,11 +302,12 @@ const getPriorityTasks = async (req, res) => {
     const { patientId } = req.query; // Get the patientId from the query
 
     let query = `
-      SELECT pt.id AS task_id, pt.due_date, pt.status, p.name AS patient_name, t.name AS task_name, pt.patient_id, t.is_repeating, t.due_in_days_after_dependency, t.is_non_blocking
+      SELECT pt.id AS task_id, pt.due_date, pt.status, p.last_name || ', ' || p.first_name AS patient_name, t.name AS task_name, pt.patient_id, t.is_repeating, t.due_in_days_after_dependency, t.is_non_blocking
       FROM patient_tasks pt
       JOIN tasks t ON pt.task_id = t.id
       JOIN patients p ON pt.patient_id = p.id
-      WHERE pt.assigned_staff_id = $1
+     JOIN patient_staff ps ON ps.patient_id = p.id
+        WHERE ps.staff_id = $1
         AND pt.status IN ('Pending', 'In Progress', 'Missed')
         AND pt.due_date <= CURRENT_DATE + INTERVAL '2 day'
         AND p.status != 'Discharged'
@@ -336,11 +337,14 @@ const getMissedTasks = async (req, res) => {
     const { patientId } = req.query; // Get the patientId from the query
 
     let query = `
-      SELECT pt.id AS task_id, pt.due_date, p.name AS patient_name, t.name AS task_name
+      SELECT pt.id AS task_id, pt.due_date, p.last_name || ', ' || p.first_name AS patient_name
+, t.name AS task_name
       FROM patient_tasks pt
       JOIN tasks t ON pt.task_id = t.id
       JOIN patients p ON pt.patient_id = p.id
-      WHERE pt.assigned_staff_id = $1
+     JOIN patient_staff ps ON ps.patient_id = p.id
+      WHERE ps.staff_id = $1
+
         AND pt.status = 'Missed'
         AND p.status != 'Discharged'
         AND NOT EXISTS (
@@ -412,6 +416,7 @@ const followUpCourtTask = async (req, res) => {
       status: "Follow Up",
       timestamp: nowLocal.toUTC().toJSDate().toISOString(),
       note: followUpReason, // Use the provided follow-up reason
+      staff_id: req.user.id
     });
 
     console.log(`🔁 Updated task '${taskDetails.name}' to follow up for ${nextDue.toDateString()}`);

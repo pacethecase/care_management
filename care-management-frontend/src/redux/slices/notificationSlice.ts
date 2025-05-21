@@ -32,6 +32,19 @@ export const fetchNotifications = createAsyncThunk<
   }
 );
 
+export const clearAllNotificationsThunk = createAsyncThunk<
+  boolean,
+  void,
+  { rejectValue: string }
+>('notifications/clearAll', async (_, { rejectWithValue }) => {
+  try {
+    await axios.delete(`${BASE_URL}/notifications/clear`, { withCredentials: true });
+    return true;
+  } catch (err: any) {
+    return rejectWithValue(err.response?.data?.error || 'Failed to clear notifications');
+  }
+});
+
 export const markAllRead = createAsyncThunk<
   boolean,
   void,
@@ -76,6 +89,9 @@ const notificationSlice = createSlice({
       })
       .addCase(markAllRead.fulfilled, (state) => {
         state.items = state.items.map((n) => ({ ...n, read: true }));
+      })
+      .addCase(clearAllNotificationsThunk.fulfilled, (state) => {
+        state.items = [];
       });
   },
 });

@@ -1,17 +1,17 @@
 import React from "react";
 
 const labelColors = {
-  "✅ On Time": "#d1fae5",   // green
-  "⚠️ Late": "#fef3c7",       // yellow
-  "❌ Missed": "#fee2e2",     // red
-  "⏳ Pending": "#dbeafe",    // blue
+  "✅ On Time": "#00a63e",   // green
+  "⚠️ Late": "#ffdf20",       // yellow
+  "❌ Missed": "#fb2c36",     // red
+  "⏳ Pending": "#3b82f6",    // blue
 };
 
 const textColors = {
-  "✅ On Time": "#065f46",
-  "⚠️ Late": "#92400e",
-  "❌ Missed": "#991b1b",
-  "⏳ Pending": "#1e3a8a",
+  "✅ On Time": "#fff",
+  "⚠️ Late": "#fff",
+  "❌ Missed": "#fff",
+  "⏳ Pending": "#fff",
 };
 type Task = {
     task_name: string;

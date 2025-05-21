@@ -38,18 +38,18 @@ const Login = () => {
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-[var(--bg-light)] text-[var(--text-dark)]">
+    <div className="flex flex-col min-h-screen text-white">
       <Navbar />
       <main className="flex flex-grow items-center justify-center p-6">
         <div className="card w-full max-w-md">
-          <h2 className="text-2xl font-bold mb-4 text-[var(--deep-navy)]">Sign In</h2>
+          <h2 className="text-2xl font-bold mb-4">Sign In</h2>
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
-              <label className="block mb-1 font-medium">Email</label>
+              <label className="block mb-1 font-bold">Email</label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-black w-5 h-5" />
                 <input
-                  className="!pl-10"
+                  className="!pl-10 bg-white text-black placeholder-gray-400 border rounded py-2 px-3"
                   type="email"
                   name="email"
                   placeholder="Enter your email"
@@ -61,11 +61,11 @@ const Login = () => {
             </div>
 
             <div>
-              <label className="block mb-1 font-medium">Password</label>
+              <label className="block mb-1 font-bold">Password</label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-black w-5 h-5" />
                 <input
-                  className="!pl-10"
+                  className="!pl-10 bg-white text-black placeholder-gray-400 border rounded py-2 px-3"
                   type="password"
                   name="password"
                   placeholder="Enter your password"

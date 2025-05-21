@@ -7,7 +7,8 @@ import { RootState } from '../redux/store';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import type { AppDispatch } from '../redux/store';
-
+import Select from 'react-select';
+import { reactSelectStyles } from '../reactSelectStyles';
 const EditPatientPage = () => {
   const dispatch = useDispatch<AppDispatch>();
   const navigate = useNavigate();
@@ -19,13 +20,14 @@ const EditPatientPage = () => {
   const patient = patients.find((p) => p.id === Number(patientId));
 
   const [formData, setFormData] = useState({
-    name: '',
+    first_name: '',
+    last_name: '',
     birth_date: '',
     age: '',
     bedId: '',
     mrn: '',
     medical_info: '',
-    assignedStaffId: '',
+    assignedStaffIds: [] as string[],
   });
 
   useEffect(() => {
@@ -42,13 +44,14 @@ const EditPatientPage = () => {
       );
 
       setFormData({
-        name: patient.name || '',
+        first_name: patient.first_name || '',
+        last_name: patient.last_name || '',
         birth_date: new Date(patient.birth_date).toISOString().split("T")[0],
         age: calculatedAge >= 0 ? calculatedAge.toString() : '',
         bedId: patient.bed_id || '',
         mrn: patient.mrn || '',
         medical_info: patient.medical_info || '',
-        assignedStaffId: String(patient.assigned_staff_id || ""),
+        assignedStaffIds: patient.assigned_staff?.map((s) => String(s.id)) || [],
       });
     }
   }, [patient]);
@@ -102,22 +105,36 @@ const EditPatientPage = () => {
 
         <div className="card">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block font-medium">Patient Name*</label>
-              <input
-                type="text"
-                name="name"
-                value={formData.name}
-                onChange={handleChange}
-                required
-              />
-            </div>
+          <div>
+  <label className="block font-medium">First Name*</label>
+  <input
+    type="text"
+     className="bg-white text-black placeholder-gray-400 border rounded py-2 px-3"
+    name="first_name"
+    value={formData.first_name}
+    onChange={handleChange}
+    required
+  />
+</div>
+<div>
+  <label className="block font-medium">Last Name*</label>
+  <input
+    type="text"
+     className="bg-white text-black placeholder-gray-400 border rounded py-2 px-3"
+    name="last_name"
+    value={formData.last_name}
+    onChange={handleChange}
+    required
+  />
+</div>
+
 
             <div>
               <label className="block font-medium">Birth Date*</label>
               <input
                 type="date"
                 name="birth_date"
+                 className="bg-white text-black placeholder-gray-400 border rounded py-2 px-3"
                 value={formData.birth_date}
                 onChange={handleChange}
              
@@ -129,6 +146,7 @@ const EditPatientPage = () => {
               <input
                 type="number"
                 name="age"
+                 className="bg-white text-black placeholder-gray-400 border rounded py-2 px-3"
                 value={formData.age}
                 readOnly
                
@@ -140,6 +158,7 @@ const EditPatientPage = () => {
               <input
                 type="text"
                 name="mrn"
+                 className="bg-white text-black placeholder-gray-400 border rounded py-2 px-3"
                 value={formData.mrn}
                 onChange={handleChange}
               />
@@ -150,6 +169,7 @@ const EditPatientPage = () => {
               <input
                 type="text"
                 name="bedId"
+                 className="bg-white text-black placeholder-gray-400 border rounded py-2 px-3"
                 value={formData.bedId}
                 onChange={handleChange}
                 required
@@ -160,6 +180,7 @@ const EditPatientPage = () => {
               <label className="block font-medium">Medical Information</label>
               <textarea
                 name="medical_info"
+                 className="bg-white text-black placeholder-gray-400 border rounded py-2 px-3"
                 value={formData.medical_info}
                 onChange={handleChange}
               />
@@ -167,22 +188,21 @@ const EditPatientPage = () => {
 
             <div className="md:col-span-2">
               <label className="block font-medium">Assign Nurse</label>
-              <select
-                name="assignedStaffId"
-                value={formData.assignedStaffId}
-                onChange={handleChange}
-              >
-                <option value="">Select a Nurse</option>
-                {staffs?.length > 0 ? (
-                  staffs.map((staff) => (
-                    <option key={staff.id} value={staff.id}>
-                      {staff.name}
-                    </option>
-                  ))
-                ) : (
-                  <option disabled>Loading staff...</option>
-                )}
-              </select>
+                          <Select
+              isMulti
+              styles={reactSelectStyles}
+              options={staffs.map(s => ({ value: s.id, label: s.name }))}
+              value={staffs
+                .filter(s => formData.assignedStaffIds.includes(String(s.id)))
+                .map(s => ({ value: s.id, label: s.name }))}
+              onChange={(selectedOptions) => {
+                setFormData((prev) => ({
+                  ...prev,
+                  assignedStaffIds: selectedOptions.map((opt) => String(opt.value)),
+                }));
+              }}
+            />
+
             </div>
           </div>
 

@@ -26,10 +26,7 @@ const HomePage = () => {
         <div className="row">
           <div className="col-md-12">
             <h1 className="text-3xl font-bold mb-4">Welcome</h1>
-            {user && <p className="mt-2 text-lg">Hello, {user.name}!</p>} {/* Display user name if available */}
-           
-
-            {/* Conditionally render reports based on selected button */}
+            {user && <p className="mt-2 text-lg">Hello, {user.name}!</p>} 
             <div className="mt-4">
              
               <DischargeBarriers />

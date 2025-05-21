@@ -3,22 +3,23 @@
 /* 🎨 Root Variables */
 :root {
   /* Brand Colors */
-  --prussian-blue: #003049;      /* Deep navy - primary background */
-  --fire-red: #D62828;           /* Alert/danger */
-  --warm-orange: #F77F00;        /* Primary accent */
-  --xanthous-yellow: #FCBF49;    /* Highlights / CTAs */
-  --vanilla: #5ac8fa4a;            /* Light background / cards */
+  --prussian-blue: #003049;      /* Deep navy - primary background */          
+  --light-navy:#014272;
 
+  --primary-red:     #ef4444;  /* Tailwind red-500 */
+  --primary-green:   #16a34a;  /* Tailwind green-500 */
+  --primary-yellow:  #facc15;  /* Tailwind yellow-500 */
+  --primary-blue:    #3b82f6;  /* Tailwind blue-500 */
   /* Neutrals */
   --bg-light: #fdfdfd;
-  --text-main: #1F2937;
+  --text-main: #000;
   --text-muted: #6B7280;
   --border-muted: #D1D5DB;
   --tab-hover: #F3F4F6;
 
-  --algo-behavioral: #F7D140; /* Yellow */
-  --algo-ltc: #003366;        /* Navy Blue */
-  --algo-guardianship: #28A745; /* Green */
+  --algo-behavioral: #180453; 
+  --algo-ltc: #005D8F;        
+  --algo-guardianship:#7E5A9B; 
 }
 
 /* 🧼 Reset & Base */
@@ -33,48 +34,47 @@ body {
 }
 
 h1, h2, h3, h4 {
-  color: var(--warm-orange);
   font-weight: 600;
 }
 
 a {
-  color: var(--warm-orange);
+  color: var(--prussian-blue);
   text-decoration: none;
   transition: color 0.3s ease;
 }
 
 a:hover {
-  color: var(--fire-red);
+  color: var(--light-navy);
 }
 
-/* 🔘 Buttons */
-.btn {
-  background-color: var(--warm-orange);
-  color: white;
-  padding: 0.6rem 1.2rem;
-  border-radius: 8px;
-  font-weight: 500;
-  font-size: 1rem;
-  border: none;
-  cursor: pointer;
-  transition: background-color 0.3s ease;
-}
+  /* 🔘 Buttons */
+  .btn {
+    background-color: var(--prussian-blue);
+    color: white;
+    padding: 0.6rem 1.2rem;
+    border-radius: 8px;
+    font-weight: 500;
+    font-size: 1rem;
+    border: none;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+  }
 
-.btn:hover {
-  background-color: var(--fire-red);
-  color: white;
-}
+  .btn:hover {
+    background-color: var(--light-navy);
+    color: white;
+  }
 
-.btn-outline {
-  background-color: transparent;
-  color: var(--warm-orange);
-  border: 2px solid var(--warm-orange);
-}
+  .btn-outline {
+    background-color: transparent;
+    color: var(--prussian-blue);
+    border: 2px solid var(--prussian-blue);
+  }
 
-.btn-outline:hover {
-  background-color: var(--warm-orange);
-  color: white;
-}
+  .btn-outline:hover {
+    background-color: var(--prussian-blue);
+    color: white;
+  }
 
 /* 💬 Inputs */
 input, textarea {
@@ -95,12 +95,22 @@ select{
 
 input:focus, select:focus, textarea:focus {
   outline: none;
-  border-color: var(--warm-orange);
+  border-color: var(--prussian-blue);
 }
 
 /* 📦 Cards */
 .card {
-  background-color: var(--vanilla);
+  background-color: var(--primary-blue);
+  border: 1px solid var(--border-muted);
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+}
+.card-heading {
   border: 1px solid var(--border-muted);
   border-radius: 12px;
   padding: 1.5rem;
@@ -112,34 +122,31 @@ input:focus, select:focus, textarea:focus {
 }
 
 .card.non-blocking {
-  background-color: #FFF3CD; 
+  background-color: var(--primary-yellow);
 }
 
 .card.card-missed{
-  background-color: #ffb8b8;
+  background-color: var(--primary-red); 
 }
 
 .card.card-completed{
-  background-color:#a6d3ae;
+  background-color: var(--primary-green);
 }
 
 /* 🧭 Tabs */
 .tab {
   padding: 0.5rem 1rem;
   border-radius: 6px;
-  color: var(--prussian-blue);
+
   background-color: transparent;
   transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 .tab:hover {
   background-color: var(--tab-hover);
+  color: var(--prussian-blue);
 }
 
-.tab-active {
-  background-color: var(--warm-orange);
-  color: white;
-}
 
 /* 📌 Status Badges */
 .badge {
@@ -147,22 +154,10 @@ input:focus, select:focus, textarea:focus {
   font-weight: 600;
   padding: 0.25rem 0.75rem;
   border-radius: 9999px;
+  color: #000;
+  background-color: var(--bg-light);
 }
 
-.badge-pending {
-  background-color: var(--xanthous-yellow);
-  color: #8A6D3B;
-}
-
-.badge-inprogress {
-  background-color: #E0F2FE;
-  color: var(--prussian-blue);
-}
-
-.badge-completed {
-  background-color: #D4EDDA;
-  color: #155724;
-}
 
 /* 🚪 Navbar */
 .navbar {
@@ -175,14 +170,17 @@ input:focus, select:focus, textarea:focus {
 }
 
 .navbar a {
-  color: var(--xanthous-yellow);
-  margin-right: 1.5rem;
+  color: white;
+
 }
 
 .navbar a:hover {
-  color: var(--warm-orange);
+  color: var(--light-navy);
 }
 
+.bg-prussian-blue {
+  background-color: var(--prussian-blue);
+}
 /* 🔚 Footer */
 .footer {
   background-color: var(--prussian-blue);
@@ -200,17 +198,14 @@ input:focus, select:focus, textarea:focus {
   gap: 1rem;
 }
 
-/* 🎨 Utility Text */
-.text-accent {
-  color: var(--warm-orange);
-}
+
 
 .text-muted {
   color: var(--text-muted);
 }
 
 .text-red {
-  color: var(--fire-red);
+  color: var(--primary-red);
 }
 
 /* index.css or global styles */
@@ -297,3 +292,5 @@ html, body {
   cursor: pointer;
   font-weight: 500;
 }
+
+

@@ -22,6 +22,7 @@ app.set('trust proxy', 1);
 // Allowed Origins (both development and production)
 const allowedOrigins = [
   'http://localhost:5173', 
+  'http://localhost:5174', 
   'https://care-management-nine.vercel.app',
 ];
 

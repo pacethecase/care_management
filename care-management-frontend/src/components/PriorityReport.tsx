@@ -32,7 +32,7 @@ const PriorityReport: React.FC<PriorityReportProps> = ({ date }) => {
         <div className="overflow-x-auto">
           <table className="min-w-full bg-white rounded-lg shadow-lg">
             <thead>
-              <tr className="bg-orange-500 text-white">
+              <tr className="bg-prussian-blue text-white">
                 <th className="p-3 text-left">Patient Name</th>
                 <th className="p-3 text-left">Task Name</th>
                 <th className="p-3 text-left">Staff</th>
@@ -46,7 +46,11 @@ const PriorityReport: React.FC<PriorityReportProps> = ({ date }) => {
                 <tr key={`${task.patient_id}-${task.task_name}`} className="border-b">
                   <td className="p-3">{task.patient_name}</td>
                   <td className="p-3">{task.task_name}</td>
-                  <td className="p-3">{task.staff_name || 'N/A'}</td>
+                  <td className="p-3">
+                    {Array.isArray(task.staff_names) && task.staff_names.length > 0
+                      ? task.staff_names.join(', ')
+                      : 'N/A'}
+                  </td>
                   <td className="p-3">
                     {task.due_date
                       ? new Date(task.due_date).toLocaleString(undefined, {

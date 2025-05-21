@@ -2,7 +2,8 @@
 
 export interface Patient {
     id: number;
-    name: string;
+    first_name: string;
+    last_name: string;
     birth_date: string;
     age?: number;
     bed_id?: string;
@@ -116,5 +117,12 @@ export interface PatientTask {
     contact_info?: string;
     include_note_in_report?: boolean;
   
+  }
+
+  export interface PatientSummary {
+    barrier_to_discharge: string;
+    daily_prioritization: string;
+    incomplete_tasks: string;
+    projected_completion: string;
   }
   

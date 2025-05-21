@@ -12,7 +12,7 @@ interface ReportTask {
   patient_name: string;
   task_name: string;
   missed_reason?: string;
-  staff_name?: string;
+  staff_names?: string[];
   due_date?: Date | string;
 }
 
@@ -26,7 +26,7 @@ const DailyReport: React.FC<Props> = ({ date }) => {
 
   return (
     <div>
-      <h2 className="text-2xl font-semibold mb-4 text-center text-orange no-print">Daily Report</h2>
+      <h2 className="text-2xl font-semibold mb-4 text-center no-print">Daily Report</h2>
       {loading && <p className="text-center text-gray-600">Loading...</p>}
       {error && <p className="text-center text-red-500">{error}</p>}
 
@@ -34,7 +34,7 @@ const DailyReport: React.FC<Props> = ({ date }) => {
         <div className="overflow-x-auto">
           <table className="min-w-full bg-white rounded-lg shadow-lg">
             <thead>
-              <tr className="bg-orange-500 text-white">
+              <tr className="bg-prussian-blue text-white">
                 <th className="p-3 text-left">Patient Name</th>
                 <th className="p-3 text-left">Task Name</th>
                 <th className="p-3 text-left">Missed Reason</th>
@@ -49,19 +49,23 @@ const DailyReport: React.FC<Props> = ({ date }) => {
                   <td className="p-3">{task.task_name}</td>
                   <td className="p-3">{task.missed_reason || 'N/A'}</td>
                   <td className="p-3">
-  {task.due_date
-    ? new Date(task.due_date).toLocaleString(undefined, {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit',
-        hour12: true,
-      })
-    : 'N/A'}
-</td>
-                  <td className="p-3">{task.staff_name || 'N/A'}</td>
-                </tr>
+                      {task.due_date
+                        ? new Date(task.due_date).toLocaleString(undefined, {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric',
+                            hour: 'numeric',
+                            minute: '2-digit',
+                            hour12: true,
+                          })
+                        : 'N/A'}
+                    </td>
+                    <td className="p-3">
+                      {task.staff_names?.length
+                        ? task.staff_names.join(', ')
+                        : 'N/A'}
+                    </td>
+                                    </tr>
               ))}
             </tbody>
           </table>

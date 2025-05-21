@@ -6,7 +6,9 @@ const {
   getPatientsByAlgorithm,
 } = require("../controller/algorithmController");
 
-router.get("/counts", getPatientCountsByAlgorithm);
-router.get("/:algorithm", getPatientsByAlgorithm);
+const { verifyToken } = require("../middleware/authMiddleware");
+
+router.get("/counts", verifyToken,getPatientCountsByAlgorithm);
+router.get("/:algorithm",verifyToken, getPatientsByAlgorithm);
 
 module.exports = router;

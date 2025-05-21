@@ -23,6 +23,6 @@ router.post("/:taskId/missed", verifyToken, markTaskAsMissed);
 router.get("/priority", verifyToken, getPriorityTasks);
 
 router.get("/missed", verifyToken, getMissedTasks);
-router.post("/:taskId/follow-up", followUpCourtTask);
+router.post("/:taskId/follow-up",verifyToken, followUpCourtTask);
 router.patch('/patient_tasks/:taskId/note', verifyToken, updateTaskNote);
 module.exports = router;

@@ -7,11 +7,19 @@ const getPatients = async (req, res) => {
   try {
     const userId = req.user?.id;
     const isStaff = req.user?.is_staff;
-    const query = isStaff
-      ? `SELECT p.*, u.name AS staff_name FROM patients p LEFT JOIN users u ON p.assigned_staff_id = u.id WHERE p.assigned_staff_id = $1 AND p.status != 'Discharged' ORDER BY p.created_at DESC`
-      : `SELECT p.*, u.name AS staff_name FROM patients p LEFT JOIN users u ON p.assigned_staff_id = u.id WHERE p.status != 'Discharged' ORDER BY p.created_at DESC`;
 
-    const result = await pool.query(query, isStaff ? [userId] : []);
+    const result = await pool.query(`
+      SELECT 
+        p.*,
+        json_agg(json_build_object('id', u.id, 'name', u.name)) FILTER (WHERE u.id IS NOT NULL) AS assigned_staff
+      FROM patients p
+      LEFT JOIN patient_staff ps ON p.id = ps.patient_id
+      LEFT JOIN users u ON ps.staff_id = u.id
+      ${isStaff ? `WHERE ps.staff_id = $1 AND p.status != 'Discharged'` : `WHERE p.status != 'Discharged'`}
+      GROUP BY p.id
+      ORDER BY p.created_at DESC
+    `, isStaff ? [userId] : []);
+
     res.status(200).json(result.rows);
   } catch (err) {
     console.error("❌ Error fetching patients:", err);
@@ -19,17 +27,19 @@ const getPatients = async (req, res) => {
   }
 };
 
+
 // Add Patient
 const addPatient = async (req, res) => {
   try {
     const {
-      name,
+      first_name,
+      last_name,
       birth_date,
       age,
       bedId,
       mrn,
       medical_info,
-      assignedStaffId,
+      assignedStaffIds = [],
       is_behavioral,
       is_restrained,
       is_geriatric_psych_available,
@@ -44,12 +54,12 @@ const addPatient = async (req, res) => {
       admitted_date
     } = req.body;
 
-    if (!name || !birth_date || !bedId || !age || !mrn) {
+    if (!first_name ||!last_name || !birth_date || !bedId || !age || !mrn) {
       return res.status(400).json({ message: "Missing required fields" });
     }
 
     const result = await pool.query(
-      `INSERT INTO patients (name, birth_date, age, bed_id,mrn, medical_info, assigned_staff_id, is_behavioral, is_restrained, is_geriatric_psych_available, is_behavioral_team, is_ltc,
+      `INSERT INTO patients (first_name,last_name, birth_date, age, bed_id,mrn, medical_info, is_behavioral, is_restrained, is_geriatric_psych_available, is_behavioral_team, is_ltc,
       is_ltc_medical,
       is_ltc_financial,
       is_guardianship,
@@ -58,13 +68,13 @@ const addPatient = async (req, res) => {
       is_guardianship_emergency,admitted_date)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) RETURNING *`,
       [
-        name,
+        first_name,
+        last_name,
         birth_date,
         age,
         bedId,
         mrn,
         medical_info,
-        assignedStaffId || null,
         is_behavioral,
         is_restrained,
         is_geriatric_psych_available,
@@ -80,22 +90,31 @@ const addPatient = async (req, res) => {
       ]
     );
     const newPatient = result.rows[0];
-
+    for (const staffId of assignedStaffIds) {
+      await pool.query(
+        `INSERT INTO patient_staff (patient_id, staff_id) VALUES ($1, $2)`,
+        [newPatient.id, staffId]
+      );
+    }
     const timezone = req.headers['x-timezone'] || 'America/New_York';
     await assignTasksToPatient(newPatient.id, timezone);
-    if (assignedStaffId) {
-      const io = req.app.get('io');
-
-        io.to(`user-${assignedStaffId}`).emit('notification', {
-          title: 'New Patient Assigned',
-          message: `You are assigned to ${newPatient.name}`,
+    if (assignedStaffIds.length > 0) {
+      const io = req.app.get("io");
+    
+      for (const staffId of assignedStaffIds) {
+        io.to(`user-${staffId}`).emit("notification", {
+          title: "New Patient Assigned",
+          message: `You are assigned to ${newPatient.first_name} ${newPatient.last_name}`,
         });
-        await pool.query(`
-          INSERT INTO notifications (user_id, title, message)
-          VALUES ($1, $2, $3)
-        `, [assignedStaffId, 'New Patient Assigned',`You are assigned to ${newPatient.name}`]);
+    
+        await pool.query(
+          `INSERT INTO notifications (user_id, title, message)
+           VALUES ($1, $2, $3)`,
+          [staffId, "New Patient Assigned", `You are assigned to ${newPatient.first_name} ${newPatient.last_name}`]
+        );
+      }
     }
-    res.status(201).json({ message: "Patient added and tasks assigned", patient: result.rows[0] });
+    res.status(201).json({ message: "Patient added and tasks assigned", patient: newPatient });
   } catch (err) {
     console.error("❌ Error adding patient:", err);
     res.status(500).json({ error: "Internal server error" });
@@ -106,12 +125,21 @@ const addPatient = async (req, res) => {
 const getPatientById = async (req, res) => {
   try {
     const { patientId } = req.params;
-    const result = await pool.query(
-      `SELECT p.*, u.name AS staff_name FROM patients p LEFT JOIN users u ON p.assigned_staff_id = u.id WHERE p.id = $1 AND p.status != 'Discharged'`,
-      [patientId]
-    );
 
-    if (result.rows.length === 0) return res.status(404).json({ error: "Patient not found" });
+    const result = await pool.query(`
+      SELECT 
+        p.*,
+        json_agg(json_build_object('id', u.id, 'name', u.name)) FILTER (WHERE u.id IS NOT NULL) AS assigned_staff
+      FROM patients p
+      LEFT JOIN patient_staff ps ON p.id = ps.patient_id
+      LEFT JOIN users u ON ps.staff_id = u.id
+      WHERE p.id = $1
+      GROUP BY p.id
+    `, [patientId]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Patient not found" });
+    }
 
     res.status(200).json(result.rows[0]);
   } catch (err) {
@@ -119,6 +147,7 @@ const getPatientById = async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 };
+
 
 // Get Tasks for a Patient
 const getPatientTasks = async (req, res) => {
@@ -134,9 +163,18 @@ const getPatientTasks = async (req, res) => {
     }
 
     const result = await pool.query(
-      `SELECT pt.id AS task_id, t.name AS task_name, t.category, t.description, pt.status, pt.due_date,pt.completed_at, t.condition_required, t.is_repeating,t.due_in_days_after_dependency,t.is_non_blocking, t.algorithm,pt.ideal_due_date, pt.task_note, pt.include_note_in_report, pt.contact_info
-       FROM patient_tasks pt
+      `SELECT pt.id AS task_id, t.name AS task_name, t.category, t.description, pt.status, pt.due_date,pt.completed_at, t.condition_required, t.is_repeating,t.due_in_days_after_dependency,t.is_non_blocking, t.algorithm,pt.ideal_due_date, pt.task_note, pt.include_note_in_report, pt.contact_info,
+      u.name AS completed_by
+      FROM patient_tasks pt
        JOIN tasks t ON pt.task_id = t.id
+       LEFT JOIN LATERAL (
+          SELECT (elem.value ->> 'staff_id')::INTEGER AS staff_id
+          FROM jsonb_array_elements(pt.status_history) AS elem
+          WHERE elem.value ->> 'status' = 'Completed'
+          ORDER BY (elem.value ->> 'timestamp')::timestamp DESC
+          LIMIT 1
+        ) AS history ON TRUE
+         LEFT JOIN users u ON u.id = history.staff_id
        WHERE pt.patient_id = $1
        ORDER BY pt.due_date ASC`,
       [patientId]
@@ -154,7 +192,6 @@ const dischargePatient = async (req, res) => {
   try {
     const { patientId } = req.params;
     const { dischargeNote } = req.body;
-    const staffId = req.user?.id || null;
 
     // Check if patient exists
     const patientRes = await pool.query(`SELECT * FROM patients WHERE id = $1`, [patientId]);
@@ -162,7 +199,7 @@ const dischargePatient = async (req, res) => {
       return res.status(404).json({ error: "Patient not found" });
     }
     const patient = patientRes.rows[0];
-  
+
     // Update patient record
     await pool.query(
       `UPDATE patients 
@@ -172,24 +209,31 @@ const dischargePatient = async (req, res) => {
        WHERE id = $2`,
       [dischargeNote, patientId]
     );
+
     const io = req.app.get('io');
 
-    if (patient.assigned_staff_id) {
-    
-      io.to(`user-${patient.assigned_staff_id}`).emit('notification', {
-        title: 'Patient Discharged',
-        message: `${patient.name} has been discharged.`,
+    // Get all assigned staff
+    const staffRes = await pool.query(
+      `SELECT staff_id FROM patient_staff WHERE patient_id = $1`,
+      [patientId]
+    );
+
+    for (const { staff_id } of staffRes.rows) {
+      io.to(`user-${staff_id}`).emit("notification", {
+        title: "Patient Discharged",
+        message: `${patient.first_name} ${patient.last_name} has been discharged.`,
       });
 
-      await pool.query(`
-        INSERT INTO notifications (user_id, patient_id, title, message)
-        VALUES ($1, $2, $3, $4)
-      `, [
-        patient.assigned_staff_id,
-        patient.id,
-        'Patient Discharged',
-        `${patient.name} has been discharged.`
-      ]);
+      await pool.query(
+        `INSERT INTO notifications (user_id, patient_id, title, message)
+         VALUES ($1, $2, $3, $4)`,
+        [
+          staff_id,
+          patient.id,
+          "Patient Discharged",
+          `${patient.first_name} ${patient.last_name} has been discharged.`
+        ]
+      );
     }
 
     res.status(200).json({ message: "Patient discharged successfully" });
@@ -199,6 +243,7 @@ const dischargePatient = async (req, res) => {
     res.status(500).json({ error: "Internal Server Error" });
   }
 };
+
 
 const reactivatePatient = async (req, res) => {
   const { patientId } = req.params;
@@ -210,6 +255,7 @@ const reactivatePatient = async (req, res) => {
     }
 
     const patient = patientRes.rows[0];
+
     await pool.query(
       `UPDATE patients
        SET discharge_date = NULL,
@@ -218,26 +264,35 @@ const reactivatePatient = async (req, res) => {
        WHERE id = $1`,
       [patientId]
     );
+
     const io = req.app.get('io');
-    if (patient.assigned_staff_id) {
-      io.to(`user-${patient.assigned_staff_id}`).emit('notification', {
-        title: 'Patient Reinstated',
-        message: `${patient.name} has been reinstated.`,
+
+    // Get all assigned staff
+    const staffRes = await pool.query(
+      `SELECT staff_id FROM patient_staff WHERE patient_id = $1`,
+      [patientId]
+    );
+
+    for (const { staff_id } of staffRes.rows) {
+      io.to(`user-${staff_id}`).emit("notification", {
+        title: "Patient Reinstated",
+        message: `${patient.first_name} ${patient.last_name} has been reinstated to active care.`,
       });
 
-      await pool.query(`
-        INSERT INTO notifications (user_id, patient_id, title, message)
-        VALUES ($1, $2, $3, $4)
-      `, [
-        patient.assigned_staff_id,
-        patient.id,
-        'Patient Reinstated',
-        `${patient.name} has been reinstated to active care.`
-      ]);
+      await pool.query(
+        `INSERT INTO notifications (user_id, patient_id, title, message)
+         VALUES ($1, $2, $3, $4)`,
+        [
+          staff_id,
+          patient.id,
+          "Patient Reinstated",
+          `${patient.first_name} ${patient.last_name} has been reinstated to active care.`
+        ]
+      );
     }
 
-
     res.json({ message: 'Patient reactivated successfully' });
+
   } catch (err) {
     console.error("❌ Error reactivating patient:", err);
     res.status(500).json({ error: 'Internal server error' });
@@ -248,12 +303,22 @@ const reactivatePatient = async (req, res) => {
 const getDischargedPatients = async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT p.*, u.name AS staff_name
+      SELECT 
+        p.*,
+        json_agg(
+          json_build_object(
+            'id', u.id,
+            'name',u.name
+          )
+        ) FILTER (WHERE u.id IS NOT NULL) AS assigned_staff
       FROM patients p
-      LEFT JOIN users u ON p.assigned_staff_id = u.id
+      LEFT JOIN patient_staff ps ON p.id = ps.patient_id
+      LEFT JOIN users u ON ps.staff_id = u.id
       WHERE p.status = 'Discharged'
+      GROUP BY p.id
       ORDER BY p.discharge_date DESC
     `);
+
     res.status(200).json(result.rows);
   } catch (err) {
     console.error("❌ Error fetching discharged patients:", err);
@@ -263,20 +328,22 @@ const getDischargedPatients = async (req, res) => {
 
 
 
+
+
 const updatePatient = async (req, res) => {
   const patientId = req.params.patientId;
   const {
-    name,
+    first_name,
+    last_name,
     birth_date,
     age,
     bedId,
     mrn,
     medical_info,
-    assignedStaffId
+    assignedStaffIds = []
   } = req.body;
 
   try {
-    // Check if patient exists
     const isAdmin = req.user.is_admin;
     if (!isAdmin) {
       return res.status(403).json({ error: "Only admins can edit patient data." });
@@ -287,36 +354,37 @@ const updatePatient = async (req, res) => {
       return res.status(404).json({ error: "Patient not found." });
     }
 
-    // Update patient
-    const updateRes = await pool.query(
+    // Update patient core info
+    await pool.query(
       `UPDATE patients
-       SET name = $1,
-           birth_date = $2,
-           age = $3,
-           bed_id = $4,
-           mrn = $5,
-           medical_info = $6,
-           assigned_staff_id = $7
-       WHERE id = $8
-       RETURNING *`,
-      [name, birth_date, age, bedId, mrn, medical_info, assignedStaffId || null, patientId]
+       SET first_name = $1,
+           last_name = $2,
+           birth_date = $3,
+           age = $4,
+           bed_id = $5,
+           mrn = $6,
+           medical_info = $7
+       WHERE id = $8`,
+      [first_name, last_name, birth_date, age, bedId, mrn, medical_info, patientId]
     );
 
-    await pool.query(
-      `UPDATE patient_tasks
-       SET assigned_staff_id = $1
-       WHERE patient_id = $2`,
-      [assignedStaffId || null, patientId]
-    );
-    return res.status(200).json({
-      message: "Patient updated successfully",
-      patient: updateRes.rows[0],
-    });
+    // 🔁 Replace all staff assignments
+    await pool.query(`DELETE FROM patient_staff WHERE patient_id = $1`, [patientId]);
+
+    for (const staffId of assignedStaffIds) {
+      await pool.query(
+        `INSERT INTO patient_staff (patient_id, staff_id) VALUES ($1, $2)`,
+        [patientId, staffId]
+      );
+    }
+
+    return res.status(200).json({ message: "Patient updated successfully" });
   } catch (err) {
     console.error("❌ Failed to update patient:", err);
     res.status(500).json({ error: "Internal Server Error" });
   }
 };
+
 
 // Search Patients (Global DB Search)
 const getSearchedPatients = async (req, res) => {
@@ -328,10 +396,12 @@ const getSearchedPatients = async (req, res) => {
 
     const query = `%${q.toLowerCase()}%`;
     const result = await pool.query(
-      `SELECT id, name, mrn, birth_date, admitted_date, status, created_at,bed_id,is_behavioral,is_ltc,is_guardianship
-       FROM patients
-       WHERE LOWER(name) LIKE $1 OR LOWER(mrn) LIKE $1
-       ORDER BY created_at DESC`,
+      `SELECT id, first_name, last_name, mrn, birth_date, admitted_date, status, created_at, bed_id,
+              is_behavioral, is_ltc, is_guardianship
+        FROM patients
+        WHERE LOWER(first_name || ' ' || last_name) LIKE $1 OR LOWER(mrn) LIKE $1
+        ORDER BY created_at DESC
+`,
       [query]
     );
 
@@ -342,6 +412,75 @@ const getSearchedPatients = async (req, res) => {
   }
 };
 
+
+const getPatientSummary = async (req, res) => {
+  const { patientId } = req.params;
+  try {
+    // 1. Barrier to Discharge: Collect flags
+    const patientRes = await pool.query(`SELECT * FROM patients WHERE id = $1`, [patientId]);
+    if (patientRes.rows.length === 0) return res.status(404).json({ error: "Patient not found" });
+
+    const p = patientRes.rows[0];
+
+    let barrierToDischarge = [];
+    if (p.is_ltc_financial || p.is_ltc_medical) barrierToDischarge.push("Long-Term Medicaid");
+    if (p.is_ltc) barrierToDischarge.push("Long-Term Placement");
+    if (p.is_guardianship) barrierToDischarge.push("Guardianship Process");
+
+    // 2. Daily Prioritization: fetch tasks due today and not completed
+  const todayTasks = await pool.query(`
+    SELECT t.name 
+    FROM patient_tasks pt
+    JOIN tasks t ON pt.task_id = t.id
+    WHERE pt.patient_id = $1 
+      AND pt.due_date::date = CURRENT_DATE 
+      AND pt.status != 'Completed'
+    ORDER BY pt.due_date ASC
+  `, [patientId]);
+
+  const prioritization = todayTasks.rows.length > 0
+    ? todayTasks.rows.map(row => row.name).join(', ')
+    : "None";
+
+  // 3. Missed/Incomplete Tasks: due before today and not completed
+  const missedOrIncomplete = await pool.query(`
+    SELECT t.name 
+    FROM patient_tasks pt
+    JOIN tasks t ON pt.task_id = t.id
+    WHERE pt.patient_id = $1 
+      AND pt.due_date::date < CURRENT_DATE
+      AND pt.status IN ('Pending', 'In Progress', 'Missed')
+  `, [patientId]);
+  
+  const missedTasks = missedOrIncomplete.rows.length > 0
+    ? missedOrIncomplete.rows.map(row => row.name).join(', ')
+    : "None";
+  
+
+
+
+
+    // 4. Projected timeline (max ideal due date)
+    const proj = await pool.query(`
+      SELECT MAX(ideal_due_date) AS projected FROM patient_tasks WHERE patient_id = $1
+    `, [patientId]);
+
+    const projectedCompletion = proj.rows[0].projected
+      ? new Date(proj.rows[0].projected).toLocaleDateString()
+      : "N/A";
+
+    res.json({
+      barrier_to_discharge: barrierToDischarge.join(", ") || "None",
+      daily_prioritization: prioritization,
+      incomplete_tasks: missedTasks,
+      projected_completion: projectedCompletion
+    });
+
+  } catch (err) {
+    console.error("❌ Error getting patient summary:", err);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+};
 
 
 
@@ -355,5 +494,6 @@ module.exports = {
   getDischargedPatients,
   updatePatient,
   getSearchedPatients,
+  getPatientSummary
 
 };

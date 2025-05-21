@@ -13,8 +13,14 @@ const assignTasksToPatient = async (patientId,timezone) => {
       return;
     }
 
-    if (!patient.assigned_staff_id) {
-      console.warn("⚠️ Patient has no assigned staff. Skipping task assignment.");
+    const staffResult = await pool.query(
+      `SELECT staff_id FROM patient_staff WHERE patient_id = $1`,
+      [patientId]
+    );
+    const staffIds = staffResult.rows.map(r => r.staff_id);
+    
+    if (staffIds.length === 0) {
+      console.warn("⚠️ No staff assigned to this patient. Skipping task assignment.");
       return;
     }
 
@@ -134,23 +140,21 @@ const assignTasksToPatient = async (patientId,timezone) => {
 
     // Sort by dueDate for order
     taskAssignments.sort((a, b) => a.dueDate - b.dueDate);
-
     const values = taskAssignments.map(({ taskId, dueDate, idealDueDate }) => [
       patient.id,
       taskId,
-      patient.assigned_staff_id,
       "Pending",
       dueDate,
       idealDueDate,
     ]);
     
-
     const insertQuery = `
-    INSERT INTO patient_tasks (patient_id, task_id, assigned_staff_id, status, due_date, ideal_due_date)
-    VALUES ${values.map((_, i) =>
-      `($${i * 6 + 1}, $${i * 6 + 2}, $${i * 6 + 3}, $${i * 6 + 4}, $${i * 6 + 5}, $${i * 6 + 6})`
-    ).join(", ")}
-  `;  
+      INSERT INTO patient_tasks (patient_id, task_id, status, due_date, ideal_due_date)
+      VALUES ${values.map((_, i) =>
+        `($${i * 5 + 1}, $${i * 5 + 2}, $${i * 5 + 3}, $${i * 5 + 4}, $${i * 5 + 5})`
+      ).join(", ")}
+    `;
+    
 
     await pool.query(insertQuery, values.flat());
     console.log(`✅ ${taskAssignments.length} tasks assigned to patient.`);

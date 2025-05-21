@@ -6,9 +6,10 @@ import type { UserInfo } from "../redux/types";
 interface PatientsListProps {
   patients: Patient[];
   user: UserInfo | null;
+  onPatientClick?: (id: number) => void;
 }
 
-const PatientsList: React.FC<PatientsListProps> = ({ patients, user }) => {
+const PatientsList: React.FC<PatientsListProps> = ({ patients, user,onPatientClick }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 9;
 
@@ -32,7 +33,7 @@ const PatientsList: React.FC<PatientsListProps> = ({ patients, user }) => {
 
   return (
     <div className="w-full">
-      <h2 className="text-3xl font-bold text-hospital-blue mb-6 text-center lg:text-left">
+      <h2 className="text-3xl font-bold mb-6 text-center text-[var(--prussian-blue)] lg:text-left">
         Patients
       </h2>
 
@@ -40,9 +41,14 @@ const PatientsList: React.FC<PatientsListProps> = ({ patients, user }) => {
         <p className="text-gray-500 text-lg text-center">No patients found.</p>
       ) : (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {paginated.map((patient) => (
-              <PatientCard key={patient.id} patient={patient} user={user} />
+             <PatientCard
+             key={patient.id}
+             patient={patient}
+             user={user}
+             onClick={() => onPatientClick?.(patient.id)} 
+           />
             ))}
           </div>
 

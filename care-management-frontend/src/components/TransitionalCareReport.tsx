@@ -25,7 +25,7 @@ const TransitionalCareReport = ({ report }: TransitionalCareReportProps) => {
 
   return (
     <div className="bg-white rounded-xl shadow p-6 mt-6">
-        <h2 className="text-2xl font-semibold mb-4 text-center text-orange  no-print">Transition Care Report</h2>
+        <h2 className="text-2xl font-semibold mb-4 text-center  no-print">Transitional Care Report</h2>
 
       {/* Patient Info */}
       <div className="text-sm text-gray-700 mb-6 space-y-1">
@@ -40,14 +40,14 @@ const TransitionalCareReport = ({ report }: TransitionalCareReportProps) => {
       {Array.isArray(sections) && sections.length > 0 ? (
         sections.map((section, idx) => (
           <div key={idx} className="mb-8">
-            <h3 className="text-lg font-semibold mb-2 text-[var(--funky-orange)]">
+            <h3 className="text-lg font-semibold mb-2">
               {section.algorithm}
             </h3>
                 
                 <div className="hidden md:block overflow-x-auto">
       <table className="w-full border-collapse text-sm min-w-[600px]">
         <thead>
-          <tr className="bg-orange-500 text-white">
+          <tr className="bg-prussian-blue text-white">
             <th className="p-3 text-left">Task Name</th>
             <th className="p-3 text-left">Completed Date</th>
             <th className="p-3 text-left">Contact Info</th>
@@ -66,10 +66,10 @@ const TransitionalCareReport = ({ report }: TransitionalCareReportProps) => {
     </div>
 
     {/* MOBILE CARD VIEW */}
-    <div className="md:hidden space-y-4">
+    <div className="md:hidden space-y-4  no-print">
       {section.tasks_completed.map((task, i) => (
         <div key={i} className="border rounded-lg p-4 shadow-sm bg-gray-50">
-          <p className="font-semibold text-orange-500 mb-1">{task.task_name}</p>
+          <p className="font-semibold mb-1">{task.task_name}</p>
           <p className="text-sm"><strong>Completed Date:</strong> {task.completed_at || 'N/A'}</p>
           <p className="text-sm"><strong>Contact Info:</strong> {section.contact_info || '—'}</p>
         </div>
