@@ -6,7 +6,8 @@ const {
   addPatient,
   getPatientById,
   getPatientTasks,
-  getDischargedPatients,dischargePatient,updatePatient,getSearchedPatients,reactivatePatient,getPatientSummary  
+  getDischargedPatients,dischargePatient,updatePatient,getSearchedPatients,reactivatePatient,getPatientSummary,
+  getPatientsByAdmin
 } = require("../controller/patientController");
 
 router.get('/discharged', verifyToken, getDischargedPatients);
@@ -21,5 +22,6 @@ router.post("/:patientId/discharge", verifyToken, dischargePatient);
 
 router.patch("/:patientId/update", verifyToken, updatePatient);
 router.patch('/:patientId/reactivate', verifyToken, reactivatePatient);
+router.get('/by-admin/:adminId',verifyToken, getPatientsByAdmin);
 
 module.exports = router;

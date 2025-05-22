@@ -30,6 +30,7 @@ const getPatients = async (req, res) => {
 
 // Add Patient
 const addPatient = async (req, res) => {
+  const added_by_user_id = req.user.id;
   try {
     const {
       first_name,
@@ -51,7 +52,8 @@ const addPatient = async (req, res) => {
       is_guardianship_financial,
       is_guardianship_person,
       is_guardianship_emergency,
-      admitted_date
+      admitted_date,
+      added_by_user_id
     } = req.body;
 
     if (!first_name ||!last_name || !birth_date || !bedId || !age || !mrn) {
@@ -65,8 +67,8 @@ const addPatient = async (req, res) => {
       is_guardianship,
       is_guardianship_financial,
       is_guardianship_person,
-      is_guardianship_emergency,admitted_date)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) RETURNING *`,
+      is_guardianship_emergency,admitted_date,added_by_user_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20) RETURNING *`,
       [
         first_name,
         last_name,
@@ -86,7 +88,8 @@ const addPatient = async (req, res) => {
         is_guardianship_financial,
         is_guardianship_person,
         is_guardianship_emergency,
-        admitted_date
+        admitted_date,
+        added_by_user_id
       ]
     );
     const newPatient = result.rows[0];
@@ -175,7 +178,7 @@ const getPatientTasks = async (req, res) => {
           LIMIT 1
         ) AS history ON TRUE
          LEFT JOIN users u ON u.id = history.staff_id
-       WHERE pt.patient_id = $1
+       WHERE pt.patient_id = $1 AND pt.is_visible = TRUE
        ORDER BY pt.due_date ASC`,
       [patientId]
     );
@@ -326,10 +329,6 @@ const getDischargedPatients = async (req, res) => {
   }
 };
 
-
-
-
-
 const updatePatient = async (req, res) => {
   const patientId = req.params.patientId;
   const {
@@ -340,7 +339,8 @@ const updatePatient = async (req, res) => {
     bedId,
     mrn,
     medical_info,
-    assignedStaffIds = []
+    assignedStaffIds = [],
+    selected_algorithms = []
   } = req.body;
 
   try {
@@ -349,12 +349,22 @@ const updatePatient = async (req, res) => {
       return res.status(403).json({ error: "Only admins can edit patient data." });
     }
 
+    
     const checkRes = await pool.query(`SELECT * FROM patients WHERE id = $1`, [patientId]);
     if (checkRes.rows.length === 0) {
       return res.status(404).json({ error: "Patient not found." });
     }
-
-    // Update patient core info
+    const existing = checkRes.rows[0];
+    const prevAlgorithms = existing.selected_algorithms || [];
+    const addedAlgorithms = selected_algorithms.filter(a => !prevAlgorithms.includes(a));
+    const removedAlgorithms = prevAlgorithms.filter(a => !selected_algorithms.includes(a));
+    
+    // Update patient
+    const flagUpdates = {
+      is_behavioral: selected_algorithms.includes("Behavioral"),
+      is_ltc: selected_algorithms.includes("LTC"),
+      is_guardianship: selected_algorithms.includes("Guardianship"),
+    };
     await pool.query(
       `UPDATE patients
        SET first_name = $1,
@@ -363,11 +373,80 @@ const updatePatient = async (req, res) => {
            age = $4,
            bed_id = $5,
            mrn = $6,
-           medical_info = $7
-       WHERE id = $8`,
-      [first_name, last_name, birth_date, age, bedId, mrn, medical_info, patientId]
+           medical_info = $7,
+           selected_algorithms = $8,
+           is_behavioral = $9,
+           is_restrained = $10,
+           is_geriatric_psych_available = $11,
+           is_behavioral_team = $12,
+           is_ltc = $13,
+           is_ltc_medical = $14,
+           is_ltc_financial = $15,
+           is_guardianship = $16,
+           is_guardianship_financial = $17,
+           is_guardianship_person = $18,
+           is_guardianship_emergency = $19
+       WHERE id = $20`,
+      [
+        first_name,
+        last_name,
+        birth_date,
+        age,
+        bedId,
+        mrn,
+        medical_info,
+        selected_algorithms,
+    
+        flagUpdates.is_behavioral,       // ✅ from selected_algorithms
+        req.body.is_restrained,
+        req.body.is_geriatric_psych_available,
+        req.body.is_behavioral_team,
+    
+        flagUpdates.is_ltc,
+        req.body.is_ltc_medical,
+        req.body.is_ltc_financial,
+    
+        flagUpdates.is_guardianship,
+        req.body.is_guardianship_financial,
+        req.body.is_guardianship_person,
+        req.body.is_guardianship_emergency,
+    
+        patientId
+      ]
     );
-
+    
+    if (addedAlgorithms.length > 0) {
+      await pool.query(`
+        UPDATE patient_tasks pt
+        SET is_visible = TRUE
+        FROM tasks t
+        WHERE pt.task_id = t.id AND pt.patient_id = $1 AND t.algorithm = ANY($2)
+      `, [patientId, addedAlgorithms]);
+      await pool.query(`
+        UPDATE patient_tasks pt
+        SET is_visible = TRUE
+        FROM task_dependencies td
+        JOIN tasks t_base ON td.depends_on_task_id = t_base.id
+        WHERE pt.task_id = td.task_id AND pt.patient_id = $1 AND t_base.algorithm = ANY($2)
+      `, [patientId, addedAlgorithms]);
+    
+    }
+    if (removedAlgorithms.length > 0) {
+      await pool.query(`
+        UPDATE patient_tasks pt
+        SET is_visible = FALSE
+        FROM tasks t
+        WHERE pt.task_id = t.id AND pt.patient_id = $1 AND t.algorithm = ANY($2)
+      `, [patientId, removedAlgorithms]);
+      await pool.query(`
+        UPDATE patient_tasks pt
+        SET is_visible = FALSE
+        FROM task_dependencies td
+        JOIN tasks t_base ON td.depends_on_task_id = t_base.id
+        WHERE pt.task_id = td.task_id AND pt.patient_id = $1 AND t_base.algorithm = ANY($2)
+      `, [patientId, removedAlgorithms]);
+    
+    }
     // 🔁 Replace all staff assignments
     await pool.query(`DELETE FROM patient_staff WHERE patient_id = $1`, [patientId]);
 
@@ -377,14 +456,28 @@ const updatePatient = async (req, res) => {
         [patientId, staffId]
       );
     }
+    const timezone = req.headers['x-timezone'] || 'America/New_York';
+    await assignTasksToPatient(patientId, timezone, selected_algorithms);
+  
 
-    return res.status(200).json({ message: "Patient updated successfully" });
+    const updatedPatientRes = await pool.query(`
+      SELECT 
+        p.*,
+        json_agg(json_build_object('id', u.id, 'name', u.name)) FILTER (WHERE u.id IS NOT NULL) AS assigned_staff
+      FROM patients p
+      LEFT JOIN patient_staff ps ON p.id = ps.patient_id
+      LEFT JOIN users u ON ps.staff_id = u.id
+      WHERE p.id = $1
+      GROUP BY p.id
+    `, [patientId]);
+    
+    return res.status(200).json({ message: "Patient updated successfully", patient: updatedPatientRes.rows[0] });
+    
   } catch (err) {
     console.error("❌ Failed to update patient:", err);
     res.status(500).json({ error: "Internal Server Error" });
   }
 };
-
 
 // Search Patients (Global DB Search)
 const getSearchedPatients = async (req, res) => {
@@ -423,9 +516,9 @@ const getPatientSummary = async (req, res) => {
     const p = patientRes.rows[0];
 
     let barrierToDischarge = [];
-    if (p.is_ltc_financial || p.is_ltc_medical) barrierToDischarge.push("Long-Term Medicaid");
-    if (p.is_ltc) barrierToDischarge.push("Long-Term Placement");
-    if (p.is_guardianship) barrierToDischarge.push("Guardianship Process");
+    if (p.is_behavioral) barrierToDischarge.push("Behavioral");
+    if (p.is_ltc) barrierToDischarge.push("Long-Term Care");
+    if (p.is_guardianship) barrierToDischarge.push("Guardianship");
 
     // 2. Daily Prioritization: fetch tasks due today and not completed
   const todayTasks = await pool.query(`
@@ -482,6 +575,30 @@ const getPatientSummary = async (req, res) => {
   }
 };
 
+const getPatientsByAdmin = async (req, res) => {
+  const { adminId } = req.params;
+
+  try {
+    const result = await pool.query(`
+      SELECT 
+        p.*,
+        json_agg(json_build_object('id', u.id, 'name', u.name)) FILTER (WHERE u.id IS NOT NULL) AS assigned_staff
+      FROM patients p
+      LEFT JOIN patient_staff ps ON p.id = ps.patient_id
+      LEFT JOIN users u ON ps.staff_id = u.id
+      WHERE p.added_by_user_id = $1 AND p.status != 'Discharged'
+      GROUP BY p.id
+      ORDER BY p.created_at DESC
+    `, [adminId]);
+
+    res.status(200).json(result.rows);
+  } catch (err) {
+    console.error("❌ Error fetching patients by admin:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+
 
 
 module.exports = {
@@ -494,6 +611,7 @@ module.exports = {
   getDischargedPatients,
   updatePatient,
   getSearchedPatients,
-  getPatientSummary
+  getPatientSummary,
+  getPatientsByAdmin
 
 };

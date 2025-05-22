@@ -151,6 +151,24 @@ export const fetchPatientSummary = createAsyncThunk(
   }
 );
 
+export const fetchPatientsByAdmin = createAsyncThunk<
+Patient[],
+number,
+{ rejectValue: string }
+>(
+'patients/fetchByAdmin',
+async (adminId, { rejectWithValue }) => {
+  try {
+    const res = await axios.get(`${BASE_URL}/patients/by-admin/${adminId}`, { withCredentials: true });
+    console.log("✅ fetchPatientsByAdmin response:", res.data);
+    return res.data;
+  } catch (err: any) {
+    console.error("❌ fetchPatientsByAdmin error:", err.response?.data);
+    return rejectWithValue(err.response?.data?.error || 'Failed to fetch patients');
+  }
+}
+);
+
 
 const patientsSlice = createSlice({
   name: 'patients',
@@ -195,10 +213,18 @@ const patientsSlice = createSlice({
         state.loading = false;
       })
       .addCase(updatePatient.fulfilled, (state, action) => {
-        const index = state.patients.findIndex((p) => p.id === action.payload.id);
-        if (index !== -1) state.patients[index] = action.payload;
-        state.loading = false;
+        const updated = action.payload;
+        const index = state.patients.findIndex((p) => p.id === updated.id);
+        if (index !== -1) {
+          state.patients[index] = updated;
+        }
+      
+        // Also update the selectedPatient if it matches
+        if (state.selectedPatient?.id === updated.id) {
+          state.selectedPatient = updated;
+        }
       })
+      
       .addCase(searchPatients.fulfilled, (state, action) => {
         state.searchResults = action.payload;
         state.loading = false;
@@ -235,6 +261,19 @@ const patientsSlice = createSlice({
         state.loading = false;
         state.error = action.payload as string;
       })
+      .addCase(fetchPatientsByAdmin.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(fetchPatientsByAdmin.fulfilled, (state, action) => {
+        state.loading = false;
+        state.patients = action.payload;
+      })
+      .addCase(fetchPatientsByAdmin.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload as string;
+      })
+      
       
   },
 });

@@ -1,6 +1,18 @@
 const pool = require("../models/db");
 const bcrypt = require("bcryptjs");
 
+const getAdmins = async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT id, name FROM users WHERE is_admin = true AND is_verified = true
+    `);
+    res.status(200).json(result.rows);
+  } catch (err) {
+    console.error("Error fetching admins:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
 const getStaffs = async (req, res) => {
   try {
     const result = await pool.query(
@@ -38,7 +50,9 @@ const updateUser = async (req, res) => {
   }
 };
 
+
 module.exports = {
+  getAdmins,
   getStaffs,
   updateUser,
 };

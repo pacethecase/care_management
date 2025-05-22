@@ -40,6 +40,7 @@ const getDailyReport = async (req, res) => {
           OR (pt.status = 'Pending' AND pt.due_date::date <= $1::date)
         )
         AND p.status != 'Discharged'
+        AND pt.is_visible = TRUE
       GROUP BY p.id, pt.id, t.id
       ORDER BY pt.due_date ASC
     `, [date]);
@@ -88,6 +89,7 @@ const getPriorityReport = async (req, res) => {
         AND pt.due_date < ($1::date + INTERVAL '1 day')
         AND pt.status IN ('Pending', 'In Progress', 'Missed')
         AND p.status != 'Discharged'
+        AND pt.is_visible = TRUE
       GROUP BY p.id, pt.id, t.id
       ORDER BY 
         CASE pt.status

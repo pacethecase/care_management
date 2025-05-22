@@ -47,10 +47,11 @@ import axios from "axios";
       }
     }, [dispatch, user?.id]);
     
-   if (!authLoaded || loading) {
-    return <p>Loading...</p>; // gracefully handle loading state
-  }
     
+
+    if (!authLoaded) {
+      return <p>Loading...</p>;
+    }
     return (
       <Router>
         <Routes>

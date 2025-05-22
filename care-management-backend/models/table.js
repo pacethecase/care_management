@@ -83,7 +83,10 @@ const createTables = async () => {
           is_guardianship_emergency BOOLEAN DEFAULT FALSE,
           guardianship_court_datetime TIMESTAMP WITH TIME ZONE DEFAULT NULL,
           ltc_court_datetime TIMESTAMP WITH TIME ZONE DEFAULT NULL,
-          created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+          added_by_user_id INTEGER REFERENCES users(id)
+        selected_algorithms TEXT[] DEFAULT '{}',
+
       );
 
 
@@ -123,7 +126,8 @@ const createTables = async () => {
           created_at TIMESTAMP  WITH TIME ZONE  DEFAULT CURRENT_TIMESTAMP,
           task_note TEXT,
           include_note_in_report BOOLEAN DEFAULT false,
-          contact_info TEXT
+          contact_info TEXT,
+          is_visible BOOLEAN DEFAULT TRUE;
           );
 
         CREATE TABLE IF NOT EXISTS notes (

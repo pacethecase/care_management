@@ -21,7 +21,7 @@ function setupMissedTaskJob(io) {
           pt.id, 
           pt.patient_id, 
           ps.staff_id AS assigned_staff_id, 
-          p.name AS patient_name
+          p.first_name || ' ' || p.last_name AS patient_name
         FROM patient_tasks pt
         JOIN patients p ON pt.patient_id = p.id
         LEFT JOIN patient_staff ps ON pt.patient_id = ps.patient_id

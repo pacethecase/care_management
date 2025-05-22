@@ -31,6 +31,7 @@ export interface Patient {
     is_guardianship_financial: boolean;
     is_guardianship_person: boolean;
     is_guardianship_emergency: boolean;
+    added_by_user_id:number;
   }
   
   export interface UserInfo {

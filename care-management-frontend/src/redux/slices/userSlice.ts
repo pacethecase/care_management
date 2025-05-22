@@ -6,7 +6,9 @@ const BASE_URL = import.meta.env.VITE_API_BASE_URL;
 interface UserState {
   user: UserInfo | null;
   staffs: UserInfo[];
-  loading: boolean;
+  admins: { id: number; name: string }[]; 
+  loading: boolean;          
+  adminLoading: boolean;    
   error: string | null;
   authLoaded: boolean;
   message?: string;
@@ -15,10 +17,13 @@ interface UserState {
 const initialState: UserState = {
   user: null,
   staffs: [],
+  admins: [],
   loading: false,
+  adminLoading: false,      // ✅ new field
   error: null,
   authLoaded: false,
 };
+
 
 // Thunks
 export const signupUser = createAsyncThunk(
@@ -139,6 +144,18 @@ export const updateUserProfile = createAsyncThunk(
     }
   }
 );
+export const fetchAdmins = createAsyncThunk(
+  'users/fetchAdmins',
+  async (_, { rejectWithValue }) => {
+    try {
+      const res = await axios.get(`${BASE_URL}/users/admins`, { withCredentials: true });
+      return res.data;
+    } catch (err: any) {
+      return rejectWithValue(err.response?.data?.error || 'Failed to fetch admins');
+    }
+  }
+);
+
 
 const userSlice = createSlice({
   name: "user",
@@ -232,7 +249,21 @@ const userSlice = createSlice({
       .addCase(updateUserProfile.rejected, (state, action) => {
         state.error = action.payload as string;
         state.loading = false;
-      });
+      })
+    // fetchAdmins
+.addCase(fetchAdmins.pending, (state) => {
+  state.adminLoading = true;
+  state.error = null;
+})
+.addCase(fetchAdmins.fulfilled, (state, action) => {
+  state.admins = action.payload;
+  state.adminLoading = false;
+})
+.addCase(fetchAdmins.rejected, (state, action) => {
+  state.admins = [];
+  state.error = action.payload as string;
+  state.adminLoading = false;
+});
   },
 });
 
