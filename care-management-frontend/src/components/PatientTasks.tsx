@@ -33,7 +33,7 @@ const PatientTasks = () => {
   const backLink = location.state?.from || "/patients";
   
   const [selectedTab, setSelectedTab] = useState<
-    "Pending" | "In Progress" | "Completed" | "All Tasks" | "Notes"
+  "Missed" | "Pending" | "In Progress" | "Completed" | "All Tasks" | "Notes"
   >("All Tasks");
   const [newNote, setNewNote] = useState("");
   const [expandedTaskId, setExpandedTaskId] = useState<number | null>(null);
@@ -281,7 +281,7 @@ const [noteDrafts, setNoteDrafts] = useState<Record<number, {
 
   const filteredTasks = patientTasks.filter((task) => {
     const matchesStatus =
-      selectedTab === "All Tasks" || task.status === selectedTab;
+      selectedTab === "All Tasks" || task.status === selectedTab ||  (selectedTab === "Pending" && task.status === "Follow Up");
     const matchesAlgorithm =
       selectedAlgorithm === "All" || task.algorithm === selectedAlgorithm;
     return matchesStatus && matchesAlgorithm;
@@ -328,8 +328,12 @@ const [noteDrafts, setNoteDrafts] = useState<Record<number, {
         const now = new Date(); 
 
         const isDelayed = idealDue
-          ? (completedAt && completedAt > idealDue) || (!completedAt && now > idealDue)
-          : false;
+        ? (
+            (completedAt && completedAt > idealDue) ||
+            (!completedAt && now > new Date(idealDue.getFullYear(), idealDue.getMonth(), idealDue.getDate(), 23, 59, 59))
+          )
+        : false;
+      
       return (
         <div
         key={task.task_id}
@@ -342,7 +346,7 @@ const [noteDrafts, setNoteDrafts] = useState<Record<number, {
       >
         {/* Header */}
         <div className="relative mb-2 flex justify-between">
-          <div>
+          <div className="flex-1 max-w-[65%]">
             <h3 className="text-lg font-semibold break-words">
               {task.task_name}
             </h3>
@@ -353,7 +357,7 @@ const [noteDrafts, setNoteDrafts] = useState<Record<number, {
             <div className="flex flex-wrap gap-2 items-start">
           {task.status !== "Completed" && (
             <>
-              {task.status !== "In Progress" && (
+              {task.status !== "In Progress" &&  task.status !== "Missed" &&(
                 <button
                   onClick={() => handleStart(task.task_id)}
                   className="btn"
@@ -573,7 +577,7 @@ const [noteDrafts, setNoteDrafts] = useState<Record<number, {
 
               {/* Tabs */}
         <div className="flex flex-wrap justify-center  gap-2 border-b pb-2 mb-4">
-          {["Pending", "In Progress", "Completed", "All Tasks", "Notes"].map((tab) => (
+          {["Missed","Pending", "In Progress", "Completed", "All Tasks", "Notes"].map((tab) => (
             <button
               key={tab}
               onClick={() => setSelectedTab(tab as any)}

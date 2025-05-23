@@ -62,45 +62,119 @@ const Tasks = () => {
   };
 
   const handleComplete = async (taskId: number, taskName: string) => {
-    try {
-      if (
-        taskName === "Court date confirmed" ||
-        taskName === "Court Hearing Date Received if not follow up completed"
-      ) {
-        const courtDate = prompt("Enter Court Date (YYYY-MM-DD):");
-        if (!courtDate) return toast.error("Court date is required.");
-        await dispatch(completeTask({ taskId, court_date: courtDate })).unwrap();
-      } else {
-        await dispatch(completeTask({ taskId })).unwrap();
-      }
-      toast.success("✅ Task completed");
-      dispatch(loadPriorityTasks(selectedPatient));
-    } catch (err: any) {
-      // Handle error if task was previously missed and no reason was given
-      const message = err?.toString() || "";
-      if (message.includes("Please provide a reason")) {
-        const reason = prompt("📝 This task was marked as missed earlier. Please enter a reason to proceed:");
-        if (!reason || reason.trim() === "") {
-          toast.error("❌ Reason is required to complete this task.");
+    const isCourtTask =
+      taskName === "Court date confirmed" ||
+      taskName === "Court Hearing Date Received if not follow up completed" ||
+      taskName === "Confirm date/time of States initial steps including Intake Interview: if not scheduled, follow-up with State";
+  
+    if (isCourtTask) {
+      // Create popup container
+      const container = document.createElement("div");
+      container.className = "court-popup";
+  
+      // Label
+      const label = document.createElement("label");
+      label.textContent = "📅 Select court date & time";
+  
+      // Input
+      const input = document.createElement("input");
+      input.type = "datetime-local";
+  
+      // Buttons container
+      const buttonGroup = document.createElement("div");
+      buttonGroup.className = "court-popup-buttons";
+  
+      // Submit button
+      const submitBtn = document.createElement("button");
+      submitBtn.textContent = "Submit";
+      submitBtn.className = "court-popup-submit";
+  
+      // Cancel button
+      const cancelBtn = document.createElement("button");
+      cancelBtn.textContent = "Cancel";
+      cancelBtn.className = "court-popup-cancel";
+      cancelBtn.onclick = () => {
+        document.body.removeChild(container);
+      };
+  
+      // Append elements
+      buttonGroup.appendChild(submitBtn);
+      buttonGroup.appendChild(cancelBtn);
+      container.appendChild(label);
+      container.appendChild(input);
+      container.appendChild(buttonGroup);
+      document.body.appendChild(container);
+  
+      submitBtn.onclick = async () => {
+        const courtDate = input.value;
+        document.body.removeChild(container);
+  
+        if (!courtDate) {
+          toast.error("Court date is required.");
           return;
         }
   
         try {
-          await dispatch(markTaskAsMissed({ taskId, reason })).unwrap();
-          toast.success("✅ Reason recorded. Retrying completion...");
-  
-          await dispatch(completeTask({ taskId })).unwrap();
+          await dispatch(completeTask({ taskId, court_date: courtDate })).unwrap();
           toast.success("✅ Task completed");
-  
           dispatch(loadPriorityTasks(selectedPatient));
-        } catch {
-          toast.error("❌ Failed to complete task after saving reason");
+        } catch (err: any) {
+          if (err?.toString().includes("Please provide a reason")) {
+            const reason = prompt("📝 This task was missed earlier. Please enter a missed reason to proceed:");
+  
+            if (!reason || reason.trim() === "") {
+              toast.error("❌ Reason is required to complete this task.");
+              return;
+            }
+  
+            try {
+              await dispatch(markTaskAsMissed({ taskId, reason })).unwrap();
+              toast.success("✅ Missed reason recorded");
+  
+              await dispatch(completeTask({ taskId, court_date: courtDate })).unwrap();
+              toast.success("✅ Task completed after reason provided");
+              dispatch(loadPriorityTasks(selectedPatient));
+            } catch {
+              toast.error("❌ Failed to complete task after saving reason");
+            }
+          } else {
+            toast.error("❌ Failed to complete task");
+          }
         }
-      } else {
-        toast.error("❌ Failed to complete task");
+      };
+    } else {
+      // Non-court task logic
+      try {
+        await dispatch(completeTask({ taskId })).unwrap();
+        toast.success("✅ Task completed");
+        dispatch(loadPriorityTasks(selectedPatient));
+      } catch (err: any) {
+        if (err?.toString().includes("Please provide a reason")) {
+          const reason = prompt("📝 This task was missed earlier. Please enter a missed reason to proceed:");
+  
+          if (!reason || reason.trim() === "") {
+            toast.error("❌ Reason is required to complete this task.");
+            return;
+          }
+  
+          try {
+            await dispatch(markTaskAsMissed({ taskId, reason })).unwrap();
+            toast.success("✅ Missed reason recorded");
+  
+            await dispatch(completeTask({ taskId })).unwrap();
+            toast.success("✅ Task completed after reason provided");
+            dispatch(loadPriorityTasks(selectedPatient));
+          } catch {
+            toast.error("❌ Failed to complete task after saving reason");
+          }
+        } else {
+          toast.error("❌ Failed to complete task");
+        }
       }
     }
   };
+  
+  
 
   const handleFollowUp = async (taskId: number) => {
     const reason = prompt("Please enter a reason for follow-up:");
@@ -223,9 +297,13 @@ const Tasks = () => {
                   <ClipboardCheck className="w-4 h-4" /> {task.status}
                 </p>
                 <div className="mt-3 flex flex-col md:flex-row gap-2">
-                  <button onClick={() => handleStart(task.task_id)} className="btn bg-white border">
+                {task.status == "Pending" && (
+                  <button onClick={() => handleStart(task.task_id)} className="btn">
                     Start
                   </button>
+                )}
+
+                 
                   {task.is_repeating && task.due_in_days_after_dependency != null && (
                     <button onClick={() => handleFollowUp(task.task_id)} className="btn btn-outline">
                       Follow Up
