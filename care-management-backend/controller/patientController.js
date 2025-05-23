@@ -528,6 +528,7 @@ const getPatientSummary = async (req, res) => {
     WHERE pt.patient_id = $1 
       AND pt.due_date::date = CURRENT_DATE 
       AND pt.status != 'Completed'
+       AND pt.is_visible = TRUE
     ORDER BY pt.due_date ASC
   `, [patientId]);
 

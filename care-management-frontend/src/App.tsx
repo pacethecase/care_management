@@ -30,7 +30,7 @@ import axios from "axios";
   function App() {
     const dispatch = useDispatch<AppDispatch>();
 
-    const { user, authLoaded, loading } = useSelector((state: RootState) => state.user);
+    const { user, authLoaded } = useSelector((state: RootState) => state.user);
 
     useEffect(() => {
       const timezone = getLocalTimezone();

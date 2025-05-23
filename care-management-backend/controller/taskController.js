@@ -311,6 +311,7 @@ const getPriorityTasks = async (req, res) => {
         AND pt.status IN ('Pending', 'In Progress', 'Missed')
         AND pt.due_date <= CURRENT_DATE + INTERVAL '2 day'
         AND p.status != 'Discharged'
+         AND pt.is_visible = TRUE
     `;
    
     const queryParams = [staffId];
@@ -347,6 +348,7 @@ const getMissedTasks = async (req, res) => {
 
         AND pt.status = 'Missed'
         AND p.status != 'Discharged'
+        AND pt.is_visible = TRUE
         AND NOT EXISTS (
           SELECT 1 FROM jsonb_array_elements(pt.status_history) elem
           WHERE elem->>'status' = 'Missed' AND elem ? 'reason'
