@@ -234,7 +234,7 @@ html, body {
   left: 50%;
   transform: translateX(-50%);
   z-index: 9999;
-  background: #eead9c;
+  background: #fff;
   border: 1px solid #ccc;
   border-radius: 12px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
@@ -251,7 +251,7 @@ html, body {
 .court-popup label {
   font-size: 16px;
   font-weight: 600;
-  color: #333;
+  color: #000;
 }
 
 .court-popup input[type="datetime-local"] {
@@ -271,7 +271,7 @@ html, body {
 
 .court-popup-submit {
   padding: 8px 20px;
-  background-color: #f77f00;
+  background-color: var(--prussian-blue);
   color: #fff;
   border: none;
   border-radius: 6px;
@@ -280,13 +280,13 @@ html, body {
 }
 
 .court-popup-submit:hover {
-  background-color: #e06600;
+  background-color: var(--light-navy);
 }
 
 .court-popup-cancel {
   padding: 8px 20px;
   background-color: #ccc;
-  color: #333;
+  color: #000;
   border: none;
   border-radius: 6px;
   cursor: pointer;

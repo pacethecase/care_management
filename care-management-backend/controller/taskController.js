@@ -184,9 +184,11 @@ const completeTask = async (req, res) => {
       );
 
       if (exists.rows.length > 0) {
-        console.log(`Dependent task '${dep.name}' already exists.`);
-        continue;
-      }
+          console.log(`Dependent task '${dep.name}' already exists.`);
+          continue;
+        }
+
+
 
       // Handling specific tasks based on conditions
       
@@ -212,7 +214,7 @@ const completeTask = async (req, res) => {
         // Insert dependent task without a due date
         await pool.query(
           `INSERT INTO patient_tasks (patient_id, task_id, status)
-           VALUES ($1, $2, $3, 'Pending')`,
+           VALUES ($1, $2, 'Pending')`,
           [task.patient_id, dep.id]
         );
         console.log(`📌 Non-blocking dependent task '${dep.name}' scheduled without a due date`);

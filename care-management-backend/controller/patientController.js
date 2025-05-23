@@ -349,7 +349,7 @@ const updatePatient = async (req, res) => {
       return res.status(403).json({ error: "Only admins can edit patient data." });
     }
 
-    
+    // Fetch current patient
     const checkRes = await pool.query(`SELECT * FROM patients WHERE id = $1`, [patientId]);
     if (checkRes.rows.length === 0) {
       return res.status(404).json({ error: "Patient not found." });
@@ -358,13 +358,15 @@ const updatePatient = async (req, res) => {
     const prevAlgorithms = existing.selected_algorithms || [];
     const addedAlgorithms = selected_algorithms.filter(a => !prevAlgorithms.includes(a));
     const removedAlgorithms = prevAlgorithms.filter(a => !selected_algorithms.includes(a));
-    
-    // Update patient
+
+    // Prepare flag updates based on selected algorithms
     const flagUpdates = {
       is_behavioral: selected_algorithms.includes("Behavioral"),
       is_ltc: selected_algorithms.includes("LTC"),
       is_guardianship: selected_algorithms.includes("Guardianship"),
     };
+
+    // Update patient details
     await pool.query(
       `UPDATE patients
        SET first_name = $1,
@@ -396,70 +398,39 @@ const updatePatient = async (req, res) => {
         mrn,
         medical_info,
         selected_algorithms,
-    
-        flagUpdates.is_behavioral,       // ✅ from selected_algorithms
+
+        flagUpdates.is_behavioral,
         req.body.is_restrained,
         req.body.is_geriatric_psych_available,
         req.body.is_behavioral_team,
-    
+
         flagUpdates.is_ltc,
         req.body.is_ltc_medical,
         req.body.is_ltc_financial,
-    
+
         flagUpdates.is_guardianship,
         req.body.is_guardianship_financial,
         req.body.is_guardianship_person,
         req.body.is_guardianship_emergency,
-    
+
         patientId
       ]
     );
-    
-    if (addedAlgorithms.length > 0) {
-      await pool.query(`
-        UPDATE patient_tasks pt
-        SET is_visible = TRUE
-        FROM tasks t
-        WHERE pt.task_id = t.id AND pt.patient_id = $1 AND t.algorithm = ANY($2)
-      `, [patientId, addedAlgorithms]);
-      await pool.query(`
-        UPDATE patient_tasks pt
-        SET is_visible = TRUE
-        FROM task_dependencies td
-        JOIN tasks t_base ON td.depends_on_task_id = t_base.id
-        WHERE pt.task_id = td.task_id AND pt.patient_id = $1 AND t_base.algorithm = ANY($2)
-      `, [patientId, addedAlgorithms]);
-    
-    }
-    if (removedAlgorithms.length > 0) {
-      await pool.query(`
-        UPDATE patient_tasks pt
-        SET is_visible = FALSE
-        FROM tasks t
-        WHERE pt.task_id = t.id AND pt.patient_id = $1 AND t.algorithm = ANY($2)
-      `, [patientId, removedAlgorithms]);
-      await pool.query(`
-        UPDATE patient_tasks pt
-        SET is_visible = FALSE
-        FROM task_dependencies td
-        JOIN tasks t_base ON td.depends_on_task_id = t_base.id
-        WHERE pt.task_id = td.task_id AND pt.patient_id = $1 AND t_base.algorithm = ANY($2)
-      `, [patientId, removedAlgorithms]);
-    
-    }
-    // 🔁 Replace all staff assignments
-    await pool.query(`DELETE FROM patient_staff WHERE patient_id = $1`, [patientId]);
 
+    // Replace staff assignments
+    await pool.query(`DELETE FROM patient_staff WHERE patient_id = $1`, [patientId]);
     for (const staffId of assignedStaffIds) {
       await pool.query(
         `INSERT INTO patient_staff (patient_id, staff_id) VALUES ($1, $2)`,
         [patientId, staffId]
       );
     }
-    const timezone = req.headers['x-timezone'] || 'America/New_York';
-    await assignTasksToPatient(patientId, timezone, selected_algorithms);
-  
 
+    // Assign or update tasks
+    const timezone = req.headers['x-timezone'] || 'America/New_York';
+    await assignTasksToPatient(patientId, timezone, selected_algorithms, addedAlgorithms, removedAlgorithms);
+
+    // Return updated patient data
     const updatedPatientRes = await pool.query(`
       SELECT 
         p.*,
@@ -470,14 +441,16 @@ const updatePatient = async (req, res) => {
       WHERE p.id = $1
       GROUP BY p.id
     `, [patientId]);
-    
+
     return res.status(200).json({ message: "Patient updated successfully", patient: updatedPatientRes.rows[0] });
-    
+
   } catch (err) {
     console.error("❌ Failed to update patient:", err);
     res.status(500).json({ error: "Internal Server Error" });
   }
 };
+
+
 
 // Search Patients (Global DB Search)
 const getSearchedPatients = async (req, res) => {

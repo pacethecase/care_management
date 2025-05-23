@@ -327,12 +327,23 @@ const [noteDrafts, setNoteDrafts] = useState<Record<number, {
         const completedAt = task.completed_at ? new Date(task.completed_at) : null;
         const now = new Date(); 
 
-        const isDelayed = idealDue
-        ? (
-            (completedAt && completedAt > idealDue) ||
-            (!completedAt && now > new Date(idealDue.getFullYear(), idealDue.getMonth(), idealDue.getDate(), 23, 59, 59))
-          )
-        : false;
+       const isDelayed = idealDue
+  ? (
+      (completedAt && completedAt > new Date(
+        idealDue.getFullYear(),
+        idealDue.getMonth(),
+        idealDue.getDate(),
+        16, 0, 0 
+      )) ||
+      (!completedAt && now > new Date(
+        idealDue.getFullYear(),
+        idealDue.getMonth(),
+        idealDue.getDate(),
+        16, 0, 0 
+      ))
+    )
+  : false;
+
       
       return (
         <div
@@ -354,53 +365,57 @@ const [noteDrafts, setNoteDrafts] = useState<Record<number, {
           </div>
 
             {/* Task Actions */}
-            <div className="flex flex-wrap gap-2 items-start">
-          {task.status !== "Completed" && (
-            <>
-              {task.status !== "In Progress" &&  task.status !== "Missed" &&(
-                <button
-                  onClick={() => handleStart(task.task_id)}
-                  className="btn"
-                >
-                  Start
-                </button>
-              )}
-              {task.is_repeating &&
-                task.due_in_days_after_dependency != null && (
-                  <button
-                    onClick={() => handleFollowUp(task.task_id)}
-                    className="btn btn-outline"
-                  >
-                    Follow Up
-                  </button>
-                )}
-              <button
-                onClick={() =>
-                  handleComplete(task.task_id, task.task_name)
-                }
-                className="btn btn-outline"
-              >
-                Complete
-              </button>
-              {task.status !== "Missed" && (
-                <button
-                  onClick={() => handleMissed(task.task_id)}
-                  className="btn bg-red-600 text-white"
-                >
-                  Missed
-                </button>
-              )}
-            </>
-          )}
+          <div className="flex flex-wrap gap-2 items-start">
+        {task.status !== "Completed" && (
+  <>
+    {task.status !== "In Progress" && task.status !== "Missed" && (
+      <button
+        onClick={() => handleStart(task.task_id)}
+        className="btn"
+      >
+        Start
+      </button>
+    )}
+
+    {task.is_repeating && task.due_in_days_after_dependency != null && (
+      <button
+        onClick={() => handleFollowUp(task.task_id)}
+        className="btn btn-outline"
+      >
+        Follow Up
+      </button>
+    )}
+
+    <button
+      onClick={() => handleComplete(task.task_id, task.task_name)}
+      className="btn btn-outline"
+    >
+      Complete
+    </button>
+
+    {/* Allow manual "Missed" marking only if not already missed */}
+    {task.status !== "Missed" && (
+      <button
+        onClick={() => handleMissed(task.task_id)}
+        className="btn bg-red-600 text-white"
+      >
+        Missed
+      </button>
+    )}
+  </>
+)}
+
      
 
    
-            {getStatusBadge(task.status)}
-                        {isDelayed &&  (
-              <span className="badge">
-                Delayed 
-              </span>
-            )}
+         <div className="status-tags">
+  {getStatusBadge(task.status)}
+  {isDelayed && (
+    <span className="badge ml-1 bg-yellow-500 text-white">
+      Delayed
+    </span>
+  )}
+</div>
           </div>
           
 
