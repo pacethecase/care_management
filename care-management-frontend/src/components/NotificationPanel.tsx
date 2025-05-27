@@ -1,6 +1,11 @@
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '../redux/store';
-import { fetchNotifications, markAllRead, clearAllNotificationsThunk,deleteNotificationThunk } from '../redux/slices/notificationSlice';
+import {
+  fetchNotifications,
+  markAllRead,
+  clearAllNotificationsThunk,
+  deleteNotificationThunk
+} from '../redux/slices/notificationSlice';
 import type { AppDispatch } from '../redux/store';
 import type { Notification } from '../redux/types';
 
@@ -42,16 +47,19 @@ const NotificationPanel = () => {
         notifications.map((n: Notification) => (
           <div
             key={n.id}
-            className={`mb-3 p-3 border rounded-md ${
+            className={`relative mb-3 p-3 border rounded-md ${
               n.read ? 'bg-gray-100' : 'bg-yellow-50'
             }`}
           >
-             <div className="absolute right-2 text-gray-400 hover:text-red-600 cursor-pointer"
-       title="Dismiss"
-              onClick={() => dispatch(deleteNotificationThunk(n.id))}
-          >
-            x
-          </div>
+            {/* ❌ Dismiss Button */}
+            <div
+              className="absolute top-2 right-2 text-gray-400 hover:text-red-600 cursor-pointer"
+              title="Dismiss"
+              onClick={() => dispatch(deleteNotificationThunk(Number(n.id)))}
+            >
+              x
+            </div>
+
             <div className="font-medium text-gray-500 text-sm">{n.title}</div>
             <div className="text-xs text-gray-500">
               {n.created_at ? new Date(n.created_at).toLocaleString() : n.timestamp}

@@ -132,7 +132,24 @@ const getPatientById = async (req, res) => {
     const result = await pool.query(`
       SELECT 
         p.*,
-        json_agg(json_build_object('id', u.id, 'name', u.name)) FILTER (WHERE u.id IS NOT NULL) AS assigned_staff
+        json_agg(json_build_object('id', u.id, 'name', u.name)) FILTER (WHERE u.id IS NOT NULL) AS assigned_staff,
+        CASE
+          WHEN EXISTS (
+            SELECT 1 FROM patient_tasks pt
+            WHERE pt.patient_id = p.id AND pt.status = 'Missed'
+          ) THEN 'missed'
+          WHEN NOT EXISTS (
+            SELECT 1 FROM patient_tasks pt
+            WHERE pt.patient_id = p.id AND pt.ideal_due_date::date = CURRENT_DATE
+          ) THEN 'completed'
+          WHEN NOT EXISTS (
+            SELECT 1 FROM patient_tasks pt
+            WHERE pt.patient_id = p.id
+              AND pt.ideal_due_date::date = CURRENT_DATE
+              AND pt.status != 'Completed'
+          ) THEN 'completed'
+          ELSE 'in_progress'
+        END AS task_status
       FROM patients p
       LEFT JOIN patient_staff ps ON p.id = ps.patient_id
       LEFT JOIN users u ON ps.staff_id = u.id

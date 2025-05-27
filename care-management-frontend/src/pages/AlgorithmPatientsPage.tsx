@@ -68,7 +68,7 @@ const AlgorithmPatients = () => {
               onClick={() => handleClick(p.id)}
             >
               <div className="flex items-center justify-between">
-                <h2 className="text-xl font-semibold text-gray-800">{p.last_name},{p.first_name}</h2>
+                <h2 className="text-xl font-semibold text-gray-800">{p.last_name}, {p.first_name}</h2>
               </div>
               <div className="text-sm text-gray-600 mt-3">
                 <p>Bed: {p.bed_id}</p>

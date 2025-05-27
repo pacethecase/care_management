@@ -1,42 +1,36 @@
-import  { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { fetchDischargedPatients } from "../redux/slices/patientSlice";
-import { fetchHistoricalTimelineReport } from "../redux/slices/reportSlice";
+import {
+  fetchDischargedPatients,
+} from "../redux/slices/patientSlice";
+import {
+  fetchHistoricalTimelineReport,
+} from "../redux/slices/reportSlice";
 import { RootState } from "../redux/store";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import PatientCard from "../components/PatientCard";
 import HistoricalTimelineReport from "../components/HistoricalTimelineReport";
-import type { AppDispatch } from '../redux/store';
+import type { AppDispatch } from "../redux/store";
 
 const DischargedPatients = () => {
-const dispatch = useDispatch<AppDispatch>();
+  const dispatch = useDispatch<AppDispatch>();
   const { dischargedPatients, loading, error } = useSelector(
     (state: RootState) => state.patients
   );
   const { historicalReport, loading: reportLoading } = useSelector(
     (state: RootState) => state.reports
   );
+  const { user } = useSelector((state: RootState) => state.user);
 
   const [expandedPatientId, setExpandedPatientId] = useState<number | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const { user } = useSelector((state: RootState) => state.user);
   const itemsPerPage = 9;
 
   useEffect(() => {
     dispatch(fetchDischargedPatients());
   }, [dispatch]);
 
-  const handleCardClick = (patientId: number) => {
-    const isSame = expandedPatientId === patientId;
-    setExpandedPatientId(isSame ? null : patientId);
-
-    if (!isSame) {
-      dispatch(fetchHistoricalTimelineReport(patientId) as any);
-    }
-  };
-
-  // Pagination logic
   const totalPages = Math.ceil(dischargedPatients.length / itemsPerPage);
   const paginatedPatients = dischargedPatients.slice(
     (currentPage - 1) * itemsPerPage,
@@ -45,7 +39,7 @@ const dispatch = useDispatch<AppDispatch>();
 
   const handleNext = () => {
     if (currentPage < totalPages) {
-      setExpandedPatientId(null); // Collapse open report when changing page
+      setExpandedPatientId(null);
       setCurrentPage((prev) => prev + 1);
     }
   };
@@ -63,7 +57,7 @@ const dispatch = useDispatch<AppDispatch>();
       <div className="p-6">
         <h2 className="text-2xl font-bold mb-6 text-red-600">Discharged Patients</h2>
 
-        {loading && <p>Loading...</p>}
+        {loading && <p>Loading patients...</p>}
         {error && <p className="text-red-500">{error}</p>}
         {dischargedPatients.length === 0 && !loading && (
           <p>No discharged patients found.</p>
@@ -72,16 +66,15 @@ const dispatch = useDispatch<AppDispatch>();
         <div className="grid grid-cols-1 gap-6">
           {paginatedPatients.map((patient) => (
             <div key={patient.id}>
-              <div
-                onClick={() => handleCardClick(patient.id)}
-                className="cursor-pointer"
-              >
-                <PatientCard
-                  patient={patient}
-                  user={user}
-                  showDischargeInfo={true}
-                />
-              </div>
+              <PatientCard
+                patient={patient}
+                user={user}
+                showDischargeInfo={true}
+                onViewReport={(id) => {
+                  setExpandedPatientId(id);
+                  dispatch(fetchHistoricalTimelineReport(id));
+                }}
+              />
 
               {expandedPatientId === patient.id && (
                 <div className="mt-4">
@@ -98,7 +91,6 @@ const dispatch = useDispatch<AppDispatch>();
           ))}
         </div>
 
-        {/* Pagination controls */}
         {totalPages > 1 && (
           <div className="flex justify-center items-center gap-4 mt-8">
             <button
