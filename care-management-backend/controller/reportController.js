@@ -22,6 +22,7 @@ const getDailyReport = async (req, res) => {
         pt.status,
         pt.due_date,
         json_agg(u.name) FILTER (WHERE u.id IS NOT NULL) AS staff_names,
+        u_added.name AS added_by,
         (
           SELECT sh.value ->> 'reason' 
           FROM jsonb_array_elements(pt.status_history) AS sh
@@ -34,14 +35,13 @@ const getDailyReport = async (req, res) => {
       JOIN tasks t ON pt.task_id = t.id
       LEFT JOIN patient_staff ps ON ps.patient_id = p.id
       LEFT JOIN users u ON u.id = ps.staff_id
+      LEFT JOIN users u_added ON u_added.id = p.added_by_user_id
       WHERE 
-        (
-          pt.status = 'Missed'
-          OR (pt.status = 'Pending' AND pt.due_date::date <= $1::date)
-        )
+        pt.status = 'Missed'
+        AND pt.due_date::date < $1::date
         AND p.status != 'Discharged'
         AND pt.is_visible = TRUE
-      GROUP BY p.id, pt.id, t.id
+      GROUP BY p.id, pt.id, t.id, u_added.name
       ORDER BY pt.due_date ASC
     `, [date]);
 
@@ -56,6 +56,7 @@ const getDailyReport = async (req, res) => {
       status: row.status,
       due_date: row.due_date,
       staff_names: row.staff_names || [],
+      added_by: row.added_by || "Unknown",
       missed_reason: row.missed_reason || "No reason provided"
     })));
   } catch (err) {
@@ -63,6 +64,7 @@ const getDailyReport = async (req, res) => {
     res.status(500).json({ error: "Failed to fetch daily report" });
   }
 };
+
 
 const getPriorityReport = async (req, res) => {
   const { date } = req.query;
@@ -79,18 +81,20 @@ const getPriorityReport = async (req, res) => {
         t.name AS task_name,
         pt.due_date,
         pt.status,
-        json_agg(u.name) FILTER (WHERE u.id IS NOT NULL) AS staff_names
+        json_agg(u.name) FILTER (WHERE u.id IS NOT NULL) AS staff_names,
+        u_added.name AS added_by
       FROM patient_tasks pt
       JOIN patients p ON pt.patient_id = p.id
       JOIN tasks t ON pt.task_id = t.id
       LEFT JOIN patient_staff ps ON ps.patient_id = p.id
       LEFT JOIN users u ON ps.staff_id = u.id
+      LEFT JOIN users u_added ON u_added.id = p.added_by_user_id
       WHERE pt.due_date >= $1::date
         AND pt.due_date < ($1::date + INTERVAL '1 day')
         AND pt.status IN ('Pending', 'In Progress', 'Missed')
         AND p.status != 'Discharged'
         AND pt.is_visible = TRUE
-      GROUP BY p.id, pt.id, t.id
+      GROUP BY p.id, pt.id, t.id, u_added.name
       ORDER BY 
         CASE pt.status
           WHEN 'Missed' THEN 1
@@ -110,15 +114,14 @@ const getPriorityReport = async (req, res) => {
       task_name: row.task_name,
       due_date: row.due_date,
       status: row.status,
-      staff_names: row.staff_names || []
+      staff_names: row.staff_names || [],
+      added_by: row.added_by || "Unknown"
     })));
   } catch (err) {
     console.error("❌ Error fetching priority report:", err);
     res.status(500).json({ error: "Failed to fetch priority report" });
   }
 };
-
-
 
 const getTransitionalCareReport = async (req, res) => {
   const patientId = req.params.id;
@@ -218,7 +221,7 @@ const getHistoricalTimelineReport = async (req, res) => {
     const admittedDate = dayjs(patient.admitted_date).startOf('day');
 
     const tasksQuery = await pool.query(
-      `SELECT t.name AS task_name, pt.completed_at, pt.task_note, pt.include_note_in_report
+      `SELECT t.name AS task_name, pt.completed_at, pt.task_note, pt.include_note_in_report,pt.contact_info
        FROM patient_tasks pt
        JOIN tasks t ON pt.task_id = t.id
        WHERE pt.patient_id = $1 AND pt.status = 'Completed'
@@ -244,6 +247,7 @@ const getHistoricalTimelineReport = async (req, res) => {
         task_name: row.task_name,
         completed_at: completedAt.format('MM.DD.YY'),
         task_note: row.task_note,
+        contact_info: row.contact_info,
         include_note_in_report: row.include_note_in_report
       });
     });

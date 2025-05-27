@@ -38,6 +38,7 @@ const PriorityReport: React.FC<PriorityReportProps> = ({ date }) => {
                 <th className="p-3 text-left">Staff</th>
                 <th className="p-3 text-left">Due Date</th>
                 <th className="p-3 text-left">Status</th>
+                 <th className="p-3 text-left">Leader</th>
               
               </tr>
             </thead>
@@ -64,6 +65,9 @@ const PriorityReport: React.FC<PriorityReportProps> = ({ date }) => {
                       : 'N/A'}
                   </td>
                   <td className="p-3">{task.status || 'N/A'}</td>
+                   <td className="p-3">
+                      {task.added_by}
+                    </td>
                 </tr>
               ))}
             </tbody>

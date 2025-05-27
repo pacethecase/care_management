@@ -13,6 +13,7 @@ interface ReportTask {
   task_name: string;
   missed_reason?: string;
   staff_names?: string[];
+  added_by?:string;
   due_date?: Date | string;
 }
 
@@ -26,7 +27,7 @@ const DailyReport: React.FC<Props> = ({ date }) => {
 
   return (
     <div>
-      <h2 className="text-2xl font-semibold mb-4 text-center no-print">Daily Report</h2>
+      <h2 className="text-2xl font-semibold mb-4 text-center no-print">Daily Report - Overdue Tasks</h2>
       {loading && <p className="text-center text-gray-600">Loading...</p>}
       {error && <p className="text-center text-red-500">{error}</p>}
 
@@ -40,6 +41,7 @@ const DailyReport: React.FC<Props> = ({ date }) => {
                 <th className="p-3 text-left">Missed Reason</th>
                 <th className="p-3 text-left">Due Date</th>
                 <th className="p-3 text-left">Staff</th>
+                  <th className="p-3 text-left">Leader</th>
               </tr>
             </thead>
             <tbody>
@@ -64,6 +66,9 @@ const DailyReport: React.FC<Props> = ({ date }) => {
                       {task.staff_names?.length
                         ? task.staff_names.join(', ')
                         : 'N/A'}
+                    </td>
+                    <td className="p-3">
+                      {task.added_by}
                     </td>
                                     </tr>
               ))}

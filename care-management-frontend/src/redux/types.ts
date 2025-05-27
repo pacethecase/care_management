@@ -55,7 +55,7 @@ export interface Note {
     id: number;
     patient_id: number;
     staff_id: number;
-    staff_name?: string;
+    nurse_name?: string;
     note_text: string;
     created_at: string;
   }
@@ -69,6 +69,8 @@ export interface Note {
     ideal_due_date?: string;
     completed_at?: string;
     completed_by?: string;
+    started_at?:string;
+    started_by?:string;
     missed_reason?: string;
     status: string;
     condition_required?: string;
@@ -129,10 +131,5 @@ export interface PatientTask {
   
   }
 
-  export interface PatientSummary {
-    barrier_to_discharge: string;
-    daily_prioritization: string;
-    incomplete_tasks: string;
-    projected_completion: string;
-  }
+  
   

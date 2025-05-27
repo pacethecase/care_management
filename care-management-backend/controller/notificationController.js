@@ -50,4 +50,18 @@ const deleteAllNotifications = async (req, res) => {
   }
 };
 
-module.exports = { getUserNotifications, markNotificationRead, markAllRead,deleteAllNotifications };
+const deleteNotification = async (req, res) => {
+  try {
+    const { id } = req.params;
+    await pool.query(
+      `DELETE FROM notifications WHERE id = $1 AND user_id = $2`,
+      [id, req.user.id]
+    );
+    res.status(200).json({ message: "Notification deleted." });
+  } catch (err) {
+    console.error("❌ Error deleting notification:", err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+module.exports = { getUserNotifications, markNotificationRead, markAllRead,deleteAllNotifications ,deleteNotification};

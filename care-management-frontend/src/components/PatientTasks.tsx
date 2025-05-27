@@ -16,7 +16,6 @@ import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import {
   ArrowLeft,
-  Calendar,
   Plus,
 } from "lucide-react";
 import { toast } from "react-toastify";
@@ -60,6 +59,7 @@ const [noteDrafts, setNoteDrafts] = useState<Record<number, {
     if (patientId) {
       dispatch(fetchPatientById(Number(patientId)));
       dispatch(loadPatientTasks(Number(patientId)));
+      dispatch(fetchPatientNotes(Number(patientId))); 
 
   
       if (taskError === "Tasks are not available for discharged patients") {
@@ -329,15 +329,7 @@ const renderTaskCard = (task: Task) => {
   };
 
   const borderColor = algoColorMap[task.algorithm as keyof typeof algoColorMap] || "var(--border-muted)";
-  const idealDue = task.ideal_due_date ? new Date(task.ideal_due_date) : null;
-  const completedAt = task.completed_at ? new Date(task.completed_at) : null;
-  const now = new Date();
-  const isDelayed = idealDue
-    ? (
-      (completedAt && completedAt > new Date(idealDue.getFullYear(), idealDue.getMonth(), idealDue.getDate(), 16, 0, 0)) ||
-      (!completedAt && now > new Date(idealDue.getFullYear(), idealDue.getMonth(), idealDue.getDate(), 16, 0, 0))
-    )
-    : false;
+
 
   return (
     <div
@@ -352,9 +344,7 @@ const renderTaskCard = (task: Task) => {
        <div className="flex justify-end mb-2">
         <div className="flex gap-2 flex-wrap">
           {getStatusBadge(task.status)}
-          {isDelayed && (
-            <span className="badge text-white">Delayed</span>
-          )}
+    
         </div>
         </div>
       <div className="flex justify-between bg-white   rounded items-start mb-2">
@@ -367,11 +357,19 @@ const renderTaskCard = (task: Task) => {
 
       <div className="text-xs mb-2">
        Due: {new Date(task.due_date).toLocaleDateString()}
+         {task.started_at && (
+            <div>
+                Started: {new Date(task.started_at).toLocaleString()}
+                {task.started_by && <> by <b>{task.started_by}</b></>}
+              </div>
+            )}
         {task.completed_at && (
           <div>
             Completed: {new Date(task.completed_at).toLocaleString()} by <b>{task.completed_by}</b>
           </div>
         )}
+      
+         
       </div>
 
       <div className="flex gap-2 flex-wrap mb-2">
@@ -471,8 +469,9 @@ const renderTaskColumns = () => {
       {notes.map((note: Note) => (
           <div key={note.id} className="pb-2">
             <p>{note.note_text}</p>
-            <span className="text-xs text-white">
+            <span className="text-xs">
               {new Date(note.created_at).toLocaleString()}
+               {note.nurse_name && ` • by ${note.nurse_name}`}
             </span>
           </div>
         ))}

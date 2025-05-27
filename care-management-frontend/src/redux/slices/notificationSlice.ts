@@ -60,6 +60,15 @@ export const markAllRead = createAsyncThunk<
     }
   }
 );
+export const deleteNotificationThunk = createAsyncThunk(
+  "notifications/delete",
+  async (id: number) => {
+    await axios.delete(`${BASE_URL}/notifications/${id}`, {
+      withCredentials: true  // ✅ Required for cookies/session to be sent
+    });
+    return id;
+  }
+);
 
 // Slice
 const notificationSlice = createSlice({
@@ -92,6 +101,9 @@ const notificationSlice = createSlice({
       })
       .addCase(clearAllNotificationsThunk.fulfilled, (state) => {
         state.items = [];
+      })
+       .addCase(deleteNotificationThunk.fulfilled, (state, action) => {
+        state.items = state.items.filter((n) => n.id !== action.payload);
       });
   },
 });

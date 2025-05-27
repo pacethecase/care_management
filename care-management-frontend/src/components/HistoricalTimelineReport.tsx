@@ -5,6 +5,7 @@ interface TaskEntry {
   completed_at: string;
   task_note:string;
   include_note_in_report:boolean;
+  contact_info:string;
 }
 
 interface WeeklyTimeline {
@@ -52,6 +53,12 @@ const HistoricalTimelineReport: React.FC<HistoricalTimelineReportProps> = ({ rep
                   <strong>Note:</strong> {task.task_note}
                 </p>
                 )}
+                 {task.contact_info && (
+                <p className="ml-4 mt-1 text-sm  text-[var(--prussian-blue)]">
+                  <strong>Contact:</strong> {task.contact_info}
+                </p>
+                )}
+
               </li>
             ))}
           </ul>

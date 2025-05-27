@@ -34,7 +34,7 @@ console.log(user);
     <header className="shadow-sm">
       {/* Top Logo Strip */}
       <div className="bg-white py-3 px-6 flex items-center justify-between">
-        <img src={logo} alt="Pace The Case Logo" loading="lazy" className="h-20 w-auto" />
+        <img src={logo} alt="Pace The Case Logo" loading="lazy" className="h-30 w-auto" />
       </div>
 
       {/* Navbar */}
@@ -53,7 +53,7 @@ console.log(user);
               <Link to="/homepage" className="tab transition">Home</Link>
               <Link to="/patients" className="tab transition">Patients</Link>
               {user?.is_staff && <Link to="/tasks" className="tab transition">Tasks</Link>}
-              {user?.is_admin && <Link to="/reports" className="tab transition">Reports</Link>}
+              <Link to="/reports" className="tab transition">Reports</Link>
           </div>
           {/* Notifications */}
           {user && (

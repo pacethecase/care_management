@@ -53,7 +53,7 @@ const addPatient = async (req, res) => {
       is_guardianship_person,
       is_guardianship_emergency,
       admitted_date,
-      added_by_user_id
+     
     } = req.body;
 
     if (!first_name ||!last_name || !birth_date || !bedId || !age || !mrn) {
@@ -165,23 +165,58 @@ const getPatientTasks = async (req, res) => {
       return res.status(403).json({ error: "Tasks are not available for discharged patients" });
     }
 
-    const result = await pool.query(
-      `SELECT pt.id AS task_id, t.name AS task_name, t.category, t.description, pt.status, pt.due_date,pt.completed_at, t.condition_required, t.is_repeating,t.due_in_days_after_dependency,t.is_non_blocking, t.algorithm,pt.ideal_due_date, pt.task_note, pt.include_note_in_report, pt.contact_info,
-      u.name AS completed_by
-      FROM patient_tasks pt
-       JOIN tasks t ON pt.task_id = t.id
-       LEFT JOIN LATERAL (
-          SELECT (elem.value ->> 'staff_id')::INTEGER AS staff_id
-          FROM jsonb_array_elements(pt.status_history) AS elem
-          WHERE elem.value ->> 'status' = 'Completed'
-          ORDER BY (elem.value ->> 'timestamp')::timestamp DESC
-          LIMIT 1
-        ) AS history ON TRUE
-         LEFT JOIN users u ON u.id = history.staff_id
-       WHERE pt.patient_id = $1 AND pt.is_visible = TRUE
-       ORDER BY pt.due_date ASC`,
-      [patientId]
-    );
+  const result = await pool.query(
+  `SELECT 
+    pt.id AS task_id,
+    t.name AS task_name,
+    t.category,
+    t.description,
+    pt.status,
+    pt.due_date,
+    pt.completed_at,
+    pt.started_at,
+    t.condition_required,
+    t.is_repeating,
+    t.due_in_days_after_dependency,
+    t.is_non_blocking,
+    t.algorithm,
+    pt.ideal_due_date,
+    pt.task_note,
+    pt.include_note_in_report,
+    pt.contact_info,
+
+    u1.name AS completed_by,
+    u2.name AS started_by
+
+  FROM patient_tasks pt
+  JOIN tasks t ON pt.task_id = t.id
+
+  -- Get the last 'Completed' status staff_id
+  LEFT JOIN LATERAL (
+    SELECT (elem.value ->> 'staff_id')::INTEGER AS staff_id
+    FROM jsonb_array_elements(pt.status_history) AS elem
+    WHERE elem.value ->> 'status' = 'Completed'
+    ORDER BY (elem.value ->> 'timestamp')::timestamp DESC
+    LIMIT 1
+  ) AS completed_history ON TRUE
+
+  LEFT JOIN users u1 ON u1.id = completed_history.staff_id
+
+  -- Get the last 'In Progress' status staff_id
+  LEFT JOIN LATERAL (
+    SELECT (elem.value ->> 'staff_id')::INTEGER AS staff_id
+    FROM jsonb_array_elements(pt.status_history) AS elem
+    WHERE elem.value ->> 'status' = 'In Progress'
+    ORDER BY (elem.value ->> 'timestamp')::timestamp DESC
+    LIMIT 1
+  ) AS started_history ON TRUE
+
+  LEFT JOIN users u2 ON u2.id = started_history.staff_id
+
+  WHERE pt.patient_id = $1 AND pt.is_visible = TRUE
+  ORDER BY pt.due_date ASC`,
+  [patientId]
+);
 
     res.status(200).json(result.rows);
   } catch (err) {
@@ -479,75 +514,7 @@ const getSearchedPatients = async (req, res) => {
 };
 
 
-const getPatientSummary = async (req, res) => {
-  const { patientId } = req.params;
-  try {
-    // 1. Barrier to Discharge: Collect flags
-    const patientRes = await pool.query(`SELECT * FROM patients WHERE id = $1`, [patientId]);
-    if (patientRes.rows.length === 0) return res.status(404).json({ error: "Patient not found" });
 
-    const p = patientRes.rows[0];
-
-    let barrierToDischarge = [];
-    if (p.is_behavioral) barrierToDischarge.push("Behavioral");
-    if (p.is_ltc) barrierToDischarge.push("Long-Term Care");
-    if (p.is_guardianship) barrierToDischarge.push("Guardianship");
-
-    // 2. Daily Prioritization: fetch tasks due today and not completed
-  const todayTasks = await pool.query(`
-    SELECT t.name 
-    FROM patient_tasks pt
-    JOIN tasks t ON pt.task_id = t.id
-    WHERE pt.patient_id = $1 
-      AND pt.due_date::date = CURRENT_DATE 
-      AND pt.status != 'Completed'
-       AND pt.is_visible = TRUE
-    ORDER BY pt.due_date ASC
-  `, [patientId]);
-
-  const prioritization = todayTasks.rows.length > 0
-    ? todayTasks.rows.map(row => row.name).join(', ')
-    : "None";
-
-  // 3. Missed/Incomplete Tasks: due before today and not completed
-  const missedOrIncomplete = await pool.query(`
-    SELECT t.name 
-    FROM patient_tasks pt
-    JOIN tasks t ON pt.task_id = t.id
-    WHERE pt.patient_id = $1 
-      AND pt.due_date::date < CURRENT_DATE
-      AND pt.status IN ('Pending', 'In Progress', 'Missed')
-  `, [patientId]);
-  
-  const missedTasks = missedOrIncomplete.rows.length > 0
-    ? missedOrIncomplete.rows.map(row => row.name).join(', ')
-    : "None";
-  
-
-
-
-
-    // 4. Projected timeline (max ideal due date)
-    const proj = await pool.query(`
-      SELECT MAX(ideal_due_date) AS projected FROM patient_tasks WHERE patient_id = $1
-    `, [patientId]);
-
-    const projectedCompletion = proj.rows[0].projected
-      ? new Date(proj.rows[0].projected).toLocaleDateString()
-      : "N/A";
-
-    res.json({
-      barrier_to_discharge: barrierToDischarge.join(", ") || "None",
-      daily_prioritization: prioritization,
-      incomplete_tasks: missedTasks,
-      projected_completion: projectedCompletion
-    });
-
-  } catch (err) {
-    console.error("❌ Error getting patient summary:", err);
-    res.status(500).json({ error: "Internal Server Error" });
-  }
-};
 
 const getPatientsByAdmin = async (req, res) => {
   const { adminId } = req.params;
@@ -585,7 +552,6 @@ module.exports = {
   getDischargedPatients,
   updatePatient,
   getSearchedPatients,
-  getPatientSummary,
   getPatientsByAdmin
 
 };

@@ -126,34 +126,39 @@ const completeTask = async (req, res) => {
     }
 
           // Step 2: Mark as completed in DB and update local object
-      let finalStatus = "Completed";
+  // ✅ Determine final status
+let finalStatus = "Completed";
 
-      if (task.ideal_due_date) {
-        const cutoff = new Date(
-          new Date(task.ideal_due_date).getFullYear(),
-          new Date(task.ideal_due_date).getMonth(),
-          new Date(task.ideal_due_date).getDate(),
-          23, 59, 0
-        );
+if (task.ideal_due_date) {
+  const cutoff = new Date(
+    new Date(task.ideal_due_date).getFullYear(),
+    new Date(task.ideal_due_date).getMonth(),
+    new Date(task.ideal_due_date).getDate(),
+    23, 59, 0
+  );
 
-        if (completedAt > cutoff) {
-          finalStatus = "Delayed Completed";
-        }
-      }
+  if (completedAt > cutoff) {
+    finalStatus = "Delayed Completed";
+  }
+}
 
-      // Update DB with appropriate status
-      await pool.query(`
-        UPDATE patient_tasks 
-        SET status = $1, completed_at = $2
-        WHERE id = $3
-      `, [finalStatus, completedAt, taskId]);
+// ✅ Update task in DB
+await pool.query(`
+  UPDATE patient_tasks 
+  SET status = $1, completed_at = $2
+  WHERE id = $3
+`, [finalStatus, completedAt, taskId]);
 
-      //  Append to history
-      await appendStatusHistory(taskId, {
-        status: finalStatus,
-        timestamp: completedAt.toISOString(),
-        staff_id: req.user.id
-      });
+// ✅ ALSO update your in-memory `task` object!
+task.completed_at = completedAt;
+
+// ✅ Append to history with the same status
+await appendStatusHistory(taskId, {
+  status: finalStatus,
+  timestamp: completedAt.toISOString(),
+  staff_id: req.user.id,
+});
+
     // Skip recurrence and dependency handling for non-blocking tasks
     if (taskDetails.is_non_blocking) {
       console.log("Non-blocking task completed, skipping recurrence and dependency handling.");
@@ -242,7 +247,7 @@ const completeTask = async (req, res) => {
       const idealBaseDateLocal = DateTime.fromJSDate(task.ideal_due_date).setZone(timezone);
       const dueBaseLocal = DateTime.fromJSDate(task.completed_at).setZone(timezone);
 
-      let due, idealBaseDate; // 🔧 Declare outside
+      let due, idealBaseDate;
 
 if (dep.is_repeating && dep.recurrence_interval != null && dep.due_in_days_after_dependency == null) {
   const dueDate = dueBaseLocal.plus({ days: dep.recurrence_interval }).set({ hour: 23, minute: 59, second: 0, millisecond: 0 });

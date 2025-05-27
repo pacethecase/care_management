@@ -1,6 +1,6 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import axios from 'axios';
-import type { Patient,PatientSummary } from '../types'; // reuse your shared Patient type
+import type { Patient } from '../types'; // reuse your shared Patient type
 
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL;
@@ -9,7 +9,6 @@ interface PatientState {
   patients: Patient[];
   dischargedPatients: Patient[];
   searchResults: Patient[];
-  patientSummary: PatientSummary | null;
   selectedPatient: Patient | null;
   loading: boolean;
   error: string | null;
@@ -19,7 +18,6 @@ const initialState: PatientState = {
   patients: [],
   dischargedPatients: [],
   searchResults: [],
-  patientSummary: null,
   selectedPatient: null,
   loading: false,
   error: null,
@@ -137,19 +135,6 @@ export const searchPatients = createAsyncThunk(
   }
 );
 
-export const fetchPatientSummary = createAsyncThunk(
-  'patients/fetchPatientSummary',
-  async (patientId: number, { rejectWithValue }) => {
-    try {
-      const res = await axios.get(`${BASE_URL}/patients/${patientId}/summary`, {
-        withCredentials: true,
-      });
-      return res.data;
-    } catch (err: any) {
-      return rejectWithValue(err.response?.data || 'Failed to fetch summary');
-    }
-  }
-);
 
 export const fetchPatientsByAdmin = createAsyncThunk<
 Patient[],
@@ -249,18 +234,7 @@ const patientsSlice = createSlice({
         state.loading = false;
         state.error = action.payload as string;
       })
-      .addCase(fetchPatientSummary.pending, (state) => {
-        state.loading = true;
-        state.error = null;
-      })
-      .addCase(fetchPatientSummary.fulfilled, (state, action) => {
-        state.patientSummary = action.payload;
-        state.loading = false;
-      })
-      .addCase(fetchPatientSummary.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.payload as string;
-      })
+     
       .addCase(fetchPatientsByAdmin.pending, (state) => {
         state.loading = true;
         state.error = null;

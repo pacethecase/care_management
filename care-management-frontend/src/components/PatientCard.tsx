@@ -109,7 +109,7 @@ const PatientCard: React.FC<PatientCardProps> = ({ patient, user, showDischargeI
     
 
       {/* Name */}
-      <h3 className="text-xl font-bold mb-1">{patient.last_name},{patient.first_name}</h3>
+      <h3 className="text-xl font-bold mb-1">{patient.last_name}, {patient.first_name}</h3>
 
       {/* Details */}
       <div className="text-sm text-[var(--text-dark)] space-y-1">

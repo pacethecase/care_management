@@ -7,7 +7,6 @@ import { useDispatch, useSelector } from 'react-redux';
 import {
   fetchPatients,
   searchPatients,
-  fetchPatientSummary,
   fetchPatientsByAdmin,
 } from '../redux/slices/patientSlice';
 import { fetchAdmins } from '../redux/slices/userSlice';
@@ -18,7 +17,7 @@ const Patients = () => {
   const dispatch = useDispatch<AppDispatch>();
   const navigate = useNavigate();
 
-  const { patients, searchResults, loading: patientLoading, error, patientSummary } = useSelector(
+  const { patients, searchResults, loading: patientLoading, error } = useSelector(
     (state: RootState) => state.patients
   );
   const { user, admins, adminLoading } = useSelector((state: RootState) => state.user);
@@ -51,12 +50,7 @@ const Patients = () => {
     return () => clearTimeout(delay);
   }, [searchTerm, selectedAdminId, dispatch, user]);
 
-  // Fetch patient summary
-  useEffect(() => {
-    if (selectedPatientId) {
-      dispatch(fetchPatientSummary(selectedPatientId));
-    }
-  }, [selectedPatientId, dispatch]);
+
 
   // Scroll lock for modal
   useEffect(() => {
@@ -88,7 +82,7 @@ const Patients = () => {
             {user?.is_admin && (
               <>
                 <label htmlFor="adminFilter" className="font-semibold">
-                  Filter by Admin:
+                  Filter by Leader:
                 </label>
                 <select
                   id="adminFilter"
@@ -98,7 +92,7 @@ const Patients = () => {
                     setSelectedAdminId(e.target.value ? Number(e.target.value) : '')
                   }
                 >
-                  <option value="">All Admins</option>
+                  <option value="">All Leaders</option>
                   {admins.map((admin) => (
                     <option key={admin.id} value={admin.id}>
                       {admin.name}
@@ -134,41 +128,7 @@ const Patients = () => {
           </p>
         )}
 
-        {/* Summary Modal */}
-        {selectedPatientId && patientSummary && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm">
-            <div className="bg-white rounded-xl shadow-lg w-full max-w-2xl p-6 relative">
-              <button
-                onClick={() => setSelectedPatientId(null)}
-                className="absolute top-3 right-3 text-gray-500 hover:text-black text-xl"
-              >
-                &times;
-              </button>
-
-              <h3 className="text-xl font-bold mb-4">Patient Summary</h3>
-
-              <div className="card non-blocking font-semibold p-3 mb-6 rounded text-sm shadow">
-                <strong>Barrier to Discharge:</strong>
-                <div className="font-normal">{patientSummary.barrier_to_discharge}</div>
-              </div>
-
-              <div className="card font-semibold mb-6 p-3 rounded text-sm shadow">
-                <strong>Daily Prioritization:</strong>
-                <div className="font-normal">{patientSummary.daily_prioritization}</div>
-              </div>
-
-              <div className="card card-missed font-semibold mb-6 p-3 rounded text-sm shadow">
-                <strong>Incomplete Tasks:</strong>
-                <div className="font-normal">{patientSummary.incomplete_tasks}</div>
-              </div>
-
-              <div className="card card-completed font-semibold mb-6 p-3 rounded text-sm shadow">
-                <strong>Projected Timeline to Completion:</strong>
-                <div className="font-normal">{patientSummary.projected_completion}</div>
-              </div>
-            </div>
-          </div>
-        )}
+      
       </main>
 
       <Footer />
