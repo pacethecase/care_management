@@ -125,16 +125,35 @@ const completeTask = async (req, res) => {
       await pool.query(`UPDATE patients SET ltc_court_datetime = $1 WHERE id = $2`, [courtDateUTC, patient.id]);
     }
 
-    // Step 2: Mark as completed in DB and update local object
-    await pool.query(`
-      UPDATE patient_tasks 
-      SET status = 'Completed', completed_at = $1
-      WHERE id = $2
-    `, [completedAt, taskId]);
+          // Step 2: Mark as completed in DB and update local object
+      let finalStatus = "Completed";
 
-    task.completed_at = completedAt;
-    await appendStatusHistory(taskId, { status: "Completed", timestamp: completedAt.toISOString(), staff_id: req.user.id });
+      if (task.ideal_due_date) {
+        const cutoff = new Date(
+          new Date(task.ideal_due_date).getFullYear(),
+          new Date(task.ideal_due_date).getMonth(),
+          new Date(task.ideal_due_date).getDate(),
+          23, 59, 0
+        );
 
+        if (completedAt > cutoff) {
+          finalStatus = "Delayed Completed";
+        }
+      }
+
+      // Update DB with appropriate status
+      await pool.query(`
+        UPDATE patient_tasks 
+        SET status = $1, completed_at = $2
+        WHERE id = $3
+      `, [finalStatus, completedAt, taskId]);
+
+      //  Append to history
+      await appendStatusHistory(taskId, {
+        status: finalStatus,
+        timestamp: completedAt.toISOString(),
+        staff_id: req.user.id
+      });
     // Skip recurrence and dependency handling for non-blocking tasks
     if (taskDetails.is_non_blocking) {
       console.log("Non-blocking task completed, skipping recurrence and dependency handling.");
@@ -148,8 +167,8 @@ const completeTask = async (req, res) => {
       const completedAt = task.completed_at ? new Date(task.completed_at) : new Date();
       const previousIdealDue = task.ideal_due_date ? new Date(task.ideal_due_date) : new Date();
     
-      const dueLocal = DateTime.fromJSDate(completedAt).setZone(timezone).plus({ days: taskDetails.recurrence_interval }).set({ hour: 15, minute: 0, second: 0, millisecond: 0 });
-      const idealLocal = DateTime.fromJSDate(previousIdealDue).setZone(timezone).plus({ days: taskDetails.recurrence_interval }).set({ hour: 15, minute: 0, second: 0, millisecond: 0 });
+      const dueLocal = DateTime.fromJSDate(completedAt).setZone(timezone).plus({ days: taskDetails.recurrence_interval }).set({ hour: 23, minute: 59, second: 0, millisecond: 0 });
+      const idealLocal = DateTime.fromJSDate(previousIdealDue).setZone(timezone).plus({ days: taskDetails.recurrence_interval }).set({ hour: 23, minute: 59, second: 0, millisecond: 0 });
     
       const nextDue = dueLocal.toUTC().toJSDate();
       const ideal_due_date = idealLocal.toUTC().toJSDate();
@@ -226,13 +245,13 @@ const completeTask = async (req, res) => {
       let due, idealBaseDate; // 🔧 Declare outside
 
 if (dep.is_repeating && dep.recurrence_interval != null && dep.due_in_days_after_dependency == null) {
-  const dueDate = dueBaseLocal.plus({ days: dep.recurrence_interval }).set({ hour: 15, minute: 0, second: 0, millisecond: 0 });
-  const idealDate = idealBaseDateLocal.plus({ days: dep.recurrence_interval }).set({ hour: 15, minute: 0, second: 0, millisecond: 0 });
+  const dueDate = dueBaseLocal.plus({ days: dep.recurrence_interval }).set({ hour: 23, minute: 59, second: 0, millisecond: 0 });
+  const idealDate = idealBaseDateLocal.plus({ days: dep.recurrence_interval }).set({ hour: 23, minute: 59, second: 0, millisecond: 0 });
   due = dueDate.toUTC().toJSDate();
   idealBaseDate = idealDate.toUTC().toJSDate();
 } else if (dep.due_in_days_after_dependency != null) {
-  const dueDate = dueBaseLocal.plus({ days: dep.due_in_days_after_dependency }).set({ hour: 15, minute: 0, second: 0, millisecond: 0 });
-  const idealDate = idealBaseDateLocal.plus({ days: dep.due_in_days_after_dependency }).set({ hour: 15, minute: 0, second: 0, millisecond: 0 });
+  const dueDate = dueBaseLocal.plus({ days: dep.due_in_days_after_dependency }).set({  hour: 23, minute: 59, second: 0, millisecond: 0 });
+  const idealDate = idealBaseDateLocal.plus({ days: dep.due_in_days_after_dependency }).set({ hour: 23, minute: 59, second: 0, millisecond: 0});
   due = dueDate.toUTC().toJSDate();
   idealBaseDate = idealDate.toUTC().toJSDate();
 }
@@ -405,7 +424,7 @@ const followUpCourtTask = async (req, res) => {
     }
 
     const nowLocal = DateTime.local().setZone(timezone);
-    const nextDueLocal = nowLocal.plus({ days: taskDetails.recurrence_interval }).set({ hour: 15, minute: 0, second: 0, millisecond: 0 });
+    const nextDueLocal = nowLocal.plus({ days: taskDetails.recurrence_interval }).set({  hour: 23, minute: 59, second: 0, millisecond: 0 });
     const nextDue = nextDueLocal.toUTC().toJSDate();
 
     await pool.query(

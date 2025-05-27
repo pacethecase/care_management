@@ -84,8 +84,8 @@ const createTables = async () => {
           guardianship_court_datetime TIMESTAMP WITH TIME ZONE DEFAULT NULL,
           ltc_court_datetime TIMESTAMP WITH TIME ZONE DEFAULT NULL,
           created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-          added_by_user_id INTEGER REFERENCES users(id)
-        selected_algorithms TEXT[] DEFAULT '{}',
+          added_by_user_id INTEGER REFERENCES users(id),
+        selected_algorithms TEXT[] DEFAULT '{}'
 
       );
 
@@ -117,7 +117,7 @@ const createTables = async () => {
           id SERIAL PRIMARY KEY,
           patient_id INTEGER REFERENCES patients(id) ON DELETE CASCADE,
           task_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
-          status VARCHAR(50) DEFAULT 'Pending',  -- Pending, In Progress, Completed, Missed, FollowUp
+          status VARCHAR(50) DEFAULT 'Pending',  -- Pending, In Progress, Completed, Missed, FollowUp,Completed with Delay
           due_date TIMESTAMP  WITH TIME ZONE ,
           completed_at TIMESTAMP  WITH TIME ZONE ,
            ideal_due_date TIMESTAMP  WITH TIME ZONE ,
@@ -127,7 +127,7 @@ const createTables = async () => {
           task_note TEXT,
           include_note_in_report BOOLEAN DEFAULT false,
           contact_info TEXT,
-          is_visible BOOLEAN DEFAULT TRUE;
+          is_visible BOOLEAN DEFAULT TRUE
           );
 
         CREATE TABLE IF NOT EXISTS notes (

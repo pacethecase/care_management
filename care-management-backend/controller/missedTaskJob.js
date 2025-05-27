@@ -3,14 +3,15 @@ const cron = require("node-cron");
 const { DateTime } = require("luxon");
 
 function setupMissedTaskJob(io) {
-  cron.schedule("0 * * * *", async () => {
+  cron.schedule("0 0 * * *", async () => {
     try {
-      const now = DateTime.local().setZone("America/New_York"); // Your app's local zone
-      const cutoff = now.set({ hour: 16, minute: 0, second: 0, millisecond: 0 });
+    const now = DateTime.local().setZone("America/New_York"); 
+    const cutoff = now.set({ hour: 23, minute: 59, second: 0, millisecond: 0 });
+
 
       // Only run the marking logic if it's past 4 PM local time
       if (now < cutoff) {
-        console.log("🕓 It is not yet 4 PM local time. Skipping missed task check.");
+        console.log("🕓 It is not yet  11:59 PM local time. Skipping missed task check.");
         return;
       }
 

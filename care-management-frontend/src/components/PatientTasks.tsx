@@ -32,9 +32,7 @@ const PatientTasks = () => {
   const location = useLocation();
   const backLink = location.state?.from || "/patients";
   
-  const [selectedTab, setSelectedTab] = useState<
-  "Missed" | "Pending" | "In Progress" | "Completed" | "All Tasks" | "Notes"
-  >("All Tasks");
+ 
   const [newNote, setNewNote] = useState("");
   const [expandedTaskId, setExpandedTaskId] = useState<number | null>(null);
 const [noteDrafts, setNoteDrafts] = useState<Record<number, {
@@ -63,15 +61,13 @@ const [noteDrafts, setNoteDrafts] = useState<Record<number, {
       dispatch(fetchPatientById(Number(patientId)));
       dispatch(loadPatientTasks(Number(patientId)));
 
-      if (selectedTab === "Notes") {
-        dispatch(fetchPatientNotes(Number(patientId)));
-      }
+  
       if (taskError === "Tasks are not available for discharged patients") {
         navigate("/patients");
       }
     
     }
-  }, [dispatch, patientId, selectedTab,taskError]);
+  }, [dispatch, patientId,taskError]);
       useEffect(() => {
         if (expandedTaskId !== null && !noteDrafts[expandedTaskId]) {
           const task = patientTasks.find(t => t.task_id === expandedTaskId);
@@ -274,230 +270,191 @@ const [noteDrafts, setNoteDrafts] = useState<Record<number, {
     }
   };
   
+const getStatusBadge = (status: string) => {
+  return (
+    <span className="badge text-xs px-2 py-1 rounded-full font-semibold">
+      {status}
+    </span>
+  );
+};
 
-  const getStatusBadge = (status: string) => {
-    return <span className="badge">{status}</span>;
+
+  
+const getTasksByStatus = (status: string) =>
+  patientTasks.filter((task) => {
+  
+    if (status === "Non-Blocking") return task.is_non_blocking;
+
+    if (status === "Pending/In Progress") {
+      return (
+        ["Pending", "In Progress", "Follow Up"].includes(task.status) &&
+        !task.is_non_blocking
+      );
+    }
+    return task.status === status && !task.is_non_blocking;
+  });
+
+
+
+
+const renderTaskCard = (task: Task) => {
+  const isExpanded = expandedTaskId === task.task_id;
+  const draft = noteDrafts[task.task_id] || {
+    task_note: "",
+    contact_info: "",
+    include_note_in_report: false,
   };
 
-  const filteredTasks = patientTasks.filter((task) => {
-    const matchesStatus =
-      selectedTab === "All Tasks" || task.status === selectedTab ||  (selectedTab === "Pending" && task.status === "Follow Up");
-    const matchesAlgorithm =
-      selectedAlgorithm === "All" || task.algorithm === selectedAlgorithm;
-    return matchesStatus && matchesAlgorithm;
-  });
-  
+  const updateDraft = (field: keyof typeof draft, value: any) => {
+    setNoteDrafts((prev) => ({
+      ...prev,
+      [task.task_id]: {
+        ...prev[task.task_id],
+        [field]: value,
+      },
+    }));
+  };
 
+  const handleSaveMeta = () => {
+    dispatch(updateTaskNoteMeta({
+      taskId: task.task_id,
+      data: draft,
+    }))
+      .unwrap()
+      .then(() => {
+        toast.success("Task note updated");
+        setExpandedTaskId(null);
+      })
+      .catch(() => toast.error("Failed to update task note"));
+  };
 
-  const renderTasks = () =>
-    filteredTasks.map((task: Task)  => {
-      console.log("🧠 Rendering task:", task.task_name, "Status:", task.status);
-      const isExpanded = expandedTaskId === task.task_id;
-      const draft = noteDrafts[task.task_id] || {
-        task_note: "",
-        contact_info: "",
-        include_note_in_report: false,
-      };
-  
-      const updateDraft = (field: keyof typeof draft, value: any) => {
-        setNoteDrafts((prev) => ({
-          ...prev,
-          [task.task_id]: {
-            ...prev[task.task_id],
-            [field]: value,
-          },
-        }));
-      };
-  
-      const handleSaveMeta = () => {
-        dispatch(updateTaskNoteMeta({
-          taskId: task.task_id,
-          data: draft,
-        }))
-          .unwrap()
-          .then(() => {
-            toast.success("Task note updated");
-            setExpandedTaskId(null); // collapse after save
-          })
-          .catch(() => toast.error("Failed to update task note"));
-      };
-  
-      const borderColor = algoColorMap[task.algorithm as keyof typeof algoColorMap] || "var(--border-muted)";
-      const idealDue = task.ideal_due_date ? new Date(task.ideal_due_date) : null;
-        const completedAt = task.completed_at ? new Date(task.completed_at) : null;
-        const now = new Date(); 
-
-       const isDelayed = idealDue
-  ? (
-      (completedAt && completedAt > new Date(
-        idealDue.getFullYear(),
-        idealDue.getMonth(),
-        idealDue.getDate(),
-        16, 0, 0 
-      )) ||
-      (!completedAt && now > new Date(
-        idealDue.getFullYear(),
-        idealDue.getMonth(),
-        idealDue.getDate(),
-        16, 0, 0 
-      ))
+  const borderColor = algoColorMap[task.algorithm as keyof typeof algoColorMap] || "var(--border-muted)";
+  const idealDue = task.ideal_due_date ? new Date(task.ideal_due_date) : null;
+  const completedAt = task.completed_at ? new Date(task.completed_at) : null;
+  const now = new Date();
+  const isDelayed = idealDue
+    ? (
+      (completedAt && completedAt > new Date(idealDue.getFullYear(), idealDue.getMonth(), idealDue.getDate(), 16, 0, 0)) ||
+      (!completedAt && now > new Date(idealDue.getFullYear(), idealDue.getMonth(), idealDue.getDate(), 16, 0, 0))
     )
-  : false;
+    : false;
 
-      
-      return (
-        <div
-        key={task.task_id}
-        className={`card w-full  border p-4 mb-4 text-black ${
-          task.is_non_blocking ? "non-blocking" : ""
-        } ${task.status === "Missed" ? "card-missed" : ""} ${
-          task.status === "Completed" ? "card-completed" : ""
-        }`}
-        style={{  borderLeft: `12px solid ${borderColor}` }}
-      >
-        {/* Header */}
-        <div className="relative mb-2 flex justify-between">
-          <div className="flex-1 max-w-[65%]">
-            <h3 className="text-lg font-semibold break-words">
-              {task.task_name}
-            </h3>
-            <p className="text-sm">{task.description}</p>
-          </div>
-
-            {/* Task Actions */}
-          <div className="flex flex-wrap gap-2 items-start">
-        {task.status !== "Completed" && (
-  <>
-    {task.status !== "In Progress" && task.status !== "Missed" && (
-      <button
-        onClick={() => handleStart(task.task_id)}
-        className="btn"
-      >
-        Start
-      </button>
-    )}
-
-    {task.is_repeating && task.due_in_days_after_dependency != null && (
-      <button
-        onClick={() => handleFollowUp(task.task_id)}
-        className="btn btn-outline"
-      >
-        Follow Up
-      </button>
-    )}
-
-    <button
-      onClick={() => handleComplete(task.task_id, task.task_name)}
-      className="btn btn-outline"
+  return (
+    <div
+      key={task.task_id}
+      className={`card border p-4 mb-4 rounded-lg text-black ${
+        task.is_non_blocking ?"non-blocking":""
+      } ${task.status === "Missed" ? "card-missed" : ""}
+        ${task.status === "Completed" ? "card-completed" : ""}
+      `}
+      style={{ borderLeft: `12px solid ${borderColor}` }}
     >
-      Complete
-    </button>
-
-    {/* Allow manual "Missed" marking only if not already missed */}
-    {task.status !== "Missed" && (
-      <button
-        onClick={() => handleMissed(task.task_id)}
-        className="btn bg-red-600 text-white"
-      >
-        Missed
-      </button>
-    )}
-  </>
-)}
-
-     
-
-   
-         <div className="status-tags">
-  {getStatusBadge(task.status)}
-  {isDelayed && (
-    <span className="badge ml-1 bg-yellow-500 text-white">
-      Delayed
-    </span>
-  )}
-</div>
-          </div>
-          
-
+       <div className="flex justify-end mb-2">
+        <div className="flex gap-2 flex-wrap">
+          {getStatusBadge(task.status)}
+          {isDelayed && (
+            <span className="badge text-white">Delayed</span>
+          )}
         </div>
-
-        <div className="text-sm mb-2">
-          <Calendar className="inline w-4 h-4 mr-1" />
-          Due: {new Date(task.due_date).toLocaleDateString()}
         </div>
-        {task.completed_at && (
-          <div>
-           <strong>Completed:</strong>{' '}
-            {task.completed_at
-              ? new Date(task.completed_at).toLocaleString(undefined, {
-                  year: 'numeric',
-                  month: 'short',
-                  day: 'numeric',
-                  hour: 'numeric',
-                  minute: '2-digit',
-                  hour12: true,
-                })
-              : 'N/A'}
-
-            {task.completed_by && <> by <strong>{task.completed_by}</strong></>}
-          </div>
-        )}
-
-<div className="text-sm mb-2">
-          <button
-                className="underline"
-                onClick={() =>
-                  setExpandedTaskId(isExpanded ? null : task.task_id)
-                }
-              >
-                {isExpanded ? "Hide Note Options" : "Add/Edit Note or Contact Info"}
-              </button>
-
-   </div>
-        <p className="text-sm">{task.task_note}</p>
-        <p className="text-sm">{task.contact_info}</p>
-
-      
-
-        {/* Expanded Note UI */}
-        {isExpanded && (
-          <div className="mt-3 p-3 border rounded  space-y-2 bg-white text-black">
-            <textarea
-              className="w-full border rounded p-2 text-sm"
-              placeholder="Enter task note..."
-              value={draft.task_note}
-              onChange={(e) => updateDraft("task_note", e.target.value)}
-            />
-            <input
-              type="text"
-              className="w-full border rounded p-2 text-sm"
-              placeholder="Contact info"
-              value={draft.contact_info}
-              onChange={(e) => updateDraft("contact_info", e.target.value)}
-            />
-            <div className="flex gap-4 items-center">
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={draft.include_note_in_report}
-                  onChange={(e) =>
-                    updateDraft("include_note_in_report", e.target.checked)
-                  }
-                />
-                Include note in report
-              </label>
-              
-            </div>
-            <button onClick={handleSaveMeta} className="btn btn-sm">
-             Save Note Info
-            </button>
-          </div>
-        )}
-
+      <div className="flex justify-between bg-white   rounded items-start mb-2">
+        <div>
+          <h4 className="font-semibold text-sm">{task.task_name}</h4>
+          <p className="text-xs text-gray-600">{task.description}</p>
+        </div>
       
       </div>
-    );
-  });
+
+      <div className="text-xs mb-2">
+       Due: {new Date(task.due_date).toLocaleDateString()}
+        {task.completed_at && (
+          <div>
+            Completed: {new Date(task.completed_at).toLocaleString()} by <b>{task.completed_by}</b>
+          </div>
+        )}
+      </div>
+
+      <div className="flex gap-2 flex-wrap mb-2">
+        {task.status !== "Completed" && (
+          <>
+            {task.status !== "In Progress" && task.status !== "Missed" && (
+              <button className="btn btn-xs" onClick={() => handleStart(task.task_id)}>Start</button>
+            )}
+            <button className="btn btn-xs btn-outline" onClick={() => handleComplete(task.task_id, task.task_name)}>Complete</button>
+            <button className="btn btn-xs bg-red-600 text-white" onClick={() => handleMissed(task.task_id)}>Missed</button>
+            {task.is_repeating && task.due_in_days_after_dependency != null && (
+              <button className="btn btn-xs btn-outline" onClick={() => handleFollowUp(task.task_id)}>Follow Up</button>
+            )}
+          </>
+        )}
+      </div>
+
+      <div className="text-xs">
+        <button
+          className="underline text-black"
+          onClick={() => setExpandedTaskId(isExpanded ? null : task.task_id)}
+        >
+          {isExpanded ? "Hide Note Options" : "Add/Edit Note or Contact Info"}
+        </button>
+      </div>
+
+      {task.task_note && <p className="text-sm mt-1">{task.task_note}</p>}
+      {task.contact_info && <p className="text-sm">{task.contact_info}</p>}
+
+      {isExpanded && (
+        <div className="mt-2 border rounded bg-white p-2 text-sm space-y-2">
+          <textarea
+            className="w-full border rounded p-2"
+            placeholder="Task note..."
+            value={draft.task_note}
+            onChange={(e) => updateDraft("task_note", e.target.value)}
+          />
+          <input
+            type="text"
+            className="w-full border rounded p-2"
+            placeholder="Contact info"
+            value={draft.contact_info}
+            onChange={(e) => updateDraft("contact_info", e.target.value)}
+          />
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={draft.include_note_in_report}
+              onChange={(e) => updateDraft("include_note_in_report", e.target.checked)}
+            />
+            Include note in report
+          </label>
+          <button className="btn btn-xs" onClick={handleSaveMeta}>💾 Save</button>
+        </div>
+      )}
+    </div>
+  );
+};
+
+
+const renderTaskColumns = () => {
+  const columns = [
+    { title: "Pending/In Progress", tasks: getTasksByStatus("Pending/In Progress") },
+    { title: "Missed", tasks: getTasksByStatus("Missed") },
+    { title: "Completed", tasks: getTasksByStatus("Completed") },
+    { title: "Non-Blocking", tasks: getTasksByStatus("Non-Blocking") },
+  ];
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      {columns.map((col) => (
+        <div key={col.title} className="bg-white rounded-lg p-3 shadow text-black">
+          <h3 className="text-lg font-bold mb-3 text-center">{col.title}</h3>
+          {col.tasks.length === 0 ? (
+            <p className="text-sm text-gray-500 text-center">No tasks</p>
+          ) : (
+            col.tasks.map((task) => renderTaskCard(task))
+          )}
+        </div>
+      ))}
+    </div>
+  );
+};
 
   const renderNotes = () => (
     <div className="bg-white p-6 text-black mb-10 rounded-lg shadow  space-y-4">
@@ -590,21 +547,9 @@ const [noteDrafts, setNoteDrafts] = useState<Record<number, {
           </div>
         </div>
 
-              {/* Tabs */}
-        <div className="flex flex-wrap justify-center  gap-2 border-b pb-2 mb-4">
-          {["Missed","Pending", "In Progress", "Completed", "All Tasks", "Notes"].map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setSelectedTab(tab as any)}
-              className={`btn ${selectedTab === tab ? "btn-outline" : ""}`}
-            >
-              {tab}
-            </button>
-          ))}
-        </div>
-
+      
         {/* Algorithm Filter */}
-        {selectedTab !== "Notes" && (
+
           <div className="flex  text-black justify-end items-center mb-6">
             <label htmlFor="algorithmFilter" className="text-sm font-medium mr-2">
               Filter by Workflow Map:
@@ -621,9 +566,14 @@ const [noteDrafts, setNoteDrafts] = useState<Record<number, {
               {patient.is_ltc && <option value="LTC">LTC</option>}
             </select>
           </div>
-        )}
+      
               
-        {selectedTab === "Notes" ? renderNotes() : renderTasks()}
+      {renderTaskColumns()}
+<div className="mt-10">
+  <h2 className="text-xl font-semibold mb-2 text-black">General Notes</h2>
+  {renderNotes()}
+</div>
+
        
    
       </main>

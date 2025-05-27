@@ -66,7 +66,7 @@ const assignTasksToPatient = async (patientId, timezone, selectedAlgorithms = []
         return;
       }
 
-      const dueLocal = DateTime.local().setZone(timezone).plus({ days }).set({ hour: 15 });
+      const dueLocal = DateTime.local().setZone(timezone).plus({ days }).set({ hour: 23, minute: 59, second: 0, millisecond: 0 });
       const dueDate = dueLocal.toUTC().toJSDate();
       const idealDueDate = dueLocal.toUTC().toJSDate();
       taskAssignments.push([patientId, taskId, 'Pending', dueDate, idealDueDate, true]);
@@ -109,8 +109,12 @@ const assignTasksToPatient = async (patientId, timezone, selectedAlgorithms = []
 
       if (patient.is_ltc) {
       await assignTask("Initiate appropriate application process", 2, patient.is_ltc); // Always assign if parent is true
+      if( patient.is_ltc_medical){
       await assignTask("Complete the Medical Eligibility Assessment application / required forms and compile supporting medical documentation", 5, patient.is_ltc_medical);
+      }
+      if( patient.is_ltc_financial){
       await assignTask("Complete Financial Screening and Determine Eligibility", 3, patient.is_ltc_financial);
+      }
     }
 
 
