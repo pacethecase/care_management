@@ -83,7 +83,7 @@ export interface Note {
     include_note_in_report?: boolean;
   }
   export interface Notification {
-    id: string | number;
+    id:  number;
     title: string;
     message: string;
     timestamp?: string;

@@ -22,7 +22,7 @@ const Notifications = () => {
 
     const handleNotification = (data: NotificationPayload) => {
       dispatch(addNotification({
-        id: Date.now().toString(),
+        id: Date.now(),
         title: data.title,
         message: data.message,
         created_at: new Date().toISOString(),
