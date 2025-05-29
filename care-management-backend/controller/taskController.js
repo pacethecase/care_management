@@ -61,7 +61,9 @@ const startTask = async (req, res) => {
 const completeTask = async (req, res) => {
   try {
     const { taskId } = req.params;
-    const { court_date } = req.body;
+    const { court_date, override_date } = req.body;
+    
+
     const timezone = req.headers['x-timezone'] || 'America/New_York';
     console.log("Completing task with ID:", taskId);
 
@@ -95,39 +97,44 @@ const completeTask = async (req, res) => {
     const taskDetails = taskDetailsRes.rows[0];
     const patient = patientRes.rows[0];
     const patientStatus = patientStatusRes.rows[0]?.status;
+console.log(taskDetails);
+    // 👇 Unified court date handler
+if (taskDetails.is_court_date) {
+  console.log("Court date check required for task:", taskDetails.name);
 
-    // 👇 Update court_date if needed
-    if (taskDetails.name === "Court date confirmed" || taskDetails.name === "Court Hearing Date Received if not follow up completed") {
-      console.log("Court date check required for task:", taskDetails.name);
-      if (!court_date) {
-        return res.status(400).json({ error: "Court date is required to complete this task." });
-      }
-      const utcString = new Date(
-        new Date(court_date).toLocaleString("en-US", { timeZone: timezone })
-      ).toISOString();
-      
-      const courtDateUTC = new Date(utcString);
-      
+  if (!court_date) {
+    return res.status(400).json({ error: "Court date is required to complete this task." });
+  }
 
-      await pool.query(`UPDATE patients SET guardianship_court_datetime = $1 WHERE id = $2`, [courtDateUTC, patient.id]);
-    }
-    if (taskDetails.name === "Confirm date/time of States initial steps including Intake Interview: if not scheduled, follow-up with State") {
-      console.log("Court date check required for task:", taskDetails.name);
-      if (!court_date) {
-        return res.status(400).json({ error: "Court date is required to complete this task." });
-      }
-      const utcString = new Date(
-        new Date(court_date).toLocaleString("en-US", { timeZone: timezone })
-      ).toISOString();
-      
-      const courtDateUTC = new Date(utcString);
+  // Convert to UTC using timezone
+  const utcString = new Date(
+    new Date(court_date).toLocaleString("en-US", { timeZone: timezone })
+  ).toISOString();
+  const courtDateUTC = new Date(utcString);
 
-      await pool.query(`UPDATE patients SET ltc_court_datetime = $1 WHERE id = $2`, [courtDateUTC, patient.id]);
-    }
+  // Determine which field to update
+  const fieldToUpdate = taskDetails.name.includes("State")
+    ? "ltc_court_datetime"
+    : "guardianship_court_datetime";
+
+  await pool.query(
+    `UPDATE patients SET ${fieldToUpdate} = $1 WHERE id = $2`,
+    [courtDateUTC, patient.id]
+  );
+
+  console.log(`✅ Updated ${fieldToUpdate} for task '${taskDetails.name}'`);
+}
+
 
           // Step 2: Mark as completed in DB and update local object
   // ✅ Determine final status
 let finalStatus = "Completed";
+const overrideDate = override_date
+  ? DateTime.fromISO(override_date, { zone: timezone })
+      .set({ hour: 23, minute: 59, second: 0, millisecond: 0 })
+      .toUTC()
+      .toJSDate()
+  : null;
 
 if (task.ideal_due_date) {
   const cutoff = new Date(
@@ -145,13 +152,14 @@ if (task.ideal_due_date) {
 // ✅ Update task in DB
 await pool.query(`
   UPDATE patient_tasks 
-  SET status = $1, completed_at = $2
-  WHERE id = $3
-`, [finalStatus, completedAt, taskId]);
+  SET status = $1, completed_at = $2, override_due_date = $3
+  WHERE id = $4
+`, [finalStatus, completedAt, overrideDate, taskId]);
+
 
 // ✅ ALSO update your in-memory `task` object!
 task.completed_at = completedAt;
-
+task.override_due_date = overrideDate; 
 // ✅ Append to history with the same status
 await appendStatusHistory(taskId, {
   status: finalStatus,
@@ -168,28 +176,57 @@ await appendStatusHistory(taskId, {
     const isManualFollowUpTask = taskDetails.is_repeating && taskDetails.due_in_days_after_dependency !== null;
 
     // Step 4: Handle repeating task
-    if (taskDetails.is_repeating && taskDetails.recurrence_interval && patientStatus !== "Discharged" && !isManualFollowUpTask) {      
-      const completedAt = task.completed_at ? new Date(task.completed_at) : new Date();
-      const previousIdealDue = task.ideal_due_date ? new Date(task.ideal_due_date) : new Date();
-    
-      const dueLocal = DateTime.fromJSDate(completedAt).setZone(timezone).plus({ days: taskDetails.recurrence_interval }).set({ hour: 23, minute: 59, second: 0, millisecond: 0 });
-      const idealLocal = DateTime.fromJSDate(previousIdealDue).setZone(timezone).plus({ days: taskDetails.recurrence_interval }).set({ hour: 23, minute: 59, second: 0, millisecond: 0 });
-    
-      const nextDue = dueLocal.toUTC().toJSDate();
-      const ideal_due_date = idealLocal.toUTC().toJSDate();
+   
+if (
+  taskDetails.is_repeating &&
+  taskDetails.recurrence_interval &&
+  patientStatus !== "Discharged" &&
+  !isManualFollowUpTask
+) {
+  let nextDue, ideal_due_date;
 
-    
-      await pool.query(
-        `INSERT INTO patient_tasks (patient_id, task_id, status, due_date, ideal_due_date)
-         VALUES ($1, $2, 'Pending', $3,$4)`,
-        [task.patient_id, taskDetails.id, nextDue, ideal_due_date]
-      );
-    
-      console.log(
-        `🔁 Repeating task '${taskDetails.name}' scheduled for ${nextDue.toDateString()} (Ideal: ${ideal_due_date.toDateString()})`
-      );
-    }
-    
+  if (task.override_due_date) {
+    // ✅ Use override date directly as next due and ideal
+    const override = new Date(task.override_due_date);
+    const overrideAt1159 = DateTime.fromJSDate(override)
+      .setZone(timezone)
+      .set({ hour: 23, minute: 59, second: 0, millisecond: 0 })
+      .toUTC()
+      .toJSDate();
+
+    nextDue = overrideAt1159;
+    ideal_due_date = overrideAt1159;
+
+    console.log(`⏱ Using override date directly for next recurrence: ${overrideAt1159.toISOString()}`);
+  } else {
+    const completedAt = task.completed_at ? new Date(task.completed_at) : new Date();
+    const previousIdealDue = task.ideal_due_date ? new Date(task.ideal_due_date) : new Date();
+
+    const dueLocal = DateTime.fromJSDate(completedAt)
+      .setZone(timezone)
+      .plus({ days: taskDetails.recurrence_interval })
+      .set({ hour: 23, minute: 59, second: 0, millisecond: 0 });
+
+    const idealLocal = DateTime.fromJSDate(previousIdealDue)
+      .setZone(timezone)
+      .plus({ days: taskDetails.recurrence_interval })
+      .set({ hour: 23, minute: 59, second: 0, millisecond: 0 });
+
+    nextDue = dueLocal.toUTC().toJSDate();
+    ideal_due_date = idealLocal.toUTC().toJSDate();
+  }
+
+  await pool.query(
+    `INSERT INTO patient_tasks (patient_id, task_id, status, due_date, ideal_due_date)
+     VALUES ($1, $2, 'Pending', $3, $4)`,
+    [task.patient_id, taskDetails.id, nextDue, ideal_due_date]
+  );
+
+  console.log(
+    `🔁 Repeating task '${taskDetails.name}' scheduled for ${nextDue.toDateString()} (Ideal: ${ideal_due_date.toDateString()})`
+  );
+}
+
 
     // Step 5: Handle dependent tasks
     const depRes = await pool.query(`
@@ -216,19 +253,19 @@ await appendStatusHistory(taskId, {
 
       // Handling specific tasks based on conditions
       
-      if (dep.name === "Begin compiling needed financial/legal information"){
+      if (dep.name === "LTC - Begin compiling needed financial/legal information"){
         if(patient.is_ltc_medical && !patient.is_ltc_financial){
           console.log("⏭ Skipping 'compiling needed financial/legal information...' based on flow conditions.");
           continue;
         }
       }
-      if (dep.name === "Follow up with state on application status"){
+      if (dep.name === "LTC - Follow up with state on Medical Application status"){
         if(patient.is_ltc_financial){
           console.log("⏭ Skipping 'compiling needed financial/legal information...' based on flow conditions.");
           continue;
         }
       }
-      if (dep.name === "Confirm Guardianship Appointed" && !patient.is_guardianship_emergency) {
+      if (dep.name === "Guardianship - Confirm Guardianship Appointed" && !patient.is_guardianship_emergency) {
         console.log("⏭ Skipping 'Confirm Guardianship Appointed' for normal flow.");
         continue;
       }
@@ -244,27 +281,42 @@ await appendStatusHistory(taskId, {
         console.log(`📌 Non-blocking dependent task '${dep.name}' scheduled without a due date`);
         continue;
       }
-      const idealBaseDateLocal = DateTime.fromJSDate(task.ideal_due_date).setZone(timezone);
-      const dueBaseLocal = DateTime.fromJSDate(task.completed_at).setZone(timezone);
+    let due, idealBaseDate;
 
-      let due, idealBaseDate;
+if (task.override_due_date) {
+  // ✅ If override_due_date exists, use it directly for both due and ideal
+  const override = DateTime.fromJSDate(new Date(task.override_due_date))
+    .setZone(timezone)
+    .set({ hour: 23, minute: 59, second: 0, millisecond: 0 });
 
-if (dep.is_repeating && dep.recurrence_interval != null && dep.due_in_days_after_dependency == null) {
-  const dueDate = dueBaseLocal.plus({ days: dep.recurrence_interval }).set({ hour: 23, minute: 59, second: 0, millisecond: 0 });
-  const idealDate = idealBaseDateLocal.plus({ days: dep.recurrence_interval }).set({ hour: 23, minute: 59, second: 0, millisecond: 0 });
-  due = dueDate.toUTC().toJSDate();
-  idealBaseDate = idealDate.toUTC().toJSDate();
-} else if (dep.due_in_days_after_dependency != null) {
-  const dueDate = dueBaseLocal.plus({ days: dep.due_in_days_after_dependency }).set({  hour: 23, minute: 59, second: 0, millisecond: 0 });
-  const idealDate = idealBaseDateLocal.plus({ days: dep.due_in_days_after_dependency }).set({ hour: 23, minute: 59, second: 0, millisecond: 0});
-  due = dueDate.toUTC().toJSDate();
-  idealBaseDate = idealDate.toUTC().toJSDate();
+  due = override.toUTC().toJSDate();
+  idealBaseDate = override.toUTC().toJSDate();
+
+  console.log(`⏱ Using override due date for dependent task '${dep.name}' → ${due.toDateString()}`);
+
+} else {
+  // 🧠 Use regular logic if no override
+  const idealBaseDateLocal = DateTime.fromJSDate(task.ideal_due_date).setZone(timezone);
+  const dueBaseLocal = DateTime.fromJSDate(task.completed_at).setZone(timezone);
+
+  if (dep.is_repeating && dep.recurrence_interval != null && dep.due_in_days_after_dependency == null) {
+    const dueDate = dueBaseLocal.plus({ days: dep.recurrence_interval }).set({ hour: 23, minute: 59, second: 0, millisecond: 0 });
+    const idealDate = idealBaseDateLocal.plus({ days: dep.recurrence_interval }).set({ hour: 23, minute: 59, second: 0, millisecond: 0 });
+    due = dueDate.toUTC().toJSDate();
+    idealBaseDate = idealDate.toUTC().toJSDate();
+  } else if (dep.due_in_days_after_dependency != null) {
+    const dueDate = dueBaseLocal.plus({ days: dep.due_in_days_after_dependency }).set({ hour: 23, minute: 59, second: 0, millisecond: 0 });
+    const idealDate = idealBaseDateLocal.plus({ days: dep.due_in_days_after_dependency }).set({ hour: 23, minute: 59, second: 0, millisecond: 0 });
+    due = dueDate.toUTC().toJSDate();
+    idealBaseDate = idealDate.toUTC().toJSDate();
+  }
 }
 
 if (!due || !idealBaseDate) {
   console.warn(`⚠️ Skipping '${dep.name}' due to missing date calculations`);
   continue;
 }
+
 
 
 await pool.query(

@@ -5,25 +5,37 @@ const insertTasks = async () => {
   try {
     console.log("🚀 Inserting tasks into the database...");
 
-    // Step 1: Insert tasks without dependency
+    // Step 1: Insert tasks
     for (const task of tasks) {
       await pool.query(
         `INSERT INTO tasks (
-          name, description, is_repeating, recurrence_interval, max_repeats, 
-          condition_required, category, due_in_days_after_dependency,is_non_blocking,algorithm
+          name,
+          description,
+          is_overridable,
+          is_repeating,
+          recurrence_interval,
+          max_repeats,
+          condition_required,
+          category,
+          due_in_days_after_dependency,
+          is_non_blocking,
+          is_court_date,
+          algorithm
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8,$9,$10)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
         ON CONFLICT (name) DO NOTHING`,
         [
           task.name,
           task.description,
-          task.is_repeating,
+          task.is_overridable ?? false,
+          task.is_repeating ?? false,
           task.recurrence_interval,
           task.max_repeats,
           task.condition_required,
           task.category,
           task.due_in_days_after_dependency,
-          task.is_non_blocking,
+          task.is_non_blocking ?? false,
+          task.is_court_date ?? false,
           task.algorithm
         ]
       );
@@ -40,7 +52,11 @@ const insertTasks = async () => {
       const taskId = taskMap.get(task.name);
       if (!taskId || !task.dependency_name) continue;
 
-      for (const depName of task.dependency_name) {
+      const dependencies = Array.isArray(task.dependency_name)
+        ? task.dependency_name
+        : [task.dependency_name];
+
+      for (const depName of dependencies) {
         const depId = taskMap.get(depName);
         if (depId) {
           await pool.query(
@@ -60,7 +76,7 @@ const insertTasks = async () => {
   } catch (err) {
     console.error("❌ Error inserting tasks:", err.message);
   } finally {
-    pool.end();
+    await pool.end();
   }
 };
 

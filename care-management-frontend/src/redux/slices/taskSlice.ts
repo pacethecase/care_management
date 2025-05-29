@@ -88,13 +88,29 @@ export const startTask = createAsyncThunk(
   }
 );
 
+
 export const completeTask = createAsyncThunk(
   "tasks/completeTask",
-  async ({ taskId, court_date }: { taskId: number; court_date?: string }, { rejectWithValue }) => {
+  async (
+    {
+      taskId,
+      court_date,
+      override_date,
+    }: {
+      taskId: number;
+      court_date?: string;
+      override_date?: string | null;
+    },
+    { rejectWithValue }
+  ) => {
     try {
+      const payload: any = {};
+      if (court_date) payload.court_date = court_date;
+      if (override_date) payload.override_date = override_date;
+
       const res = await axios.post(
         `${BASE_URL}/tasks/${taskId}/complete`,
-        court_date ? { court_date } : {},
+        payload,
         { withCredentials: true }
       );
       return res.data;

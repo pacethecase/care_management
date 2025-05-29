@@ -99,7 +99,7 @@ const createTables = async () => {
 
       CREATE TABLE IF NOT EXISTS tasks (
           id SERIAL PRIMARY KEY,
-          name VARCHAR(150) NOT NULL UNIQUE,
+          name VARCHAR(200) NOT NULL UNIQUE,
           description TEXT,
           is_repeating BOOLEAN DEFAULT FALSE,  -- Determines if the task should repeat
           recurrence_interval INTEGER,  -- Number of days before it repeats (e.g., 7 for weekly)
@@ -109,7 +109,8 @@ const createTables = async () => {
           due_in_days_after_dependency INTEGER DEFAULT NULL,
           is_non_blocking BOOLEAN DEFAULT FALSE,
           created_at TIMESTAMP  WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-          algorithm VARCHAR(50)
+          algorithm VARCHAR(50),
+          is_overridable BOOLEAN DEFAULT FALSE
       );
 
      
@@ -127,6 +128,7 @@ const createTables = async () => {
           task_note TEXT,
           include_note_in_report BOOLEAN DEFAULT false,
           contact_info TEXT,
+          override_due_date TIMESTAMP WITH TIME ZONE DEFAULT NULL,
           is_visible BOOLEAN DEFAULT TRUE
           );
 

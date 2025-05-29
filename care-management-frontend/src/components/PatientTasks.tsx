@@ -42,6 +42,10 @@ const [noteDrafts, setNoteDrafts] = useState<Record<number, {
   const { patientTasks, loading: taskLoading } = useSelector((state: RootState) => state.tasks);
   const { selectedPatient: patient, loading: patientLoading } = useSelector((state: RootState) => state.patients);
   const [selectedAlgorithm, setSelectedAlgorithm] = useState<string>("All");
+ const [overrideDates, setOverrideDates] = useState<Record<number, string>>({});
+
+
+
   const { notes } = useSelector((state: RootState) => state.notes);
   const { user } = useSelector((state: RootState) => state.user);
   const { taskError } = useSelector((state: RootState) => state.tasks);
@@ -95,14 +99,10 @@ const [noteDrafts, setNoteDrafts] = useState<Record<number, {
       .catch(() => toast.error("❌ Failed to start task"));
   };
 
-  const handleComplete = async (taskId: number, taskName: string) => {
+  const handleComplete = async (taskId: number,courtTask: boolean) => {
     try {
-      const isCourtTask =
-        taskName === "Court date confirmed" ||
-        taskName === "Court Hearing Date Received if not follow up completed" ||
-        taskName === "Confirm date/time of States initial steps including Intake Interview: if not scheduled, follow-up with State";
-  
-      if (isCourtTask) {
+   
+      if (courtTask) {
         // Container
         const container = document.createElement("div");
         container.className = "court-popup"; // Add styles for this class in index.css
@@ -143,7 +143,8 @@ const [noteDrafts, setNoteDrafts] = useState<Record<number, {
           }
   
           try {
-            await dispatch(completeTask({ taskId, court_date: courtDate })).unwrap();
+  
+            await dispatch(completeTask({ taskId, court_date: courtDate, override_date: overrideDates[taskId] || null })).unwrap();
             toast.success("✅ Task completed");
   
             if (patientId) {
@@ -163,7 +164,7 @@ const [noteDrafts, setNoteDrafts] = useState<Record<number, {
                 await dispatch(markTaskAsMissed({ taskId, reason })).unwrap();
                 toast.success("✅ Missed reason recorded");
         
-                await dispatch(completeTask({ taskId, court_date: courtDate })).unwrap();
+                await dispatch(completeTask({ taskId, court_date: courtDate , override_date: overrideDates[taskId] || null})).unwrap();
                 toast.success("✅ Task completed after reason provided");
         
                 if (patientId) {
@@ -191,7 +192,7 @@ const [noteDrafts, setNoteDrafts] = useState<Record<number, {
       }
   
     
-      await dispatch(completeTask({ taskId })).unwrap();
+      await dispatch(completeTask({ taskId , override_date: overrideDates[taskId] || null})).unwrap();
       toast.success("✅ Task completed");
   
       if (patientId) {
@@ -213,11 +214,12 @@ const [noteDrafts, setNoteDrafts] = useState<Record<number, {
           toast.success("✅ Missed reason recorded");
     
          
-          await dispatch(completeTask({ taskId })).unwrap();
+          await dispatch(completeTask({ taskId, override_date: overrideDates[taskId] || null })).unwrap();
           toast.success("✅ Task completed after reason provided");
           if (patientId) {
             dispatch(fetchPatientById(Number(patientId)));
             dispatch(loadPatientTasks(Number(patientId)));
+            
           }
         } catch {
           toast.error("❌ Failed to complete task even after reason");
@@ -290,7 +292,15 @@ const getTasksByStatus = (status: string) =>
         ["Pending", "In Progress", "Follow Up"].includes(task.status) &&
         !task.is_non_blocking
       );
+
     }
+    if (status === "Completed"){
+      return (
+        ["Completed", "Delayed Completed"].includes(task.status) &&
+        !task.is_non_blocking
+      )
+
+    } 
     return task.status === status && !task.is_non_blocking;
   });
 
@@ -332,6 +342,7 @@ const renderTaskCard = (task: Task) => {
 
 
   return (
+   
     <div
       key={task.task_id}
       className={`card border p-4 mb-4 rounded-lg text-black ${
@@ -347,15 +358,15 @@ const renderTaskCard = (task: Task) => {
     
         </div>
         </div>
-      <div className="flex justify-between bg-white   rounded items-start mb-2">
+      <div className="flex justify-between rounded items-start mb-2">
         <div>
-          <h4 className="font-semibold text-sm">{task.task_name}</h4>
-          <p className="text-xs text-gray-600">{task.description}</p>
+          <h4 className="font-bold text-sm">{task.task_name}</h4>
+          <p className="text-xs text-semibold">{task.description}</p>
         </div>
       
       </div>
 
-      <div className="text-xs mb-2">
+      <div className="text-sm mb-2 font-bold">
        Due: {new Date(task.due_date).toLocaleDateString()}
          {task.started_at && (
             <div>
@@ -369,16 +380,37 @@ const renderTaskCard = (task: Task) => {
           </div>
         )}
       
+      {task.is_overridable && task.status !== "Completed" &&(
+  <div className="mb-2">
+    <label className="block text-sm font-medium text-gray-700">Override next due date:</label>
+    <input
+  type="date"
+  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm"
+  value={overrideDates[task.task_id] || ""}
+  onChange={(e) =>
+    setOverrideDates(prev => ({
+      ...prev,
+      [task.task_id]: e.target.value,
+    }))
+  }
+/>
+
+  </div>
+)}
+
+
+
          
       </div>
 
       <div className="flex gap-2 flex-wrap mb-2">
+       
         {task.status !== "Completed" && (
           <>
             {task.status !== "In Progress" && task.status !== "Missed" && (
               <button className="btn btn-xs" onClick={() => handleStart(task.task_id)}>Start</button>
             )}
-            <button className="btn btn-xs btn-outline" onClick={() => handleComplete(task.task_id, task.task_name)}>Complete</button>
+            <button className="btn btn-xs btn-outline" onClick={() => handleComplete(task.task_id, task.is_court_date ?? false)}>Complete</button>
             <button className="btn btn-xs bg-red-600 text-white" onClick={() => handleMissed(task.task_id)}>Missed</button>
             {task.is_repeating && task.due_in_days_after_dependency != null && (
               <button className="btn btn-xs btn-outline" onClick={() => handleFollowUp(task.task_id)}>Follow Up</button>

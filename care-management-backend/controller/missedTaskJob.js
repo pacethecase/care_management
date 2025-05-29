@@ -3,37 +3,34 @@ const cron = require("node-cron");
 const { DateTime } = require("luxon");
 
 function setupMissedTaskJob(io) {
+  // Runs every day at midnight (NY time)
   cron.schedule("0 0 * * *", async () => {
     try {
-    const now = DateTime.local().setZone("America/New_York"); 
-    const cutoff = now.set({ hour: 23, minute: 59, second: 0, millisecond: 0 });
+      const timezone = "America/New_York";
+      const now = DateTime.local().setZone(timezone);
 
+      // Get the start of today (00:00:00) so anything before that is overdue
+      const todayStart = now.startOf('day');
 
-      // Only run the marking logic if it's past 4 PM local time
-      if (now < cutoff) {
-        console.log("🕓 It is not yet  11:59 PM local time. Skipping missed task check.");
-        return;
-      }
+      console.log("⏳ Running missed task job at", now.toFormat("yyyy-MM-dd HH:mm"));
 
-      console.log("⏳ Running missed task job at", now.toFormat("HH:mm"));
-
-      const overdueTasks = await pool.query(`
+      const { rows: overdueTasks } = await pool.query(`
         SELECT 
           pt.id, 
           pt.patient_id, 
+          COALESCE(pt.due_date, pt.ideal_due_date) AS due_date,
           ps.staff_id AS assigned_staff_id, 
           p.first_name || ' ' || p.last_name AS patient_name
         FROM patient_tasks pt
         JOIN patients p ON pt.patient_id = p.id
         LEFT JOIN patient_staff ps ON pt.patient_id = ps.patient_id
         WHERE pt.status IN ('Pending', 'In Progress')
-          AND pt.due_date <= $1
-      `, [cutoff.toUTC().toISO()]); 
+          AND COALESCE(pt.due_date, pt.ideal_due_date) < $1::timestamptz
+      `, [todayStart.toISO()]);
 
-      console.log(`🔍 Found ${overdueTasks.rows.length} overdue tasks`);
-      if (overdueTasks.rows.length === 0) return;
+      console.log(`🔍 Found ${overdueTasks.length} overdue tasks`);
 
-      for (let task of overdueTasks.rows) {
+      for (let task of overdueTasks) {
         await pool.query(`
           UPDATE patient_tasks
           SET status = 'Missed',
@@ -44,26 +41,20 @@ function setupMissedTaskJob(io) {
           WHERE id = $1
         `, [task.id]);
 
-        console.log(task);
         console.log(`🚨 Task ${task.id} for patient ${task.patient_id} marked as missed`);
 
         if (task.assigned_staff_id) {
-          // Check if the patient is still active
-          const patientStatusResult = await pool.query(
+          const { rows: [statusRow] } = await pool.query(
             `SELECT status FROM patients WHERE id = $1`,
             [task.patient_id]
           );
-        
-          const isAdmitted = patientStatusResult.rows[0]?.status === 'Admitted';
-        
-          if (isAdmitted) {
-            // Emit real-time notification
+
+          if (statusRow?.status === 'Admitted') {
             io.to(`user-${task.assigned_staff_id}`).emit('notification', {
               title: 'Task Missed',
               message: `A task for patient ${task.patient_name} was auto-marked as missed. Please review and add a reason.`,
             });
-        
-            // Save notification in DB
+
             await pool.query(`
               INSERT INTO notifications (user_id, title, message)
               VALUES ($1, $2, $3)

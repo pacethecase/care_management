@@ -19,6 +19,7 @@ export interface Patient {
     guardianship_court_datetime?: string;
     ltc_court_datetime?: string;
     created_at?: string; 
+    task_status?: string;
 
     is_behavioral: boolean;
     is_restrained: boolean;
@@ -63,6 +64,7 @@ export interface Note {
   export interface Task {
     task_id: number;
     task_name: string;
+    is_overridable?:boolean;
     description: string;
     algorithm: string;
     due_date: string;
@@ -81,6 +83,7 @@ export interface Note {
     task_note?:string
     contact_info?: string;
     include_note_in_report?: boolean;
+    is_court_date?:boolean;
   }
   export interface Notification {
     id:  number;

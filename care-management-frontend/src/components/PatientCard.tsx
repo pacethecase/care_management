@@ -46,6 +46,24 @@ const PatientCard: React.FC<PatientCardProps> = ({
     (today.getMonth() === birthDate.getMonth() && today.getDate() >= birthDate.getDate());
   if (!isBirthdayPassed) age--;
 
+  // Determine button color based on task_status
+let taskButtonColor = "";
+
+switch (patient.task_status) {
+  case "missed":
+    taskButtonColor = "bg-red-600 hover:bg-red-700";
+    break;
+  case "in_progress":
+    taskButtonColor = "bg-blue-500 hover:bg-blue-600";
+    break;
+  case "completed":
+    taskButtonColor = "bg-green-600 hover:bg-green-700";
+    break;
+  default:
+    taskButtonColor = "bg-gray-400 hover:bg-gray-500";
+}
+
+
   const algorithms = [
     patient.is_behavioral && "Behavioral",
     patient.is_ltc && "Long-Term Care",
@@ -156,13 +174,15 @@ const PatientCard: React.FC<PatientCardProps> = ({
       {/* CTA */}
       {!showDischargeInfo && (
         <div className="mt-4 flex justify-center">
-          <Link
-            to={`/patients/${patient.id}/tasks`}
-            state={{ from: currentPath }}
-            className="btn px-6 py-2 text-white bg-[var(--warm-orange)] hover:bg-orange-600 rounded-md font-semibold shadow-md transition-all duration-300"
-          >
-            View Tasks
-          </Link>
+        <Link
+          to={`/patients/${patient.id}/tasks`}
+          state={{ from: currentPath }}
+          className={`btn1 px-6 py-2 text-white ${taskButtonColor} rounded-md font-semibold shadow-md transition-all duration-300`}
+
+        >
+          View Tasks
+        </Link>
+
         </div>
       )}
     </div>

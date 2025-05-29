@@ -65,6 +65,20 @@ a:hover {
     color: white;
   }
 
+  .btn1:hover {
+    color: white;
+  }
+
+    .btn1 {
+    color: white;
+    padding: 0.6rem 1.2rem;
+    border-radius: 8px;
+    font-weight: 500;
+    font-size: 1rem;
+    border: none;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+  }
   .btn-outline {
     background-color: transparent;
     color: var(--prussian-blue);

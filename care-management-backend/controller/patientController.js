@@ -11,8 +11,23 @@ const getPatients = async (req, res) => {
     const result = await pool.query(`
       SELECT 
         p.*,
-        json_agg(json_build_object('id', u.id, 'name', u.name)) FILTER (WHERE u.id IS NOT NULL) AS assigned_staff
-      FROM patients p
+        json_agg(json_build_object('id', u.id, 'name', u.name)) FILTER (WHERE u.id IS NOT NULL) AS assigned_staff,
+       CASE
+  WHEN EXISTS (
+      SELECT 1 FROM patient_tasks pt
+      WHERE pt.patient_id = p.id AND pt.status = 'Missed' AND pt.is_visible = true
+    ) THEN 'missed'
+    WHEN EXISTS (
+      SELECT 1 FROM patient_tasks pt
+      WHERE pt.patient_id = p.id
+        AND pt.ideal_due_date::date = CURRENT_DATE
+        AND pt.status != 'Completed'
+        AND pt.is_visible = true
+    ) THEN 'in_progress'
+    ELSE 'completed'
+  END AS task_status
+
+        FROM patients p
       LEFT JOIN patient_staff ps ON p.id = ps.patient_id
       LEFT JOIN users u ON ps.staff_id = u.id
       ${isStaff ? `WHERE ps.staff_id = $1 AND p.status != 'Discharged'` : `WHERE p.status != 'Discharged'`}
@@ -26,6 +41,7 @@ const getPatients = async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 };
+
 
 
 // Add Patient
@@ -100,7 +116,13 @@ const addPatient = async (req, res) => {
       );
     }
     const timezone = req.headers['x-timezone'] || 'America/New_York';
-    await assignTasksToPatient(newPatient.id, timezone);
+   const selectedAlgorithms = [];
+if (is_behavioral) selectedAlgorithms.push("Behavioral");
+if (is_guardianship) selectedAlgorithms.push("Guardianship");
+if (is_ltc) selectedAlgorithms.push("LTC");
+
+await assignTasksToPatient(newPatient.id, timezone, selectedAlgorithms);
+
     if (assignedStaffIds.length > 0) {
       const io = req.app.get("io");
     
@@ -196,6 +218,8 @@ const getPatientTasks = async (req, res) => {
     t.is_repeating,
     t.due_in_days_after_dependency,
     t.is_non_blocking,
+      t.is_overridable,
+  t.is_court_date,
     t.algorithm,
     pt.ideal_due_date,
     pt.task_note,
