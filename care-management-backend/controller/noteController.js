@@ -4,12 +4,24 @@ const pool = require("../models/db");
 const getPatientNotes = async (req, res) => {
   try {
     const { patientId } = req.params;
+    const { hospital_id } = req.user;
+
+    // Make sure patient belongs to the same hospital
+    const patientCheck = await pool.query(
+      `SELECT 1 FROM patients WHERE id = $1 AND hospital_id = $2`,
+      [patientId, hospital_id]
+    );
+
+    if (patientCheck.rowCount === 0) {
+      return res.status(403).json({ error: "Unauthorized access to patient notes" });
+    }
+
     const notesResult = await pool.query(
       `SELECT n.*, u.name AS nurse_name 
        FROM notes n 
        LEFT JOIN users u ON n.staff_id = u.id 
-       WHERE patient_id = $1 
-       ORDER BY created_at DESC`,
+       WHERE n.patient_id = $1 
+       ORDER BY n.created_at DESC`,
       [patientId]
     );
 
@@ -20,14 +32,26 @@ const getPatientNotes = async (req, res) => {
   }
 };
 
+
 // ✅ Add Note
 const addPatientNote = async (req, res) => {
   try {
     const { patientId } = req.params;
     const { staff_id, note_text } = req.body;
+    const { hospital_id } = req.user;
 
     if (!note_text.trim()) {
       return res.status(400).json({ error: "Note cannot be empty" });
+    }
+
+    // Check hospital match
+    const patientCheck = await pool.query(
+      `SELECT 1 FROM patients WHERE id = $1 AND hospital_id = $2`,
+      [patientId, hospital_id]
+    );
+
+    if (patientCheck.rowCount === 0) {
+      return res.status(403).json({ error: "Unauthorized access to patient" });
     }
 
     const newNote = await pool.query(
@@ -43,14 +67,29 @@ const addPatientNote = async (req, res) => {
   }
 };
 
+
 // ✅ Edit Note (Optional)
 const updatePatientNote = async (req, res) => {
   try {
     const { noteId } = req.params;
     const { note_text } = req.body;
+    const { hospital_id } = req.user;
 
     if (!note_text.trim()) {
       return res.status(400).json({ error: "Note cannot be empty" });
+    }
+
+    // Ensure note belongs to a patient in the same hospital
+    const noteCheck = await pool.query(
+      `SELECT 1
+       FROM notes n
+       JOIN patients p ON n.patient_id = p.id
+       WHERE n.id = $1 AND p.hospital_id = $2`,
+      [noteId, hospital_id]
+    );
+
+    if (noteCheck.rowCount === 0) {
+      return res.status(403).json({ error: "Unauthorized to edit this note" });
     }
 
     const updatedNote = await pool.query(
@@ -59,10 +98,6 @@ const updatePatientNote = async (req, res) => {
        WHERE id = $2 RETURNING *`,
       [note_text, noteId]
     );
-
-    if (updatedNote.rows.length === 0) {
-      return res.status(404).json({ error: "Note not found" });
-    }
 
     res.status(200).json(updatedNote.rows[0]);
   } catch (err) {

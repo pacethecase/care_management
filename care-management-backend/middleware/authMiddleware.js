@@ -1,23 +1,27 @@
-// middleware/authMiddleware.js
 const jwt = require('jsonwebtoken');
 const JWT_SECRET = process.env.JWT_SECRET;
 
 // ✅ Token Verification Middleware
 const verifyToken = (req, res, next) => {
-    const token = req.cookies.token; // ✅ from cookie
-  
-    if (!token) return res.status(401).json({ error: "Access denied. No token." });
-  
-    try {
-      const decoded = jwt.verify(token, JWT_SECRET);
-      req.user = decoded;
-      next();
-    } catch (err) {
-      console.error("JWT verification failed:", err);
-      res.status(401).json({ error: "Invalid token." });
+  const token = req.cookies.token;
+
+  if (!token) return res.status(401).json({ error: "Access denied. No token." });
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+
+    // ✅ Ensure hospital_id is present
+    if (!decoded.hospital_id) {
+      return res.status(403).json({ error: "Token missing hospital context." });
     }
-  };
-  
+
+    req.user = decoded;
+    next();
+  } catch (err) {
+    console.error("JWT verification failed:", err);
+    res.status(401).json({ error: "Invalid token." });
+  }
+};
 
 // 🔒 Role-Based Guards
 const requireAdmin = (req, res, next) => {

@@ -1,7 +1,8 @@
 const pool = require('../models/db');
 
+
 const getPatientCountsByAlgorithm = async (req, res) => {
-  const { is_admin, id: staffId } = req.user;
+  const { is_admin, id: staffId, hospital_id } = req.user;
 
   try {
     let query;
@@ -9,34 +10,41 @@ const getPatientCountsByAlgorithm = async (req, res) => {
 
     if (is_admin) {
       query = `
-        SELECT 'Behavioral' AS algorithm, COUNT(*) AS count FROM patients WHERE is_behavioral = true AND status != 'Discharged'
+        SELECT 'Behavioral' AS algorithm, COUNT(*) AS count 
+        FROM patients 
+        WHERE is_behavioral = true AND status != 'Discharged' AND hospital_id = $1
         UNION ALL
-        SELECT 'Guardianship' AS algorithm, COUNT(*) AS count FROM patients WHERE is_guardianship = true AND status != 'Discharged'
+        SELECT 'Guardianship' AS algorithm, COUNT(*) AS count 
+        FROM patients 
+        WHERE is_guardianship = true AND status != 'Discharged' AND hospital_id = $1
         UNION ALL
-        SELECT 'LTC' AS algorithm, COUNT(*) AS count FROM patients WHERE is_ltc = true AND status != 'Discharged'
+        SELECT 'LTC' AS algorithm, COUNT(*) AS count 
+        FROM patients 
+        WHERE is_ltc = true AND status != 'Discharged' AND hospital_id = $1
       `;
+      params = [hospital_id];
     } else {
       query = `
         SELECT 'Behavioral' AS algorithm, COUNT(*) AS count
         FROM patients p
         JOIN patient_staff ps ON p.id = ps.patient_id
-        WHERE p.is_behavioral = true AND p.status != 'Discharged' AND ps.staff_id = $1
+        WHERE p.is_behavioral = true AND p.status != 'Discharged' AND ps.staff_id = $1 AND p.hospital_id = $2
 
         UNION ALL
 
         SELECT 'Guardianship' AS algorithm, COUNT(*) AS count
         FROM patients p
         JOIN patient_staff ps ON p.id = ps.patient_id
-        WHERE p.is_guardianship = true AND p.status != 'Discharged' AND ps.staff_id = $1
+        WHERE p.is_guardianship = true AND p.status != 'Discharged' AND ps.staff_id = $1 AND p.hospital_id = $2
 
         UNION ALL
 
         SELECT 'LTC' AS algorithm, COUNT(*) AS count
         FROM patients p
         JOIN patient_staff ps ON p.id = ps.patient_id
-        WHERE p.is_ltc = true AND p.status != 'Discharged' AND ps.staff_id = $1
+        WHERE p.is_ltc = true AND p.status != 'Discharged' AND ps.staff_id = $1 AND p.hospital_id = $2
       `;
-      params = [staffId];
+      params = [staffId, hospital_id];
     }
 
     const result = await pool.query(query, params);
@@ -49,7 +57,7 @@ const getPatientCountsByAlgorithm = async (req, res) => {
 
 const getPatientsByAlgorithm = async (req, res) => {
   const { algorithm } = req.params;
-  const { is_admin, id: staffId } = req.user;
+  const { is_admin, id: staffId, hospital_id } = req.user;
 
   const mapping = {
     Behavioral: 'is_behavioral',
@@ -70,16 +78,17 @@ const getPatientsByAlgorithm = async (req, res) => {
       query = `
         SELECT id, first_name, last_name, birth_date, bed_id, created_at
         FROM patients
-        WHERE ${column} = true AND status != 'Discharged'
+        WHERE ${column} = true AND status != 'Discharged' AND hospital_id = $1
       `;
+      params = [hospital_id];
     } else {
       query = `
         SELECT p.id, p.first_name , p.last_name , p.birth_date, p.bed_id, p.created_at
         FROM patients p
         JOIN patient_staff ps ON p.id = ps.patient_id
-        WHERE ${column} = true AND p.status != 'Discharged' AND ps.staff_id = $1
+        WHERE ${column} = true AND p.status != 'Discharged' AND ps.staff_id = $1 AND p.hospital_id = $2
       `;
-      params = [staffId];
+      params = [staffId, hospital_id];
     }
 
     const result = await pool.query(query, params);
@@ -89,6 +98,7 @@ const getPatientsByAlgorithm = async (req, res) => {
     res.status(500).json({ error: 'Internal Server Error' });
   }
 };
+
 
 module.exports = {
   getPatientCountsByAlgorithm,

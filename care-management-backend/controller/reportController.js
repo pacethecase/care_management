@@ -8,6 +8,7 @@ dayjs.extend(isoWeek);
 // Daily Report Controller
 const getDailyReport = async (req, res) => {
   const { date } = req.query;
+  const {hospital_id} = req.user;
 
   if (!date) {
     return res.status(400).json({ error: "Date parameter is required" });
@@ -41,9 +42,10 @@ const getDailyReport = async (req, res) => {
         AND pt.due_date::date < $1::date
         AND p.status != 'Discharged'
         AND pt.is_visible = TRUE
+         AND p.hospital_id = $2
       GROUP BY p.id, pt.id, t.id, u_added.name
       ORDER BY pt.due_date ASC
-    `, [date]);
+    `, [date, hospital_id]);
 
     if (result.rows.length === 0) {
       return res.json({ message: "No tasks for the selected date." });
@@ -68,6 +70,8 @@ const getDailyReport = async (req, res) => {
 
 const getPriorityReport = async (req, res) => {
   const { date } = req.query;
+   const {hospital_id} = req.user;
+
 
   if (!date) {
     return res.status(400).json({ error: "Date parameter is required" });
@@ -94,6 +98,7 @@ const getPriorityReport = async (req, res) => {
         AND pt.status IN ('Pending', 'In Progress', 'Missed')
         AND p.status != 'Discharged'
         AND pt.is_visible = TRUE
+          AND p.hospital_id = $2
       GROUP BY p.id, pt.id, t.id, u_added.name
       ORDER BY 
         CASE pt.status
@@ -102,7 +107,7 @@ const getPriorityReport = async (req, res) => {
           WHEN 'In Progress' THEN 3
           ELSE 4
         END;
-    `, [date]);
+    `, [date,hospital_id]);
 
     if (result.rows.length === 0) {
       return res.json({ message: "No tasks due for the selected date." });
@@ -125,7 +130,7 @@ const getPriorityReport = async (req, res) => {
 
 const getTransitionalCareReport = async (req, res) => {
   const patientId = req.params.id;
-
+const { hospital_id } = req.user;
   try {
     // Get patient info
     const patientQuery = await pool.query(`
@@ -142,8 +147,8 @@ const getTransitionalCareReport = async (req, res) => {
           ELSE 'N/A'
         END AS algorithm
       FROM patients
-      WHERE id = $1
-    `, [patientId]);
+      WHERE id = $1 AND hospital_id = $2
+    `, [patientId,hospital_id]);
 
     if (patientQuery.rowCount === 0) {
       return res.status(404).json({ error: 'Patient not found' });
@@ -206,12 +211,11 @@ const getTransitionalCareReport = async (req, res) => {
 
 const getHistoricalTimelineReport = async (req, res) => {
   const patientId = req.params.id;
-
+const { hospital_id } = req.user;
   try {
     const patientQuery = await pool.query(
-      `SELECT id, first_name, last_name, birth_date, admitted_date, mrn FROM patients WHERE id = $1`,
-      [patientId]
-    );
+      `SELECT id, first_name, last_name, birth_date, admitted_date, mrn FROM patients WHERE id = $1 AND hospital_id = $2
+    `, [patientId,hospital_id]);
 
     if (patientQuery.rowCount === 0) {
       return res.status(404).json({ error: "Patient not found" });
@@ -271,13 +275,13 @@ const getHistoricalTimelineReport = async (req, res) => {
   }
 };
 
-module.exports = getHistoricalTimelineReport;
+
 
 
   const getProjectedTimelineReport = async (req, res) => {
     try {
       const patientId = req.params.id;
-  
+  const { hospital_id } = req.user;
       // Fetch all relevant tasks
       const result = await pool.query(`
         SELECT 
@@ -297,10 +301,10 @@ module.exports = getHistoricalTimelineReport;
         FROM patient_tasks pt
         JOIN tasks t ON pt.task_id = t.id
         JOIN patients p ON pt.patient_id = p.id
-        WHERE pt.patient_id = $1
+        WHERE pt.patient_id = $1 AND p.hospital_id = $2
           AND t.algorithm IN ('Guardianship', 'LTC')
         ORDER BY pt.completed_at NULLS LAST, pt.due_date
-      `, [patientId]);
+      `, [patientId,hospital_id]);
       
       const tasks = result.rows;
       if (tasks.length === 0) return res.json({ projected: {}, actual: {}, grouped: {} });

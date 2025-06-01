@@ -39,7 +39,17 @@ const createTables = async () => {
   try {
     await pool.query(`CREATE EXTENSION IF NOT EXISTS citext;`);
 
+    
     await pool.query(`
+
+        CREATE TABLE hospitals (
+        id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+
+
+      
       CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
         name VARCHAR(100) NOT NULL,
@@ -50,7 +60,9 @@ const createTables = async () => {
         is_verified BOOLEAN DEFAULT FALSE,
         reset_token TEXT,
         reset_token_expires TIMESTAMP  WITH TIME ZONE,
-        created_at TIMESTAMP  WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        created_at TIMESTAMP  WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        hospital_id INTEGER NOT NULL REFERENCES hospitals(id),
+
       );
 
   CREATE TABLE IF NOT EXISTS patients (
@@ -85,7 +97,9 @@ const createTables = async () => {
           ltc_court_datetime TIMESTAMP WITH TIME ZONE DEFAULT NULL,
           created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
           added_by_user_id INTEGER REFERENCES users(id),
-        selected_algorithms TEXT[] DEFAULT '{}'
+        selected_algorithms TEXT[] DEFAULT '{}',
+        hospital_id INTEGER NOT NULL REFERENCES hospitals(id),
+
 
       );
 
@@ -155,8 +169,7 @@ const createTables = async () => {
           read BOOLEAN DEFAULT FALSE
         );
 
-
-
+    
     `);
 
     console.log('Tables created successfully');

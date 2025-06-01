@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState,useEffect } from "react";
 import Footer from "../components/Footer";
 import Navbar from "../components/Navbar";
 import { User, Lock, Mail, UserCog, Stethoscope } from "lucide-react";
@@ -7,25 +7,40 @@ import { signupUser, clearUser } from "../redux/slices/userSlice";
 import { toast } from "react-toastify";
 import { useNavigate } from "react-router-dom";
 import type { AppDispatch } from '../redux/store';
+import { loadHospitals } from "../redux/slices/hospitalSlice";
+import type { Hospital } from "../redux/types";
+
 import { RootState } from "../redux/store";
 const SignUp = () => {
   const dispatch = useDispatch<AppDispatch>();
   const navigate = useNavigate();
   const { loading, error } = useSelector((state: RootState) => state.user);
+  const { hospitals } = useSelector((state: RootState) => state.hospitals);
+
+  useEffect(() => {
+  dispatch(loadHospitals());
+}, []);
 
   const [formData, setFormData] = useState({
     name: "",
     email: "",
     password: "",
+    hospital_id: "",
     isStaff: false,
     isAdmin: false,
   });
+
+  
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
+  const handleSelectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+  const { name, value } = e.target;
+  setFormData((prev) => ({ ...prev, [name]: value }));
+};
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -93,6 +108,23 @@ const SignUp = () => {
                 />
               </div>
             </div>
+            <div>
+                <label className="block mb-1 font-medium">Select Hospital</label>
+                <select
+                  name="hospital_id"
+                  value={formData.hospital_id}
+                  onChange={handleSelectChange}
+                  className="bg-white text-black border rounded py-2 px-3 w-full"
+                  required
+                >
+                  <option value="">-- Select Hospital --</option>
+                  {hospitals.map((h: Hospital) => (
+                    <option key={h.id} value={h.id}>
+                      {h.name}
+                    </option>
+                  ))}
+                </select>
+                </div>
 
             <div>
               <label className="block mb-1 font-medium">Select Role</label>

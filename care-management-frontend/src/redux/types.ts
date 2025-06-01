@@ -101,6 +101,12 @@ export interface AlgorithmPatientCount {
     count: number;
   }
   
+  // types.ts or wherever you define types
+export interface Hospital {
+  id: number;
+  name: string;
+}
+
 export interface PatientTask {
     id: number;
     patient_id: number;

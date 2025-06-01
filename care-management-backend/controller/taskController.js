@@ -15,13 +15,27 @@ const startTask = async (req, res) => {
   try {
     const { taskId } = req.params;
     const staffId = req.user.id;
+    const hospitalId = req.user.hospital_id;
 
-    const taskRes = await pool.query(`SELECT * FROM patient_tasks WHERE id = $1`, [taskId]);
-    if (taskRes.rows.length === 0) return res.status(404).json({ error: "Task not found" });
+    // ✅ Step 1: Check if the task belongs to this hospital
+    const authCheck = await pool.query(`
+      SELECT pt.*, p.hospital_id
+      FROM patient_tasks pt
+      JOIN patients p ON pt.patient_id = p.id
+      WHERE pt.id = $1
+    `, [taskId]);
 
-    const task = taskRes.rows[0];
+    if (authCheck.rows.length === 0) {
+      return res.status(404).json({ error: "Task not found" });
+    }
 
-    // 🔒 Check if missed reason is missing
+    const task = authCheck.rows[0];
+
+    if (task.hospital_id !== hospitalId) {
+      return res.status(403).json({ error: "Unauthorized: Task not in your hospital" });
+    }
+
+    // 🔒 Step 2: Check if task is missed without a reason
     if (task.status === 'Missed') {
       const historyCheck = await pool.query(`
         SELECT jsonb_array_elements(status_history) AS entry FROM patient_tasks WHERE id = $1
@@ -37,6 +51,7 @@ const startTask = async (req, res) => {
       }
     }
 
+    // ✅ Step 3: Start task
     await pool.query(`
       UPDATE patient_tasks 
       SET status = 'In Progress', started_at = NOW()
@@ -57,6 +72,7 @@ const startTask = async (req, res) => {
   }
 };
 
+
 // ✅ Complete Task (handle repeat + dependency)
 const completeTask = async (req, res) => {
   try {
@@ -68,13 +84,26 @@ const completeTask = async (req, res) => {
     console.log("Completing task with ID:", taskId);
 
     // Step 1: Fetch task from patient_tasks
-    const taskRes = await pool.query(`SELECT * FROM patient_tasks WHERE id = $1`, [taskId]);
+const hospitalId = req.user.hospital_id;
+
+const taskRes = await pool.query(`
+  SELECT pt.*, p.hospital_id 
+  FROM patient_tasks pt
+  JOIN patients p ON pt.patient_id = p.id
+  WHERE pt.id = $1
+`, [taskId]);
+
     if (taskRes.rows.length === 0) {
       console.log("❌ Task not found");
       return res.status(404).json({ error: "Task not found" });
     }
 
     const task = taskRes.rows[0];
+
+    if (task.hospital_id !== hospitalId) {
+      return res.status(403).json({ error: "Unauthorized: Task does not belong to your hospital." });
+    }
+
     const completedAt = new Date(); 
 
 
@@ -345,10 +374,22 @@ const markTaskAsMissed = async (req, res) => {
     const { missed_reason } = req.body;
     const staffId = req.user.id;
 
-    const taskRes = await pool.query(`SELECT * FROM patient_tasks WHERE id = $1`, [taskId]);
-    if (taskRes.rows.length === 0) return res.status(404).json({ error: "Task not found" });
+ const hospitalId = req.user.hospital_id;
 
-    const task = taskRes.rows[0];
+const taskRes = await pool.query(`
+  SELECT pt.*, p.hospital_id 
+  FROM patient_tasks pt
+  JOIN patients p ON pt.patient_id = p.id
+  WHERE pt.id = $1
+`, [taskId]);
+
+if (taskRes.rows.length === 0) return res.status(404).json({ error: "Task not found" });
+
+const task = taskRes.rows[0];
+if (task.hospital_id !== hospitalId) {
+  return res.status(403).json({ error: "Unauthorized: Task does not belong to your hospital." });
+}
+
     if (task.status === "Completed") {
       return res.status(400).json({ error: "Only pending/in-progress tasks can be missed" });
     }
@@ -376,23 +417,27 @@ const markTaskAsMissed = async (req, res) => {
 // 🚨 Get Priority Tasks (due today/tomorrow)
 const getPriorityTasks = async (req, res) => {
   try {
-    const staffId = req.user.id;
-    const { patientId } = req.query; // Get the patientId from the query
+     const { id: staffId, hospital_id } = req.user;
+    const { patientId } = req.query;
 
     let query = `
-      SELECT pt.id AS task_id, pt.due_date, pt.status, p.last_name || ', ' || p.first_name AS patient_name, t.name AS task_name, pt.patient_id, t.is_repeating, t.due_in_days_after_dependency, t.is_non_blocking
+      SELECT pt.id AS task_id, pt.due_date, pt.status,
+             p.last_name || ', ' || p.first_name AS patient_name,
+             t.name AS task_name, pt.patient_id, t.is_repeating,
+             t.due_in_days_after_dependency, t.is_non_blocking
       FROM patient_tasks pt
       JOIN tasks t ON pt.task_id = t.id
-      JOIN patients p ON pt.patient_id = p.id
-     JOIN patient_staff ps ON ps.patient_id = p.id
-        WHERE ps.staff_id = $1
+      JOIN patients p ON pt.patient_id = p.id AND p.hospital_id = $2
+      JOIN patient_staff ps ON ps.patient_id = p.id
+      WHERE ps.staff_id = $1
         AND pt.status IN ('Pending', 'In Progress', 'Missed')
         AND pt.due_date <= CURRENT_DATE + INTERVAL '2 day'
         AND p.status != 'Discharged'
-         AND pt.is_visible = TRUE
+        AND pt.is_visible = TRUE
     `;
-   
-    const queryParams = [staffId];
+
+    const queryParams = [staffId, hospital_id];
+
 
     if (patientId) {
       query += ` AND pt.patient_id = $2`;  // Add the patient filter if patientId is provided
@@ -412,18 +457,18 @@ const getPriorityTasks = async (req, res) => {
 // 🕒 Get Missed Tasks Without Reasons
 const getMissedTasks = async (req, res) => {
   try {
-    const staffId = req.user.id;
-    const { patientId } = req.query; // Get the patientId from the query
+    const { id: staffId, hospital_id } = req.user;
+    const { patientId } = req.query;
 
     let query = `
-      SELECT pt.id AS task_id, pt.due_date, p.last_name || ', ' || p.first_name AS patient_name
-, t.name AS task_name
+      SELECT pt.id AS task_id, pt.due_date,
+             p.last_name || ', ' || p.first_name AS patient_name,
+             t.name AS task_name
       FROM patient_tasks pt
       JOIN tasks t ON pt.task_id = t.id
-      JOIN patients p ON pt.patient_id = p.id
-     JOIN patient_staff ps ON ps.patient_id = p.id
+      JOIN patients p ON pt.patient_id = p.id AND p.hospital_id = $2
+      JOIN patient_staff ps ON ps.patient_id = p.id
       WHERE ps.staff_id = $1
-
         AND pt.status = 'Missed'
         AND p.status != 'Discharged'
         AND pt.is_visible = TRUE
@@ -432,10 +477,11 @@ const getMissedTasks = async (req, res) => {
           WHERE elem->>'status' = 'Missed' AND elem ? 'reason'
         )
     `;
-    const queryParams = [staffId];
+
+    const queryParams = [staffId, hospital_id];
 
     if (patientId) {
-      query += ` AND pt.patient_id = $2`; // Add the patient filter if patientId is provided
+      query += ` AND pt.patient_id = $3`;
       queryParams.push(patientId);
     }
 
@@ -452,16 +498,25 @@ const getMissedTasks = async (req, res) => {
 const followUpCourtTask = async (req, res) => {
   try {
     const { taskId } = req.params;
-    const { followUpReason } = req.body; // Get follow-up reason from the request body
+    const { followUpReason } = req.body;
+    const { id: staffId, hospital_id } = req.user;
     const timezone = req.headers['x-timezone'] || 'America/New_York';
-    // Check if the reason was provided
+
     if (!followUpReason || followUpReason.trim() === "") {
       return res.status(400).json({ error: "Follow-up reason is required." });
     }
 
-    // Step 1: Fetch task from patient_tasks
-    const taskRes = await pool.query(`SELECT * FROM patient_tasks WHERE id = $1`, [taskId]);
-    if (taskRes.rows.length === 0) return res.status(404).json({ error: "Task not found" });
+    // Step 1: Fetch task from patient_tasks with hospital check
+    const taskRes = await pool.query(`
+      SELECT pt.*, p.hospital_id AS patient_hospital_id
+      FROM patient_tasks pt
+      JOIN patients p ON pt.patient_id = p.id
+      WHERE pt.id = $1 AND p.hospital_id = $2
+    `, [taskId, hospital_id]);
+
+    if (taskRes.rows.length === 0) {
+      return res.status(404).json({ error: "Task not found or unauthorized hospital access" });
+    }
 
     const task = taskRes.rows[0];
 
@@ -469,7 +524,6 @@ const followUpCourtTask = async (req, res) => {
     const taskDetailsRes = await pool.query(`SELECT * FROM tasks WHERE id = $1`, [task.task_id]);
     const taskDetails = taskDetailsRes.rows[0];
 
-    // Check if this is a repeatable task with dependency-based recurrence
     const isManualFollowUpTask =
       taskDetails.is_repeating === true &&
       taskDetails.due_in_days_after_dependency !== null;
@@ -481,22 +535,22 @@ const followUpCourtTask = async (req, res) => {
     }
 
     const nowLocal = DateTime.local().setZone(timezone);
-    const nextDueLocal = nowLocal.plus({ days: taskDetails.recurrence_interval }).set({  hour: 23, minute: 59, second: 0, millisecond: 0 });
+    const nextDueLocal = nowLocal.plus({ days: taskDetails.recurrence_interval }).set({
+      hour: 23, minute: 59, second: 0, millisecond: 0
+    });
     const nextDue = nextDueLocal.toUTC().toJSDate();
 
-    await pool.query(
-      `UPDATE patient_tasks
-       SET status = 'Follow Up', due_date = $1
-       WHERE id = $2`,
-      [nextDue, taskId]
-    );
+    await pool.query(`
+      UPDATE patient_tasks
+      SET status = 'Follow Up', due_date = $1
+      WHERE id = $2
+    `, [nextDue, taskId]);
 
-    // Step 4: Append the follow-up reason to the task status history
     await appendStatusHistory(taskId, {
       status: "Follow Up",
       timestamp: nowLocal.toUTC().toJSDate().toISOString(),
-      note: followUpReason, // Use the provided follow-up reason
-      staff_id: req.user.id
+      note: followUpReason,
+      staff_id: staffId
     });
 
     console.log(`🔁 Updated task '${taskDetails.name}' to follow up for ${nextDue.toDateString()}`);
@@ -511,19 +565,24 @@ const followUpCourtTask = async (req, res) => {
 const updateTaskNote = async (req, res) => {
   try {
     const { taskId } = req.params;
-    const {
-      task_note,
-      include_note_in_report,
-      contact_info,
-    } = req.body;
+    const { task_note, include_note_in_report, contact_info } = req.body;
+    const { hospital_id } = req.user;
 
-    const existingRes = await pool.query(`SELECT * FROM patient_tasks WHERE id = $1`, [taskId]);
-    if (existingRes.rows.length === 0) {
-      return res.status(404).json({ error: "Task not found" });
+    // ✅ Fetch task and validate hospital ownership
+    const taskRes = await pool.query(`
+      SELECT pt.*, p.hospital_id
+      FROM patient_tasks pt
+      JOIN patients p ON pt.patient_id = p.id
+      WHERE pt.id = $1 AND p.hospital_id = $2
+    `, [taskId, hospital_id]);
+
+    if (taskRes.rows.length === 0) {
+      return res.status(404).json({ error: "Task not found or unauthorized hospital access" });
     }
 
-    const current = existingRes.rows[0];
+    const current = taskRes.rows[0];
 
+    // ✅ Proceed with update
     const result = await pool.query(
       `UPDATE patient_tasks
        SET task_note = $1::text,
