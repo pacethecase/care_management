@@ -52,13 +52,21 @@ export const fetchPriorityReport = createAsyncThunk<any[], string, { rejectValue
   }
 );
 
-export const fetchTransitionalReport = createAsyncThunk<any, number, { rejectValue: string }>(
+export const fetchTransitionalReport = createAsyncThunk<
+  any, // or a proper `TransitionalReport` type
+  { patientId: number; start_date?: string; end_date?: string },
+  { rejectValue: string }
+>(
   "reports/fetchTransitionalReport",
-  async (patientId, { rejectWithValue }) => {
+  async ({ patientId, start_date, end_date }, { rejectWithValue }) => {
     try {
-      const response = await axios.get(`${BASE_URL}/reports/patients/${patientId}/transitional-report`, {
-        withCredentials: true,
-      });
+      const response = await axios.get(
+        `${BASE_URL}/reports/patients/${patientId}/transitional-report`,
+        {
+          params: { start_date, end_date },
+          withCredentials: true,
+        }
+      );
       return response.data;
     } catch (error: any) {
       return rejectWithValue(error.response?.data || "Failed to fetch transitional report");
@@ -66,18 +74,25 @@ export const fetchTransitionalReport = createAsyncThunk<any, number, { rejectVal
   }
 );
 
-export const fetchHistoricalTimelineReport = createAsyncThunk<any, number, { rejectValue: string }>(
+
+export const fetchHistoricalTimelineReport = createAsyncThunk<
+  any, // or a proper `HistoricalTimelineReport` type
+  { patientId: number; start_date?: string; end_date?: string },
+  { rejectValue: string }
+>(
   "reports/fetchHistoricalTimelineReport",
-  async (patientId, { rejectWithValue }) => {
+  async ({ patientId, start_date, end_date }, { rejectWithValue }) => {
     try {
       const response = await axios.get(
-        `${BASE_URL}/reports/patients/${patientId}/historical-timeline-report`
-        , {
+        `${BASE_URL}/reports/patients/${patientId}/historical-timeline-report`,
+        {
+          params: { start_date, end_date },
           withCredentials: true,
-        });
+        }
+      );
       return response.data;
     } catch (error: any) {
-      return rejectWithValue(error.response?.data || "Failed to fetch timeline report");
+      return rejectWithValue(error.response?.data || "Failed to fetch historical report");
     }
   }
 );

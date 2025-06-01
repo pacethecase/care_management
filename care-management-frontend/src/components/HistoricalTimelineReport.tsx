@@ -6,6 +6,9 @@ interface TaskEntry {
   task_note:string;
   include_note_in_report:boolean;
   contact_info:string;
+    delayed?: boolean;
+  delayed_reason?: string;
+
 }
 
 interface WeeklyTimeline {
@@ -44,24 +47,32 @@ const HistoricalTimelineReport: React.FC<HistoricalTimelineReportProps> = ({ rep
       {timeline.map((weekObj, weekIdx) => (
         <div key={weekIdx} className="mb-6">
           <h3 className="text-lg font-bold mb-3 text-[var(--deep-navy)]">{weekObj.week}</h3>
-          <ul className="list-disc list-inside space-y-1 text-sm">
+         <ul className="list-disc list-inside space-y-1 text-sm">
             {weekObj.tasks.map((task, taskIdx) => (
               <li key={taskIdx}>
                 <strong>{task.task_name}</strong> – {task.completed_at}
+                {task.delayed && (
+                  <span className="ml-2 text-red-600 font-semibold">(Delayed)</span>
+                )}
+                {task.delayed && task.delayed_reason && (
+                  <p className="ml-4 mt-1 text-sm text-red-700 italic">
+                    <strong>Reason:</strong> {task.delayed_reason}
+                  </p>
+                )}
                 {task.include_note_in_report && task.task_note && (
-                <p className="ml-4 mt-1 text-sm  text-[var(--prussian-blue)]">
-                  <strong>Note:</strong> {task.task_note}
-                </p>
+                  <p className="ml-4 mt-1 text-sm text-[var(--prussian-blue)]">
+                    <strong>Note:</strong> {task.task_note}
+                  </p>
                 )}
-                 {task.contact_info && (
-                <p className="ml-4 mt-1 text-sm  text-[var(--prussian-blue)]">
-                  <strong>Contact:</strong> {task.contact_info}
-                </p>
+                {task.contact_info && (
+                  <p className="ml-4 mt-1 text-sm text-[var(--prussian-blue)]">
+                    <strong>Contact:</strong> {task.contact_info}
+                  </p>
                 )}
-
               </li>
             ))}
           </ul>
+
         </div>
       ))}
     </div>

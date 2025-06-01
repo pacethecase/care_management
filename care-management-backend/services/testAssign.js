@@ -4,20 +4,20 @@ const pool = require("../models/db");
 
 const run = async () => {
   try {
-    // Step 1: Insert a mock patient (assuming user with ID 1 is the creator)
+    // Step 1: Insert a mock patient (assuming user with ID 1 is the creator and hospital ID 1)
     const { rows } = await pool.query(`
       INSERT INTO patients (
         first_name, last_name, birth_date, age, bed_id,
         admitted_date, is_behavioral, is_guardianship,
         is_guardianship_financial, is_guardianship_person,
         is_guardianship_emergency, is_ltc, is_ltc_financial, is_ltc_medical,
-        added_by_user_id, selected_algorithms
+        added_by_user_id, selected_algorithms, hospital_id
       ) VALUES (
         'Test', 'Patient1', '1960-01-01', 64, 'B201',
         '2025-04-01', false, true,
         true, true,
         false, true, true, true,
-        1, ARRAY['Guardianship', 'LTC']
+        1, ARRAY['Guardianship', 'LTC'], 1
       ) RETURNING id
     `);
 

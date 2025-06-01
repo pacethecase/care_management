@@ -37,6 +37,8 @@ const ReportPage = () => {
   
   const [selectedPatientId, setSelectedPatientId] = useState<number | null>(null);
 
+  const [startRange, setStartRange] = useState<string>("");
+  const [endRange, setEndRange] = useState<string>(getLocalDateString());
   useEffect(() => {
     dispatch(fetchPatients());
   }, [dispatch]);
@@ -58,16 +60,30 @@ const ReportPage = () => {
         dispatch(fetchPriorityReport(selectedDate));
         break;
       case "transitional":
-        if (selectedPatientId) dispatch(fetchTransitionalReport(selectedPatientId));
+        if (selectedPatientId)  dispatch(
+  fetchTransitionalReport({
+    patientId: selectedPatientId!,
+    start_date: startRange || undefined,
+    end_date: endRange || undefined,
+  })
+);
+
         break;
       case "historical":
-        if (selectedPatientId) dispatch(fetchHistoricalTimelineReport(selectedPatientId));
+        if (selectedPatientId)  dispatch(
+  fetchHistoricalTimelineReport({
+    patientId: selectedPatientId!,
+    start_date: startRange || undefined,
+    end_date: endRange || undefined,
+  })
+);
+
         break;
       case "projected":
         if (selectedPatientId) dispatch(fetchProjectedTimelineReport(selectedPatientId));
         break;
     }
-  }, [selectedReport, selectedDate, selectedPatientId, dispatch]);
+  }, [selectedReport, selectedDate, selectedPatientId,  startRange, endRange, dispatch]);
 
   useEffect(() => {
     if (
@@ -85,11 +101,11 @@ const ReportPage = () => {
 
     if (content && printWindow) {
       const reportTitleMap: Record<ReportType, string> = {
-        daily: "DAILY REPORT",
-        priority: "PRIORITY REPORT",
-        transitional: "TRANSITIONAL CARE REPORT",
-        historical: "HISTORICAL TIMELINE REPORT",
-        projected: "PROJECTED TIMELINE REPORT",
+         daily: "Daily Report – Overdue Tasks",
+        priority: "Priority Report – Tasks Due Today",
+        transitional: "Transitional Care Report",
+        historical: "Historical Timeline Report",
+        projected: "Projected Timeline Report",
       };
 
       const reportTitle = reportTitleMap[selectedReport || "daily"];
@@ -142,26 +158,64 @@ const ReportPage = () => {
             gap: 8px;
             margin-top: 1rem;
             background-color: #fefefe;
-          }
-          .task-box {
-            min-width: 150px;
-            max-width: 200px;
-            padding: 8px 10px;
-            border-radius: 6px;
-            background-color: #f9f9f9;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-            font-size: 11px;
-            word-wrap: break-word;
-          }
+            }
+
           .meta {
             font-size: 11px;
             margin-top: 2px;
           }
-          .arrow {
-            font-size: 18px;
-            color: #888;
-          }
+         
+          
+   
+
+          .print-task-box {
+          display: inline-block;
+          vertical-align: top;
+          break-inside: avoid;
+          page-break-inside: avoid;
+          background-color: #f9f9f9;   
+          min-width: 180px;
+          max-width: 200px;
+          font-size: 14px;
+          font-weight: bold;
+    
         
+        }
+
+
+
+          .print-arrow {
+            font-size: 18px;
+            margin: 0 5px;
+          }
+
+          .print-final-step {
+            background-color: #ede9fe;
+            color: #5b21b6;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-weight: bold;
+          }
+              .print-admitted {
+              background-color: #ebe6e7;
+              color:#000;
+              padding: 6px 12px;
+              border-radius: 6px;
+              font-weight: bold;
+              }
+              .print-Pending,
+                .print-In-Progress {
+                  background-color: #3b82f6  !important;
+                }
+
+                .print-Completed,
+                .print-Delayed-Completed {
+                  background-color: #16a34a  !important;
+                }
+
+          .print-Missed {
+            background-color: #ef4444  !important;
+            }
           .italic { font-style: italic; color: #b91c1c; }
         </style>
       `;
@@ -196,27 +250,61 @@ const ReportPage = () => {
       <div className="container p-6 mx-auto">
         <h1 className="text-3xl font-bold mb-6">Reports</h1>
 
-        <div className="mb-4">
-          <label className="text-lg">Select Date:</label>
-          <input
-            type="date"
-            value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
-            className="border rounded p-2 ml-4"
-          />
-        </div>
+    {selectedReport && ["daily", "priority"].includes(selectedReport) && (
+  <div className="mb-4">
+    <label className="text-lg">Select Date:</label>
+    <input
+      type="date"
+      value={selectedDate}
+      onChange={(e) => setSelectedDate(e.target.value)}
+      className="border rounded p-2 ml-4"
+    />
+  </div>
+)}
 
-        <div className="space-x-4 mb-4 no-print">
-          {(["daily", "priority", "transitional", "historical", "projected"] as ReportType[]).map((type) => (
-            <button
-              key={type}
-              className={`btn ${selectedReport === type ? "btn-primary" : "btn-outline"}`}
-              onClick={() => setSelectedReport(type)}
-            >
-              {type.charAt(0).toUpperCase() + type.slice(1)} Report
-            </button>
-          ))}
-        </div>
+
+       {selectedReport && ["transitional", "historical"].includes(selectedReport) && (
+  <div className="mb-4 space-x-4">
+    <label>From:</label>
+    <input
+      type="date"
+      value={startRange}
+      onChange={(e) => setStartRange(e.target.value)}
+      className="border p-2"
+    />
+    <label>To:</label>
+    <input
+      type="date"
+      value={endRange}
+      onChange={(e) => setEndRange(e.target.value)}
+      className="border p-2"
+    />
+  </div>
+)}
+
+
+     <div className="space-x-4 mb-4 no-print">
+  {(["daily", "priority", "transitional", "historical", "projected"] as ReportType[]).map((type) => {
+    const reportLabels: Record<ReportType, string> = {
+      daily: "Daily Report – Overdue Tasks",
+      priority: "Priority Report – Tasks Due Today",
+      transitional: "Transitional Care Report",
+      historical: "Historical Timeline Report",
+      projected: "Projected Timeline Report",
+    };
+
+    return (
+      <button
+        key={type}
+        className={`btn ${selectedReport === type ? "btn-primary" : "btn-outline"}`}
+        onClick={() => setSelectedReport(type)}
+      >
+        {reportLabels[type]}
+      </button>
+    );
+  })}
+</div>
+
 
         {(selectedReport === "transitional" ||
           selectedReport === "historical" ||

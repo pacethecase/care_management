@@ -70,10 +70,13 @@ const DischargedPatients = () => {
                 patient={patient}
                 user={user}
                 showDischargeInfo={true}
-                onViewReport={(id) => {
-                  setExpandedPatientId(id);
-                  dispatch(fetchHistoricalTimelineReport(id));
-                }}
+               onViewReport={(id) => {
+              if (id && typeof id === "number") {
+                setExpandedPatientId(id);
+                dispatch(fetchHistoricalTimelineReport({ patientId: id }));
+              }
+            }}
+
               />
 
               {expandedPatientId === patient.id && (

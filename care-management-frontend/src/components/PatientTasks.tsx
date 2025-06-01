@@ -348,7 +348,7 @@ const renderTaskCard = (task: Task) => {
       className={`card border p-4 mb-4 rounded-lg text-black ${
         task.is_non_blocking ?"non-blocking":""
       } ${task.status === "Missed" ? "card-missed" : ""}
-        ${task.status === "Completed" ? "card-completed" : ""}
+        ${task.status === "Completed"  || task.status === "Delayed Completed" ? "card-completed" : ""}
       `}
       style={{ borderLeft: `12px solid ${borderColor}` }}
     >
@@ -380,7 +380,7 @@ const renderTaskCard = (task: Task) => {
           </div>
         )}
       
-      {task.is_overridable && task.status !== "Completed" &&(
+      {task.is_overridable && task.status !== "Completed" && task.status !== "Delayed Completed" &&(
   <div className="mb-2">
     <label className="block text-sm font-medium text-gray-700">Override next due date:</label>
     <input

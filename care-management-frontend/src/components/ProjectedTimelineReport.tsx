@@ -1,127 +1,84 @@
 import React from "react";
 
-const labelColors = {
-  "✅ On Time": "#00a63e",   // green
-  "⚠️ Late": "#ffdf20",       // yellow
-  "❌ Missed": "#fb2c36",     // red
-  "⏳ Pending": "#3b82f6",    // blue
+type Task = {
+  task_name: string;
+  status: string;
+  due_date: string;
+  completed_at?: string;
+  missed_reason?: string;
 };
 
-const textColors = {
-  "✅ On Time": "#fff",
-  "⚠️ Late": "#fff",
-  "❌ Missed": "#fff",
-  "⏳ Pending": "#fff",
+type ReportData = {
+  projected: Record<string, string>;
+  actual: Record<string, string>;
+  grouped: Record<string, Task[]>;
 };
-type Task = {
-    task_name: string;
-    label: "✅ On Time" | "⚠️ Late" | "❌ Missed" | "⏳ Pending";
-    due_date: string;
-    completed_at?: string;
-    missed_reason?: string;
-  };
-  
-  type ReportData = {
-    projected: Record<string, string>;
-    actual: Record<string, string>;
-    grouped: Record<string, Task[]>;
-  };
-  
-const ProjectedTimelineReport = ({ data }: { data: ReportData }) => {
+
+const statusColors: Record<string, string> = {
+  "Pending": "var(--primary-blue)",
+  "In Progress": "var(--primary-blue)",
+  "Completed": "var(--primary-green)",
+  "Missed": "var(--primary-red)",
+  "Delayed Completed": "var(--primary-green)",
+};
+
+const ProjectedTimelineReport: React.FC<{ data: ReportData }> = ({ data }) => {
   if (!data || !data.grouped) return <p>No timeline data available.</p>;
 
   const { projected, actual, grouped } = data;
 
   return (
-    <div style={{ fontSize: "13px", lineHeight: "1.4" }}>
+    <div className="text-black text-sm leading-snug print:text-black print:bg-white font-bold">
       {["Guardianship", "LTC"].map((algo) => {
         const tasks = grouped[algo];
         if (!tasks || tasks.length === 0) return null;
 
         return (
-          <div key={algo} style={{ marginBottom: "2.5rem" }}>
-            <h2 style={{ fontSize: "20px", fontWeight: "bold", color: "#FF7F00" }}>{algo} Workflow</h2>
-            <p style={{ marginBottom: "1rem" }}>
+          <div key={algo} className="mb-10">
+            <h2 className="text-xl font-bold text-orange mb-2">{algo} Workflow</h2>
+            <p className="mb-4">
               🟩 <strong>Projected Completion:</strong> {projected[algo]} &nbsp;&nbsp;
               🟦 <strong>New Projected Completion:</strong> {actual[algo] || "Not yet completed"}
             </p>
 
-            <div
-              style={{
-                display: "flex",
-                flexWrap: "wrap",
-                gap: "10px",
-                padding: "10px",
-             
-                background: "#fff"
-              }}
-            >
-              {/* Start box */}
-              <div
-                style={{
-                  background: "#dbeafe",
-                  color: "#1e3a8a",
-                  fontWeight: 600,
-                  padding: "6px 12px",
-                  borderRadius: "5px",
-                  whiteSpace: "nowrap"
-                }}
-              >
+         <div className="flex flex-wrap items-center gap-2 bg-white p-3 rounded shadow-sm timeline-container">
+
+              {/* Start Block */}
+              <div className="px-3 py-2 rounded bg-gray-200 text-black font-bold print-admitted">
                 Patient Admitted
               </div>
 
-              {/* Tasks */}
-              {tasks.map((task, i) => {
-                const bg = labelColors[task.label] || "#f3f4f6";
-                const textColor = textColors[task.label] || "#374151";
+              {tasks.map((task, i) => (
+                <React.Fragment key={i}>
+                  <span className="text-lg font-bold">➡️</span>
 
-                return (
-                  <React.Fragment key={i}>
-                    <span style={{ fontSize: "18px", marginTop: "auto", marginBottom: "auto" }}>➡️</span>
-
-                    <div
-                      style={{
-                        background: bg,
-                        color: textColor,
-                        padding: "10px",
-                        borderRadius: "5px",
-                        minWidth: "170px",
-                        maxWidth: "200px",
-                        boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
-                        fontSize: "12px"
-                      }}
-                      title={task.task_name}
-                    >
-                      <div style={{ fontWeight: 600, fontSize: "13px", marginBottom: "4px", overflowWrap: "break-word" }}>
-                        {task.task_name}
+                  <div
+                  className={`print-task-box print-${task.status.replace(/\s+/g, "-")}`}
+                    style={{
+                      backgroundColor: statusColors[task.status] || "#ccc",
+                      color: "#000",
+                      minWidth: "170px",
+                      maxWidth: "200px",
+                      fontSize: "12px",
+                    }}
+                  >
+                    <div className="font-bold mb-1">{task.task_name}</div>
+                    <div className="font-semibold mb-1">Status: {task.status}</div>
+                    <div className="font-semibold mb-1">Due: {new Date(task.due_date).toLocaleDateString()}</div>
+                    {task.completed_at && (
+                      <div className="font-semibold mb-1">Completed: {new Date(task.completed_at).toLocaleDateString()}</div>
+                    )}
+                    {task.missed_reason && (
+                      <div className="font-semibold mb-1">
+                        Reason: {task.missed_reason}
                       </div>
-                      <div>{task.label}</div>
-                      <div>Due: {new Date(task.due_date).toLocaleDateString()}</div>
-                      {task.completed_at && (
-                        <div>Completed: {new Date(task.completed_at).toLocaleDateString()}</div>
-                      )}
-                      {task.missed_reason && (
-                        <div style={{ color: "#b91c1c", fontStyle: "italic", marginTop: "4px" }}>
-                          Reason: {task.missed_reason}
-                        </div>
-                      )}
-                    </div>
-                  </React.Fragment>
-                );
-              })}
+                    )}
+                  </div>
+                </React.Fragment>
+              ))}
 
-              {/* Final Step */}
-              <span style={{ fontSize: "18px", marginTop: "auto", marginBottom: "auto" }}>➡️</span>
-              <div
-                style={{
-                  background: "#ede9fe",
-                  color: "#5b21b6",
-                  fontWeight: 600,
-                  padding: "6px 12px",
-                  borderRadius: "5px",
-                  whiteSpace: "nowrap"
-                }}
-              >
+              <span className="text-lg font-bold print-arrow">➡️</span>
+              <div className="px-3 py-2 rounded bg-violet-100 text-purple-900 font-bold  print-final-step">
                 Final Step: {actual[algo] || projected[algo]}
               </div>
             </div>
