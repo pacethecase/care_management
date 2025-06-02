@@ -172,13 +172,29 @@ export const updateTaskNoteMeta = createAsyncThunk<
   async ({ taskId, data }, { rejectWithValue }) => {
     try {
       const res = await axios.patch(
-        `${import.meta.env.VITE_API_BASE_URL}/tasks/patient_tasks/${taskId}/note`,
+        `${BASE_URL}/tasks/patient_tasks/${taskId}/note`,
         data,
         { withCredentials: true }
       );
       return res.data.task;
     } catch (err: any) {
       return rejectWithValue(err.response?.data?.error || 'Failed to update task note');
+    }
+  }
+);
+
+export const acknowledgeTask = createAsyncThunk(
+  "tasks/acknowledgeTask",
+  async (taskId: number, { rejectWithValue }) => {
+    try {
+      const res = await axios.patch(
+        `${BASE_URL}/tasks/${taskId}/acknowledge`,
+        {},
+        { withCredentials: true }
+      );
+      return res.data;
+    } catch (err: any) {
+      return rejectWithValue(err.response?.data || "Failed to acknowledge task");
     }
   }
 );
@@ -233,8 +249,27 @@ const taskSlice = createSlice({
       })
       .addCase(updateTaskNoteMeta.rejected, (state, action) => {
         state.error = action.payload as string;
-      });
-      
+      })
+      .addCase(acknowledgeTask.fulfilled, (state, action) => {
+  const updatedTask = action.payload.task || action.payload;
+
+  const index = state.patientTasks.findIndex(
+    (t) => t.task_id === updatedTask.task_id
+  );
+
+  if (index !== -1) {
+    state.patientTasks[index] = {
+      ...state.patientTasks[index],
+      ...updatedTask,
+    };
+  }
+})
+.addCase(acknowledgeTask.rejected, (state, action) => {
+  state.taskError = typeof action.payload === "string"
+    ? action.payload
+    : "Failed to acknowledge task";
+});
+
   },
 });
 

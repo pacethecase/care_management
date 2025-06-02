@@ -8,7 +8,8 @@ const {
   getMissedTasks,
   getPriorityTasks,
   followUpCourtTask,
-  updateTaskNote
+  updateTaskNote,
+  acknowledgeTask,
 } = require("../controller/taskController");
 const { verifyToken } = require("../middleware/authMiddleware");
 
@@ -24,5 +25,8 @@ router.get("/priority", verifyToken, getPriorityTasks);
 
 router.get("/missed", verifyToken, getMissedTasks);
 router.post("/:taskId/follow-up",verifyToken, followUpCourtTask);
-router.patch('/patient_tasks/:taskId/note', verifyToken, updateTaskNote);
+router.patch("/patient_tasks/:taskId/note", verifyToken, updateTaskNote);
+router.patch("/:id/acknowledge", verifyToken, acknowledgeTask);
+
+
 module.exports = router;

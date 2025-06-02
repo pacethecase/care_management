@@ -242,6 +242,7 @@ const getPatientTasks = async (req, res) => {
         pt.due_date,
         pt.completed_at,
         pt.started_at,
+
         t.condition_required,
         t.is_repeating,
         t.due_in_days_after_dependency,
@@ -254,7 +255,11 @@ const getPatientTasks = async (req, res) => {
         pt.include_note_in_report,
         pt.contact_info,
         u1.name AS completed_by,
-        u2.name AS started_by
+        u2.name AS started_by,
+        u3.name AS acknowledged_by,
+        acknowledged_history.timestamp AS acknowledged_at
+
+
       FROM patient_tasks pt
       JOIN tasks t ON pt.task_id = t.id
 
@@ -262,7 +267,7 @@ const getPatientTasks = async (req, res) => {
       LEFT JOIN LATERAL (
         SELECT (elem.value ->> 'staff_id')::INTEGER AS staff_id
         FROM jsonb_array_elements(pt.status_history) AS elem
-        WHERE elem.value ->> 'status' = 'Completed'
+        WHERE elem.value ->> 'status' IN ('Completed', 'Delayed Completed')
         ORDER BY (elem.value ->> 'timestamp')::timestamp DESC
         LIMIT 1
       ) AS completed_history ON TRUE
@@ -277,6 +282,20 @@ const getPatientTasks = async (req, res) => {
         LIMIT 1
       ) AS started_history ON TRUE
       LEFT JOIN users u2 ON u2.id = started_history.staff_id
+
+
+     -- Last 'Acknowledged'
+      LEFT JOIN LATERAL (
+        SELECT 
+          (elem.value ->> 'staff_id')::INTEGER AS staff_id,
+          (elem.value ->> 'timestamp')::timestamp AS timestamp
+        FROM jsonb_array_elements(pt.status_history) AS elem
+        WHERE elem.value ->> 'status' = 'Acknowledged'
+        ORDER BY (elem.value ->> 'timestamp')::timestamp DESC
+        LIMIT 1
+      ) AS acknowledged_history ON TRUE
+      LEFT JOIN users u3 ON u3.id = acknowledged_history.staff_id
+
 
       JOIN patients p ON pt.patient_id = p.id
       WHERE pt.patient_id = $1 AND p.hospital_id = $2 AND pt.is_visible = TRUE
@@ -623,6 +642,32 @@ const getPatientsByAdmin = async (req, res) => {
 };
 
 
+const updateCourtDate = async (req, res) => {
+  const { id } = req.params;
+  const { type, newDate } = req.body;
+
+  if (!["guardianship", "ltc"].includes(type)) {
+    return res.status(400).json({ error: "Invalid type. Must be 'guardianship' or 'ltc'." });
+  }
+
+  const column = type === "guardianship"
+    ? "guardianship_court_datetime"
+    : "ltc_court_datetime";
+
+  try {
+    await pool.query(
+      `UPDATE patients SET ${column} = $1 WHERE id = $2`,
+      [newDate, id]
+    );
+    res.status(200).json({ message: "Court date updated successfully." });
+  } catch (error) {
+    console.error("❌ Error updating court date:", error);
+    res.status(500).json({ error: "Failed to update court date." });
+  }
+};
+
+
+
 module.exports = {
   getPatients,
   addPatient,
@@ -633,6 +678,7 @@ module.exports = {
   getDischargedPatients,
   updatePatient,
   getSearchedPatients,
-  getPatientsByAdmin
+  getPatientsByAdmin,
+  updateCourtDate
 
 };

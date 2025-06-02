@@ -143,7 +143,7 @@ const createTables = async () => {
           include_note_in_report BOOLEAN DEFAULT false,
           contact_info TEXT,
           override_due_date TIMESTAMP WITH TIME ZONE DEFAULT NULL,
-          is_visible BOOLEAN DEFAULT TRUE
+          is_visible BOOLEAN DEFAULT TRUE,
           );
 
         CREATE TABLE IF NOT EXISTS notes (

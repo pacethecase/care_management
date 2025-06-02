@@ -16,6 +16,7 @@ const socketIo = require('socket.io');
 
 require("dotenv").config();
 const setupMissedTaskJob = require('./controller/missedTaskJob');
+const setupCourtReminderJob = require("./controller/setupCourtReminderJob");
 
 const app = express();
 const server = http.createServer(app);
@@ -59,6 +60,7 @@ app.set('io', io);
 
 // Setup background job (missed task job)
 setupMissedTaskJob(io);
+setupCourtReminderJob(io);
 
 // Socket.IO events handling
 io.on('connection', (socket) => {

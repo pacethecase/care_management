@@ -12,6 +12,7 @@ interface PatientState {
   selectedPatient: Patient | null;
   loading: boolean;
   error: string | null;
+  updateSuccess: boolean;
 }
 
 const initialState: PatientState = {
@@ -21,6 +22,7 @@ const initialState: PatientState = {
   selectedPatient: null,
   loading: false,
   error: null,
+  updateSuccess: false,
 };
 
 export const fetchPatients = createAsyncThunk(
@@ -154,6 +156,35 @@ async (adminId, { rejectWithValue }) => {
 }
 );
 
+export const updateCourtDate = createAsyncThunk(
+  "patients/updateCourtDate",
+  async (
+    {
+      patientId,
+      type,
+      newDate,
+    }: { patientId: number; type: "guardianship" | "ltc"; newDate: string },
+    { rejectWithValue }
+  ) => {
+    try {
+      await axios.patch(
+        `${BASE_URL}/patients/${patientId}/court-date`,
+        {
+          type,
+          newDate,
+        },
+        {
+          withCredentials: true,
+        }
+      );
+
+      return { patientId, type, newDate };
+    } catch (error: any) {
+      return rejectWithValue(error.response?.data?.error || "Update failed");
+    }
+  }
+);
+
 
 const patientsSlice = createSlice({
   name: 'patients',
@@ -247,6 +278,30 @@ const patientsSlice = createSlice({
         state.loading = false;
         state.error = action.payload as string;
       })
+       .addCase(updateCourtDate.pending, (state) => {
+        state.loading = true;
+        state.updateSuccess = false;
+        state.error = null;
+      })
+      .addCase(updateCourtDate.fulfilled, (state, action) => {
+        const { patientId, type, newDate } = action.payload;
+
+        if (state.selectedPatient?.id === patientId) {
+          if (type === "guardianship") {
+            state.selectedPatient.guardianship_court_datetime = newDate;
+          } else {
+            state.selectedPatient.ltc_court_datetime = newDate;
+          }
+        }
+
+        state.loading = false;
+        state.updateSuccess = true;
+      })
+      .addCase(updateCourtDate.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload as string;
+        state.updateSuccess = false;
+      });
       
       
   },

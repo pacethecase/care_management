@@ -605,6 +605,38 @@ const updateTaskNote = async (req, res) => {
   }
 };
 
+const acknowledgeTask = async (req, res) => {
+  const taskId = parseInt(req.params.id, 10); // Ensure it's a number
+  const userId = parseInt(req.user.id, 10);   // Ensure it's a number
+
+  try {
+    const result = await pool.query(
+      `
+      UPDATE patient_tasks
+      SET status = 'Acknowledged',
+          status_history = status_history || jsonb_build_object(
+            'status', 'Acknowledged',
+            'timestamp', NOW(),
+            'staff_id', $1::INT
+          )::jsonb
+      WHERE id = $2::INT
+      RETURNING *
+      `,
+      [userId, taskId]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'Task not found or already acknowledged' });
+    }
+
+    res.json({ message: 'Task acknowledged successfully', task: result.rows[0] });
+  } catch (err) {
+    console.error('❌ Error acknowledging task:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+
 
 module.exports = {
   startTask,
@@ -613,5 +645,7 @@ module.exports = {
   getMissedTasks,
   getPriorityTasks,
   followUpCourtTask,
-  updateTaskNote
+  updateTaskNote,
+  acknowledgeTask,
+
 };

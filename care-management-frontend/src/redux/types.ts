@@ -73,6 +73,8 @@ export interface Note {
     completed_by?: string;
     started_at?:string;
     started_by?:string;
+    acknowledged_by?:string;
+    acknowledged_at?:string;
     missed_reason?: string;
     status: string;
     condition_required?: string;
