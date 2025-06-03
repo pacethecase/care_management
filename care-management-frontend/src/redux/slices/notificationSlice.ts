@@ -96,15 +96,46 @@ const notificationSlice = createSlice({
         state.loading = false;
         state.error = typeof action.payload === 'string' ? action.payload : 'Failed to fetch notifications';
       })
-      .addCase(markAllRead.fulfilled, (state) => {
+    
+      .addCase(markAllRead.pending, (state) => {
+          state.loading = true;
+          state.error = null;
+        })
+          .addCase(markAllRead.fulfilled, (state) => {
+         state.loading = false;
         state.items = state.items.map((n) => ({ ...n, read: true }));
       })
+        .addCase(markAllRead.rejected, (state, action) => {
+          state.loading = false;
+          state.error = action.payload as string;
+        })
+      
+
       .addCase(clearAllNotificationsThunk.fulfilled, (state) => {
         state.items = [];
+        state.loading = false;
       })
+        .addCase(clearAllNotificationsThunk.pending, (state) => {
+          state.loading = true;
+          state.error = null;
+        })
+        .addCase(clearAllNotificationsThunk.rejected, (state, action) => {
+          state.loading = false;
+          state.error = action.payload as string;
+        })
+       
        .addCase(deleteNotificationThunk.fulfilled, (state, action) => {
+        state.loading = false;
         state.items = state.items.filter((n) => n.id !== action.payload);
-      });
+      }) 
+      .addCase(deleteNotificationThunk.pending, (state) => {
+          state.loading = true;
+          state.error = null;
+        })
+        .addCase(deleteNotificationThunk.rejected, (state, action) => {
+          state.loading = false;
+          state.error = action.payload as string;
+        });
   },
 });
 

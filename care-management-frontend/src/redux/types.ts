@@ -62,6 +62,7 @@ export interface Note {
   }
   
   export interface Task {
+    patient_task_id:number;
     task_id: number;
     task_name: string;
     is_overridable?:boolean;

@@ -417,14 +417,22 @@ if (task.hospital_id !== hospitalId) {
 // 🚨 Get Priority Tasks (due today/tomorrow)
 const getPriorityTasks = async (req, res) => {
   try {
-     const { id: staffId, hospital_id } = req.user;
+    const { id: staffId, hospital_id } = req.user;
     const { patientId } = req.query;
 
     let query = `
-      SELECT pt.id AS task_id, pt.due_date, pt.status,
-             p.last_name || ', ' || p.first_name AS patient_name,
-             t.name AS task_name, pt.patient_id, t.is_repeating,
-             t.due_in_days_after_dependency, t.is_non_blocking
+      SELECT 
+        pt.id AS patient_task_id,
+        pt.task_id AS task_id, 
+        pt.due_date, 
+        pt.status,
+        p.last_name || ', ' || p.first_name AS patient_name,
+        t.name AS task_name, 
+        pt.patient_id, 
+        t.is_repeating,
+         t.is_court_date,
+        t.due_in_days_after_dependency, 
+        t.is_non_blocking
       FROM patient_tasks pt
       JOIN tasks t ON pt.task_id = t.id
       JOIN patients p ON pt.patient_id = p.id AND p.hospital_id = $2
@@ -438,9 +446,8 @@ const getPriorityTasks = async (req, res) => {
 
     const queryParams = [staffId, hospital_id];
 
-
     if (patientId) {
-      query += ` AND pt.patient_id = $2`;  // Add the patient filter if patientId is provided
+      query += ` AND pt.patient_id = $3`;
       queryParams.push(patientId);
     }
 
@@ -454,6 +461,7 @@ const getPriorityTasks = async (req, res) => {
   }
 };
 
+
 // 🕒 Get Missed Tasks Without Reasons
 const getMissedTasks = async (req, res) => {
   try {
@@ -461,7 +469,8 @@ const getMissedTasks = async (req, res) => {
     const { patientId } = req.query;
 
     let query = `
-      SELECT pt.id AS task_id, pt.due_date,
+      SELECT   pt.id AS patient_task_id,
+        pt.task_id AS task_id, pt.due_date,
              p.last_name || ', ' || p.first_name AS patient_name,
              t.name AS task_name
       FROM patient_tasks pt

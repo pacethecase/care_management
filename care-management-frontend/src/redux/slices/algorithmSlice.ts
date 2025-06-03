@@ -7,7 +7,9 @@ const BASE_URL = import.meta.env.VITE_API_BASE_URL;
 interface AlgorithmState {
   patientCounts: AlgorithmPatientCount[];
   patientsByAlgorithm: Patient[];
-  loading: boolean;
+  loading:boolean;
+    loadingCounts: boolean;
+  loadingPatients: boolean;
   error: string | null;
 }
 
@@ -15,6 +17,8 @@ const initialState: AlgorithmState = {
   patientCounts: [],
   patientsByAlgorithm: [],
   loading: false,
+   loadingCounts:false,
+    loadingPatients:false,
   error: null,
 };
 
@@ -60,32 +64,41 @@ export const loadPatientsByAlgorithm = createAsyncThunk<
 const algorithmSlice = createSlice({
   name: 'algorithms',
   initialState,
-  reducers: {},
+  reducers: {
+     resetAlgorithmState: (state) => {
+    state.patientCounts = [];
+    state.patientsByAlgorithm = [];
+    state.loadingCounts = false;
+    state.loadingPatients = false;
+    state.loading=false;
+    state.error = null;
+  }
+  },
   extraReducers: (builder) => {
     builder
       .addCase(loadPatientCountsByAlgorithm.pending, (state) => {
-        state.loading = true;
+        state.loadingCounts = true;
         state.error = null;
       })
       .addCase(loadPatientCountsByAlgorithm.fulfilled, (state, action) => {
-        state.loading = false;
+        state.loadingCounts = false;
         state.patientCounts = action.payload;
       })
       .addCase(loadPatientCountsByAlgorithm.rejected, (state, action) => {
-        state.loading = false;
+        state.loadingCounts = false;
         state.error = typeof action.payload === 'string' ? action.payload : 'Error loading algorithm counts';
       })
 
       .addCase(loadPatientsByAlgorithm.pending, (state) => {
-        state.loading = true;
+        state.loadingPatients = true;
         state.error = null;
       })
       .addCase(loadPatientsByAlgorithm.fulfilled, (state, action) => {
-        state.loading = false;
+        state.loadingPatients = false;
         state.patientsByAlgorithm = action.payload;
       })
       .addCase(loadPatientsByAlgorithm.rejected, (state, action) => {
-        state.loading = false;
+        state.loadingPatients = false;
         state.error = typeof action.payload === 'string' ? action.payload : 'Error loading patients';
       });
   },

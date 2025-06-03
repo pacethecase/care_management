@@ -1,4 +1,4 @@
-import { useState, useEffect, ChangeEvent } from 'react';
+import { useState, useEffect, ChangeEvent, useMemo } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate, Link } from 'react-router-dom';
 import { addPatient } from '../redux/slices/patientSlice';
@@ -10,16 +10,15 @@ import Footer from '../components/Footer';
 import Select from 'react-select';
 import { reactSelectStyles } from '../reactSelectStyles';
 
-
 interface FormData {
   first_name: string;
-  last_name:string;
+  last_name: string;
   birth_date: string;
   age: number;
   bedId: string;
   mrn: string;
   medical_info: string;
-  assignedStaffIds: string[]; 
+  assignedStaffIds: string[];
   is_behavioral: boolean;
   is_restrained: boolean;
   is_geriatric_psych_available: boolean;
@@ -38,6 +37,8 @@ const AddPatientPage = () => {
   const navigate = useNavigate();
   const staffs = useSelector((state: RootState) => state.user.staffs);
 
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const [formData, setFormData] = useState<FormData>({
     first_name: '',
     last_name: '',
@@ -46,7 +47,7 @@ const AddPatientPage = () => {
     bedId: '',
     mrn: '',
     medical_info: '',
-    assignedStaffIds: [] as string[],
+    assignedStaffIds: [],
     is_behavioral: false,
     is_restrained: false,
     is_geriatric_psych_available: false,
@@ -67,15 +68,17 @@ const AddPatientPage = () => {
   useEffect(() => {
     if (formData.birth_date) {
       const birthDate = new Date(formData.birth_date);
-      const today = new Date();
-      const calculatedAge = Math.floor(
-        (today.getTime() - birthDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000)
-      );
-      setFormData((prev) => ({
-        ...prev,
-        age: calculatedAge >= 0 ? calculatedAge : 0,
-        is_geriatric_psych_available: calculatedAge > 65 ? prev.is_geriatric_psych_available : false,
-      }));
+      if (!isNaN(birthDate.getTime())) {
+        const today = new Date();
+        const calculatedAge = Math.floor(
+          (today.getTime() - birthDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000)
+        );
+        setFormData((prev) => ({
+          ...prev,
+          age: calculatedAge >= 0 ? calculatedAge : 0,
+          is_geriatric_psych_available: calculatedAge > 65 ? prev.is_geriatric_psych_available : false,
+        }));
+      }
     }
   }, [formData.birth_date]);
 
@@ -91,17 +94,33 @@ const AddPatientPage = () => {
     }));
   };
 
-  const handleSubmit = async () => {
-    try {
-      const admittedDate = new Date().toISOString(); 
-      dispatch(addPatient({ ...formData, admitted_date: admittedDate }));
+  const validateForm = () => {
+    const requiredFields: (keyof FormData)[] = ['first_name', 'last_name', 'birth_date', 'bedId'];
+    return requiredFields.every((field) => !!formData[field]);
+  };
 
+  const handleSubmit = async () => {
+    if (!validateForm()) {
+      alert("Please fill in all required fields.");
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      const admittedDate = new Date().toISOString();
+      await dispatch(addPatient({ ...formData, admitted_date: admittedDate })).unwrap();
       navigate('/patients');
     } catch (err: any) {
       alert(`Error: ${err?.message || 'Failed to add patient'}`);
       console.error("Submit failed:", err);
+    } finally {
+      setIsSubmitting(false);
     }
   };
+
+  const staffOptions = useMemo(() => {
+    return staffs.map(s => ({ value: s.id, label: s.name }));
+  }, [staffs]);
 
   return (
     <div className="flex flex-col min-h-screen text-white">
@@ -117,8 +136,9 @@ const AddPatientPage = () => {
         <div className="card">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <label className="block font-medium">First Name*</label>
+              <label htmlFor="first_name" className="block font-medium">First Name*</label>
               <input
+                id="first_name"
                 className="bg-white text-black placeholder-gray-400 border rounded py-2 px-3"
                 placeholder="Enter First Name"
                 type="text"
@@ -128,10 +148,12 @@ const AddPatientPage = () => {
                 required
               />
             </div>
+
             <div>
-              <label className="block font-medium">Last Name*</label>
+              <label htmlFor="last_name" className="block font-medium">Last Name*</label>
               <input
-              className="bg-white text-black placeholder-gray-400 border rounded py-2 px-3"
+                id="last_name"
+                className="bg-white text-black placeholder-gray-400 border rounded py-2 px-3"
                 placeholder="Enter Last Name"
                 type="text"
                 name="last_name"
@@ -142,9 +164,10 @@ const AddPatientPage = () => {
             </div>
 
             <div>
-              <label className="block font-medium">Birth Date*</label>
+              <label htmlFor="birth_date" className="block font-medium">Birth Date*</label>
               <input
                 type="date"
+                id="birth_date"
                 className="bg-white text-black placeholder-gray-400 border rounded py-2 px-3"
                 name="birth_date"
                 value={formData.birth_date}
@@ -154,21 +177,22 @@ const AddPatientPage = () => {
             </div>
 
             <div>
-              <label className="block font-medium">Age*</label>
+              <label htmlFor="age" className="block font-medium">Age*</label>
               <input
                 type="number"
+                id="age"
                 className="bg-white text-black cursor-not-allowed placeholder-gray-400 border rounded py-2 px-3"
                 name="age"
                 value={formData.age}
                 readOnly
-
               />
             </div>
 
             <div>
-              <label className="block font-medium">MRN</label>
+              <label htmlFor="mrn" className="block font-medium">MRN</label>
               <input
                 type="text"
+                id="mrn"
                 className="bg-white text-black placeholder-gray-400 border rounded py-2 px-3"
                 name="mrn"
                 value={formData.mrn}
@@ -177,11 +201,12 @@ const AddPatientPage = () => {
             </div>
 
             <div>
-              <label className="block font-medium">Bed ID*</label>
+              <label htmlFor="bedId" className="block font-medium">Bed ID*</label>
               <input
                 type="text"
+                id="bedId"
                 name="bedId"
-                 className="bg-white text-black placeholder-gray-400 border rounded py-2 px-3"
+                className="bg-white text-black placeholder-gray-400 border rounded py-2 px-3"
                 value={formData.bedId}
                 onChange={handleChange}
                 required
@@ -189,9 +214,10 @@ const AddPatientPage = () => {
             </div>
 
             <div className="md:col-span-2">
-              <label className="block font-medium">Medical Information</label>
+              <label htmlFor="medical_info" className="block font-medium">Medical Information</label>
               <textarea
-               className="bg-white text-black placeholder-gray-400 border rounded py-2 px-3"
+                id="medical_info"
+                className="bg-white text-black placeholder-gray-400 border rounded py-2 px-3"
                 name="medical_info"
                 value={formData.medical_info}
                 onChange={handleChange}
@@ -200,23 +226,18 @@ const AddPatientPage = () => {
 
             <div className="md:col-span-2 text-black">
               <label className="block text-white font-medium">Assign Staff</label>
-                    <Select
-                    
-                      isMulti
-                      styles={reactSelectStyles}
-                      options={staffs.map(s => ({ value: s.id, label: s.name }))}
-                      value={staffs
-                        .filter(s => formData.assignedStaffIds.includes(String(s.id)))
-                        .map(s => ({ value: s.id, label: s.name }))}
-                      onChange={(selectedOptions) => {
-                        setFormData((prev) => ({
-                          ...prev,
-                          assignedStaffIds: selectedOptions.map((opt) => String(opt.value)),
-                        }));
-                      }}
-                    />
-
-
+              <Select
+                isMulti
+                styles={reactSelectStyles}
+                options={staffOptions}
+                value={staffOptions.filter((opt) => formData.assignedStaffIds.includes(String(opt.value)))}
+                onChange={(selectedOptions) => {
+                  setFormData((prev) => ({
+                    ...prev,
+                    assignedStaffIds: selectedOptions.map((opt) => String(opt.value)),
+                  }));
+                }}
+              />
             </div>
 
             <div className="md:col-span-2">
@@ -224,8 +245,12 @@ const AddPatientPage = () => {
             </div>
           </div>
 
-          <button className="btn mt-6" onClick={handleSubmit}>
-            Add Patient
+          <button
+            className="btn mt-6"
+            onClick={handleSubmit}
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? "Adding..." : "Add Patient"}
           </button>
         </div>
       </main>

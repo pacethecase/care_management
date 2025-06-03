@@ -189,7 +189,14 @@ export const updateCourtDate = createAsyncThunk(
 const patientsSlice = createSlice({
   name: 'patients',
   initialState,
-  reducers: {},
+  reducers: {
+     setPatients: (state, action) => {
+      state.patients = action.payload;
+    },
+    clearPatients: (state) => {
+      state.patients = [];  
+    },
+  },
   extraReducers: (builder) => {
     builder
       .addCase(fetchPatients.pending, (state) => {
@@ -207,6 +214,14 @@ const patientsSlice = createSlice({
       .addCase(addPatient.fulfilled, (state, action) => {
         state.patients.push(action.payload.patient);
         state.loading = false;
+      })
+      .addCase(addPatient.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(addPatient.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload as string;
       })
       .addCase(fetchPatientById.fulfilled, (state, action) => {
         state.selectedPatient = action.payload;
@@ -307,4 +322,5 @@ const patientsSlice = createSlice({
   },
 });
 
+export const { clearPatients } = patientsSlice.actions;
 export default patientsSlice.reducer;

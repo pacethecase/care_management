@@ -1,4 +1,5 @@
-  import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { Routes, Route } from 'react-router-dom';
+
   import SignUp from "./pages/SignUp";
   import Login from "./pages/Login";
   import HomePage from "./pages/HomePage";
@@ -53,7 +54,7 @@ import axios from "axios";
       return <p>Loading...</p>;
     }
     return (
-      <Router>
+<>
         <Routes>
           <Route path="/signup" element={<SignUp />} />
           <Route path="/" element={<Login />} />
@@ -150,7 +151,7 @@ import axios from "axios";
         </Routes>
         <Notifications />
         <ToastContainer position="top-right" autoClose={3000} theme="light" />
-      </Router>
+</>
     );
   }
 

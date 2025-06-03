@@ -54,13 +54,27 @@ const addPatientNote = async (req, res) => {
       return res.status(403).json({ error: "Unauthorized access to patient" });
     }
 
-    const newNote = await pool.query(
-      `INSERT INTO notes (patient_id, staff_id, note_text) 
-       VALUES ($1, $2, $3) RETURNING *`,
-      [patientId, staff_id, note_text]
+const newNoteRes = await pool.query(
+  `INSERT INTO notes (patient_id, staff_id, note_text)
+   VALUES ($1, $2, $3)
+   RETURNING id, note_text, created_at, staff_id`,
+  [patientId, staff_id, note_text]
+);
+
+const newNote = newNoteRes.rows[0];
+
+    // Get nurse name from staff_id
+    const nurseRes = await pool.query(
+      `SELECT name FROM users WHERE id = $1`,
+      [staff_id]
     );
 
-    res.status(201).json(newNote.rows[0]);
+    const name = nurseRes.rows[0]?.name || null;
+
+    res.status(201).json({
+      ...newNote,
+      name, 
+    });
   } catch (err) {
     console.error("❌ Error adding note:", err);
     res.status(500).json({ error: "Internal Server Error" });

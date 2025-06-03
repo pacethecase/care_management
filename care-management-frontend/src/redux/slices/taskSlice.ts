@@ -203,7 +203,24 @@ export const acknowledgeTask = createAsyncThunk(
 const taskSlice = createSlice({
   name: "tasks",
   initialState,
-  reducers: {},
+ 
+    reducers: {
+        clearTaskError: (state) => {
+          state.taskError = null;
+        },
+        clearGeneralError: (state) => {
+          state.error = null;
+        },
+        resetTasks: (state) => {
+          state.patientTasks = [];
+          state.priorityTasks = [];
+          state.missedTasks = [];
+          state.error = null;
+          state.taskError = null;
+        }
+
+
+  },
   extraReducers: (builder) => {
     builder
       .addCase(loadPatientTasks.pending, (state) => {
@@ -237,25 +254,26 @@ const taskSlice = createSlice({
         state.loading = false;
         state.error = action.payload as string;
       })
-      .addCase(updateTaskNoteMeta.fulfilled, (state, action) => {
-        const updatedTask = action.payload;
-        const index = state.patientTasks.findIndex((t) => t.task_id === updatedTask.id);
-        if (index !== -1) {
-          state.patientTasks[index] = {
-            ...state.patientTasks[index],
-            ...updatedTask,
-          };
-        }
-      })
+     .addCase(updateTaskNoteMeta.fulfilled, (state, action) => {
+  const updatedTask = action.payload;
+  const idx = state.patientTasks.findIndex(t => t.patient_task_id === updatedTask.id);
+  if (idx !== -1) {
+    state.patientTasks[idx] = {
+      ...state.patientTasks[idx],
+      ...updatedTask,
+    };
+  }
+})
       .addCase(updateTaskNoteMeta.rejected, (state, action) => {
         state.error = action.payload as string;
       })
       .addCase(acknowledgeTask.fulfilled, (state, action) => {
   const updatedTask = action.payload.task || action.payload;
 
-  const index = state.patientTasks.findIndex(
-    (t) => t.task_id === updatedTask.task_id
-  );
+const index = state.patientTasks.findIndex(
+  (t) => t.patient_task_id === updatedTask.id
+);
+
 
   if (index !== -1) {
     state.patientTasks[index] = {

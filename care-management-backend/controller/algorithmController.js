@@ -65,7 +65,11 @@ const getPatientsByAlgorithm = async (req, res) => {
     LTC: 'is_ltc',
   };
 
-  const column = mapping[algorithm];
+    if (!Object.hasOwn(mapping, algorithm)) {
+      return res.status(400).json({ error: 'Invalid algorithm type' });
+    }
+    const column = mapping[algorithm];
+
   if (!column) {
     return res.status(400).json({ error: 'Invalid algorithm type' });
   }

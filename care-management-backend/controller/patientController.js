@@ -234,7 +234,8 @@ const getPatientTasks = async (req, res) => {
 
     const result = await pool.query(
       `SELECT 
-        pt.id AS task_id,
+        pt.id AS patient_task_id,
+        pt.task_id AS task_id,
         t.name AS task_name,
         t.category,
         t.description,
@@ -340,11 +341,14 @@ const dischargePatient = async (req, res) => {
 
     const io = req.app.get('io');
 
-    // Get all assigned staff
-    const staffRes = await pool.query(
-      `SELECT staff_id FROM patient_staff WHERE patient_id = $1`,
-      [patientId]
-    );
+
+     const staffRes = await pool.query(
+   `SELECT u.id AS staff_id
+   FROM patient_staff ps
+    JOIN users u ON u.id = ps.staff_id
+   WHERE ps.patient_id = $1 AND u.is_staff = true`,
+  [patientId]
+  );
 
     for (const { staff_id } of staffRes.rows) {
       io.to(`user-${staff_id}`).emit("notification", {
@@ -400,16 +404,18 @@ const reactivatePatient = async (req, res) => {
 
     const io = req.app.get('io');
 
-    // Notify assigned staff
-    const staffRes = await pool.query(
-      `SELECT staff_id FROM patient_staff WHERE patient_id = $1`,
-      [patientId]
+   const staffRes = await pool.query(
+    `SELECT u.id AS staff_id
+    FROM patient_staff ps
+      JOIN users u ON u.id = ps.staff_id
+    WHERE ps.patient_id = $1 AND u.is_staff = true`,
+    [patientId]
     );
-
+  
     for (const { staff_id } of staffRes.rows) {
       io.to(`user-${staff_id}`).emit("notification", {
         title: "Patient Reinstated",
-        message: `${patient.first_name} ${patient.last_name} has been reinstated to active care.`,
+        message: `${patient.first_name} ${patient.last_name} has been reinstated to active care1.`,
       });
 
       await pool.query(

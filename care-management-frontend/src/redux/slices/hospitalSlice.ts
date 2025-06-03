@@ -16,21 +16,25 @@ const initialState: HospitalState = {
   error: null,
 };
 
-// ✅ Thunk: Fetch all hospitals
 export const loadHospitals = createAsyncThunk<
-  Hospital[],     // Return type
-  void,           // No input
+  Hospital[],
+  void,
   { rejectValue: string }
 >(
   'hospitals/loadHospitals',
   async (_, { rejectWithValue }) => {
     try {
-      const res = await axios.get(`${BASE_URL}/hospitals/`, {
+      const res = await axios.get(`${BASE_URL}/hospitals`, {
         withCredentials: true,
       });
+      if (!Array.isArray(res.data)) {
+        return rejectWithValue('Unexpected response format');
+      }
       return res.data;
     } catch (err: any) {
-      return rejectWithValue('Failed to load hospitals');
+      const message =
+        err.response?.data?.error || err.message || 'Failed to load hospitals';
+      return rejectWithValue(message);
     }
   }
 );
@@ -51,6 +55,7 @@ const hospitalSlice = createSlice({
       })
       .addCase(loadHospitals.rejected, (state, action) => {
         state.loading = false;
+        state.hospitals = [];
         state.error = action.payload ?? 'Unknown error loading hospitals';
       });
   },

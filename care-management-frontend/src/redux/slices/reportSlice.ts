@@ -4,7 +4,7 @@ import axios from "axios";
 
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL;
-interface ReportState {
+interface ReportState { 
   dailyReport: any[];
   priorityReport: any[];
   transitionalReport: any | null;
@@ -116,7 +116,18 @@ export const fetchProjectedTimelineReport = createAsyncThunk<any, number, { reje
 const reportSlice = createSlice({
   name: "reports",
   initialState,
-  reducers: {},
+  reducers: {
+    clearReports: (state) => {
+    state.dailyReport = [];
+    state.priorityReport = [];
+    state.transitionalReport = null;
+    state.historicalReport = null;
+    state.projectedTimelineReport = null;
+  },
+  clearReportError: (state) => {
+    state.error = null;
+  },
+  },
   extraReducers: (builder) => {
     builder
       .addCase(fetchDailyReport.pending, (state) => {
@@ -182,4 +193,5 @@ const reportSlice = createSlice({
   },
 });
 
+export const { clearReports } = reportSlice.actions;
 export default reportSlice.reducer;

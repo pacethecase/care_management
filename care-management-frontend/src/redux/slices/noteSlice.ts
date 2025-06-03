@@ -6,13 +6,17 @@ const BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 interface NoteState {
   notes: Note[];
-  loading: boolean;
+   addLoading?: boolean;
+     loading: boolean;
+  updateLoading?: boolean;
   error: string | null;
 }
 
 const initialState: NoteState = {
   notes: [],
-  loading: false,
+  loading:false,
+  addLoading: false,
+  updateLoading: false,
   error: null,
 };
 
@@ -86,6 +90,7 @@ const noteSlice = createSlice({
       state.notes = [];
       state.error = null;
       state.loading = false;
+      
     },
   },
   extraReducers: (builder) => {
@@ -98,25 +103,36 @@ const noteSlice = createSlice({
         state.loading = false;
         state.notes = action.payload;
       })
-      .addCase(fetchPatientNotes.rejected, (state, action) => {
-        state.loading = false;
-        state.error = typeof action.payload === "string" ? action.payload : "Failed to fetch notes";
-      })
+      .addCase(addPatientNote.pending, (state) => {
+          state.addLoading = true;
+        })
+        .addCase(addPatientNote.fulfilled, (state, action) => {
+          state.addLoading = false;
+          state.notes.unshift(action.payload);
+        })
+        .addCase(addPatientNote.rejected, (state, action) => {
+          state.addLoading = false;
+          state.error = typeof action.payload === "string" ? action.payload : "Failed to add note";
+        })
 
-      .addCase(addPatientNote.fulfilled, (state, action) => {
-        state.notes.unshift(action.payload);
+          .addCase(updatePatientNote.pending, (state) => {
+        state.loading = true;
+        state.error = null;
       })
-      .addCase(addPatientNote.rejected, (state, action) => {
-        state.error = typeof action.payload === "string" ? action.payload : "Failed to add note";
-      })
-
       .addCase(updatePatientNote.fulfilled, (state, action) => {
+        state.loading = false;
         const idx = state.notes.findIndex((n) => n.id === action.payload.id);
-        if (idx !== -1) state.notes[idx] = action.payload;
+        if (idx !== -1) {
+          state.notes[idx] = action.payload;
+        }
       })
       .addCase(updatePatientNote.rejected, (state, action) => {
-        state.error = typeof action.payload === "string" ? action.payload : "Failed to update note";
+        state.loading = false;
+        state.error = typeof action.payload === "string"
+          ? action.payload
+          : "Failed to update note";
       });
+
   },
 });
 

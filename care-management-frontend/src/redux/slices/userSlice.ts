@@ -2,6 +2,7 @@ import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 import type { UserInfo } from "../types";
 
+
 const BASE_URL = import.meta.env.VITE_API_BASE_URL;
 interface UserState {
   user: UserInfo | null;
@@ -167,7 +168,14 @@ const userSlice = createSlice({
       state.error = null;
       state.loading = false;
       state.message = undefined;
+
     },
+    clearError: (state) => {
+        state.error = null;
+      },
+      clearMessage: (state) => {
+        state.message = undefined;
+      }
   },
   extraReducers: (builder) => {
     builder
@@ -201,7 +209,8 @@ const userSlice = createSlice({
         state.user = null;
         state.authLoaded = true;
         state.error = action.payload as string;
-        state.loading = false;
+        state.loading = false; 
+      
       })
       .addCase(fetchStaffs.fulfilled, (state, action) => {
         state.staffs = action.payload;

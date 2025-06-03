@@ -26,6 +26,7 @@ import type { AppDispatch } from '../redux/store';
 import type { Task } from  "../redux/types";
 import type { Note } from  "../redux/types";
 import { showCourtDatePopup } from "../utils/showCourtDatePopup";
+import { useMemo } from "react";
 
 const PatientTasks = () => {
   const { patientId } = useParams<{ patientId: string }>();
@@ -77,11 +78,11 @@ const [activeTab, setActiveTab] = useState<"Tasks" | "Notes">("Tasks");
   }, [dispatch, patientId,taskError]);
       useEffect(() => {
         if (expandedTaskId !== null && !noteDrafts[expandedTaskId]) {
-          const task = patientTasks.find(t => t.task_id === expandedTaskId);
+          const task = patientTasks.find(t => t.patient_task_id === expandedTaskId);
           if (task) {
             setNoteDrafts(prev => ({
               ...prev,
-              [task.task_id]: {
+              [task.patient_task_id ]: {
                 task_note: task.task_note || "",
                 contact_info: task.contact_info || "",
                 include_note_in_report: !!task.include_note_in_report,
@@ -234,37 +235,40 @@ const getStatusBadge = (status: string) => {
 
 
   
-const getTasksByStatus = (status: string) =>
-   patientTasks
-    .filter((task) =>
-      selectedAlgorithm === "All" ? true : task.algorithm === selectedAlgorithm
-    ).filter((task) => {
-  
-    if (status === "Non-Blocking") return task.is_non_blocking;
+const tasksByStatus = useMemo(() => {
+  const filtered = patientTasks.filter((task) =>
+    selectedAlgorithm === "All" ? true : task.algorithm === selectedAlgorithm
+  );
 
-    if (status === "Pending/In Progress") {
-      return (
-        ["Pending", "In Progress", "Follow Up"].includes(task.status) &&
-        !task.is_non_blocking
-      );
+  const statusMap: Record<string, Task[]> = {
+    "Pending/In Progress": [],
+    Missed: [],
+    Completed: [],
+    "Non-Blocking": [],
+  };
 
+  for (const task of filtered) {
+    if (task.is_non_blocking) {
+      statusMap["Non-Blocking"].push(task);
+    } else if (["Pending", "In Progress", "Follow Up"].includes(task.status)) {
+      statusMap["Pending/In Progress"].push(task);
+    } else if (["Completed", "Delayed Completed"].includes(task.status)) {
+      statusMap["Completed"].push(task);
+    } else if (task.status === "Missed") {
+      statusMap["Missed"].push(task);
     }
-    if (status === "Completed"){
-      return (
-        ["Completed", "Delayed Completed"].includes(task.status) &&
-        !task.is_non_blocking
-      )
+  }
 
-    } 
-    return task.status === status && !task.is_non_blocking;
-  });
+  return statusMap;
+}, [patientTasks, selectedAlgorithm]);
+
 
 
 
 
 const renderTaskCard = (task: Task) => {
-  const isExpanded = expandedTaskId === task.task_id;
-  const draft = noteDrafts[task.task_id] || {
+  const isExpanded = expandedTaskId === task.patient_task_id ;
+  const draft = noteDrafts[task.patient_task_id ] || {
     task_note: "",
     contact_info: "",
     include_note_in_report: false,
@@ -273,25 +277,28 @@ const renderTaskCard = (task: Task) => {
   const updateDraft = (field: keyof typeof draft, value: any) => {
     setNoteDrafts((prev) => ({
       ...prev,
-      [task.task_id]: {
-        ...prev[task.task_id],
+      [task.patient_task_id ]: {
+        ...prev[task.patient_task_id ],
         [field]: value,
       },
     }));
   };
 
-  const handleSaveMeta = () => {
-    dispatch(updateTaskNoteMeta({
-      taskId: task.task_id,
-      data: draft,
-    }))
-      .unwrap()
-      .then(() => {
-        toast.success("Task note updated");
-        setExpandedTaskId(null);
-      })
-      .catch(() => toast.error("Failed to update task note"));
-  };
+const handleSaveMeta = (taskId: number, data: any) => {
+  console.log("Saving note for task_id (patient_tasks.id):", task.patient_task_id );
+
+  dispatch(updateTaskNoteMeta({
+    taskId,
+    data,
+  }))
+    .unwrap()
+    .then(() => {
+      toast.success("Task note updated");
+      setExpandedTaskId(null);
+    })
+    .catch(() => toast.error("Failed to update task note"));
+};
+
 
   const borderColor = algoColorMap[task.algorithm as keyof typeof algoColorMap] || "var(--border-muted)";
 
@@ -299,7 +306,7 @@ const renderTaskCard = (task: Task) => {
   return (
    
     <div
-      key={task.task_id}
+      key={task.patient_task_id }
       className={`card border p-4 mb-4 rounded-lg text-black ${
         task.is_non_blocking ?"non-blocking":""
       } ${task.status === "Missed" ? "card-missed" : ""}
@@ -358,11 +365,11 @@ const renderTaskCard = (task: Task) => {
               <input
                 type="date"
                 className="mt-1 block w-full rounded-md border-gray-300 shadow-sm"
-                value={overrideDates[task.task_id] || ""}
+                value={overrideDates[task.patient_task_id ] || ""}
                 onChange={(e) =>
                   setOverrideDates((prev) => ({
                     ...prev,
-                    [task.task_id]: e.target.value,
+                    [task.patient_task_id ]: e.target.value,
                   }))
                 }
               />
@@ -376,28 +383,28 @@ const renderTaskCard = (task: Task) => {
       {!task.is_non_blocking && task.status !== "Completed"  && task.status!= "Delayed Completed" && (
   <div className="flex gap-2 flex-wrap mb-2">
     {task.status !== "In Progress" && task.status !== "Missed" && (
-      <button className="btn btn-xs" onClick={() => handleStart(task.task_id)}>
+      <button className="btn btn-xs" onClick={() => handleStart(task.patient_task_id )}>
         Start
       </button>
     )}
     <button
       className="btn btn-xs btn-outline"
       onClick={() =>
-        handleComplete(task.task_id, task.is_court_date ?? false)
+        handleComplete(task.patient_task_id , task.is_court_date ?? false)
       }
     >
       Complete
     </button>
     <button
       className="btn btn-xs bg-red-600 text-white"
-      onClick={() => handleMissed(task.task_id)}
+      onClick={() => handleMissed(task.patient_task_id )}
     >
       Missed
     </button>
     {task.is_repeating && task.due_in_days_after_dependency != null && (
       <button
         className="btn btn-xs btn-outline"
-        onClick={() => handleFollowUp(task.task_id)}
+        onClick={() => handleFollowUp(task.patient_task_id )}
       >
         Follow Up
       </button>
@@ -408,7 +415,7 @@ const renderTaskCard = (task: Task) => {
 {task.is_non_blocking && task.status !== "Acknowledged" && (
   <button
     className="btn btn-xs bg-blue-500 text-white"
-    onClick={() => handleAcknowledge(task.task_id)}
+    onClick={() => handleAcknowledge(task.patient_task_id )}
   >
     Acknowledge
   </button>
@@ -420,7 +427,7 @@ const renderTaskCard = (task: Task) => {
       <div className="text-xs">
         <button
           className="underline text-black"
-          onClick={() => setExpandedTaskId(isExpanded ? null : task.task_id)}
+          onClick={() => setExpandedTaskId(isExpanded ? null : task.patient_task_id)}
         >
           {isExpanded ? "Hide Note Options" : "Add/Edit Note or Contact Info"}
         </button>
@@ -452,7 +459,11 @@ const renderTaskCard = (task: Task) => {
             />
             Include note in report
           </label>
-          <button className="btn btn-xs" onClick={handleSaveMeta}>💾 Save</button>
+          
+        <button className="btn btn-xs" onClick={() => handleSaveMeta(task.patient_task_id, draft)}>
+          💾 Save
+        </button>
+
         </div>
       )}
     </div>
@@ -462,12 +473,13 @@ const renderTaskCard = (task: Task) => {
 
 
 const renderTaskColumns = () => {
-  const columns = [
-    { title: "Pending/In Progress", tasks: getTasksByStatus("Pending/In Progress") },
-    { title: "Missed", tasks: getTasksByStatus("Missed") },
-    { title: "Completed", tasks: getTasksByStatus("Completed") },
-    { title: "Non-Blocking", tasks: getTasksByStatus("Non-Blocking") },
-  ];
+ const columns = [
+  { title: "Pending/In Progress", tasks: tasksByStatus["Pending/In Progress"] },
+  { title: "Missed", tasks: tasksByStatus["Missed"] },
+  { title: "Completed", tasks: tasksByStatus["Completed"] },
+  { title: "Non-Blocking", tasks: tasksByStatus["Non-Blocking"] },
+];
+
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">

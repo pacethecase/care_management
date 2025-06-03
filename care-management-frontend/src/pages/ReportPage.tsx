@@ -1,4 +1,4 @@
-import  { useState, useEffect } from "react";
+import  { useState, useEffect,useMemo } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { FaPrint } from "react-icons/fa";
 import DailyReport from "../components/DailyReport";
@@ -19,6 +19,7 @@ import {
 } from "../redux/slices/reportSlice";
 import { fetchPatients } from "../redux/slices/patientSlice";
 import type { AppDispatch } from "../redux/store";
+
 
 type ReportType = "daily" | "priority" | "transitional" | "historical" | "projected";
 
@@ -285,13 +286,14 @@ const ReportPage = () => {
 
      <div className="space-x-4 mb-4 no-print">
   {(["daily", "priority", "transitional", "historical", "projected"] as ReportType[]).map((type) => {
-    const reportLabels: Record<ReportType, string> = {
-      daily: "Daily Report – Overdue Tasks",
-      priority: "Priority Report – Tasks Due Today",
-      transitional: "Transitional Care Report",
-      historical: "Historical Timeline Report",
-      projected: "Projected Timeline Report",
-    };
+        const reportLabels = useMemo(() => ({
+        daily: "Daily Report – Overdue Tasks",
+        priority: "Priority Report – Tasks Due Today",
+        transitional: "Transitional Care Report",
+        historical: "Historical Timeline Report",
+        projected: "Projected Timeline Report",
+      }), []);
+
 
     return (
       <button
@@ -330,14 +332,21 @@ const ReportPage = () => {
           </div>
         )}
 
-        {selectedReport && (
-          <div className="mb-6">
-            <button onClick={handlePrint} className="btn btn-secondary">
-              <FaPrint className="inline mr-2" />
-              Print Report
-            </button>
-          </div>
+       {selectedReport && (
+        <div className="mb-6">
+          <button
+            onClick={handlePrint}
+            className="btn btn-secondary"
+            disabled={
+              (["transitional", "historical", "projected"].includes(selectedReport) && !selectedPatientId)
+            }
+          >
+            <FaPrint className="inline mr-2" />
+            Print Report
+          </button>
+        </div>
         )}
+
 
         <div id="report-content" className="bg-white rounded-lg shadow p-6 min-h-[150px]">
           {!selectedReport && <p className="text-gray-500">Select a report to view.</p>}

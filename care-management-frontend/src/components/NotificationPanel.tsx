@@ -22,7 +22,6 @@ const NotificationPanel = () => {
             className="text-xs text-blue-600 hover:underline"
             onClick={async () => {
               await dispatch(markAllRead());
-              dispatch(fetchNotifications());
             }}
           >
             Mark All Read

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { FiUser, FiBell } from 'react-icons/fi';
 import { Link, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
-import { logoutUser } from '../redux/slices/userSlice';
+import { logoutAndClearAll } from '../redux/actions/logoutAndClearAll';
 import logo from '../assets/logo.png';
 import NotificationPanel from './NotificationPanel';
 import type { AppDispatch } from '../redux/store';
@@ -21,7 +21,7 @@ const Navbar: React.FC = () => {
 console.log(user);
   const handleLogout = async () => {
     try {
-      await dispatch(logoutUser()).unwrap();
+     await dispatch(logoutAndClearAll("manual"));
       navigate('/');
     } catch (err) {
       console.error('Logout error:', err);

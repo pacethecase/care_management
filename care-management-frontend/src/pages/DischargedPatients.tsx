@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import {
   fetchDischargedPatients,
@@ -32,10 +32,13 @@ const DischargedPatients = () => {
   }, [dispatch]);
 
   const totalPages = Math.ceil(dischargedPatients.length / itemsPerPage);
-  const paginatedPatients = dischargedPatients.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-  );
+
+  const paginatedPatients = useMemo(() => {
+    return dischargedPatients.slice(
+      (currentPage - 1) * itemsPerPage,
+      currentPage * itemsPerPage
+    );
+  }, [dischargedPatients, currentPage]);
 
   const handleNext = () => {
     if (currentPage < totalPages) {
@@ -59,8 +62,8 @@ const DischargedPatients = () => {
 
         {loading && <p>Loading patients...</p>}
         {error && <p className="text-red-500">{error}</p>}
-        {dischargedPatients.length === 0 && !loading && (
-          <p>No discharged patients found.</p>
+        {!loading && dischargedPatients.length === 0 && (
+          <p className="text-gray-500">No discharged patients found.</p>
         )}
 
         <div className="grid grid-cols-1 gap-6">
@@ -70,13 +73,12 @@ const DischargedPatients = () => {
                 patient={patient}
                 user={user}
                 showDischargeInfo={true}
-               onViewReport={(id) => {
-              if (id && typeof id === "number") {
-                setExpandedPatientId(id);
-                dispatch(fetchHistoricalTimelineReport({ patientId: id }));
-              }
-            }}
-
+                onViewReport={(id) => {
+                  if (typeof id === "number") {
+                    setExpandedPatientId(id);
+                    dispatch(fetchHistoricalTimelineReport({ patientId: id }));
+                  }
+                }}
               />
 
               {expandedPatientId === patient.id && (
@@ -99,7 +101,8 @@ const DischargedPatients = () => {
             <button
               onClick={handlePrev}
               disabled={currentPage === 1}
-              className="btn btn-outline"
+              className={`btn btn-outline ${currentPage === 1 ? 'opacity-50 cursor-not-allowed' : ''}`}
+              aria-label="Previous page"
             >
               Previous
             </button>
@@ -109,7 +112,8 @@ const DischargedPatients = () => {
             <button
               onClick={handleNext}
               disabled={currentPage === totalPages}
-              className="btn btn-outline"
+              className={`btn btn-outline ${currentPage === totalPages ? 'opacity-50 cursor-not-allowed' : ''}`}
+              aria-label="Next page"
             >
               Next
             </button>
