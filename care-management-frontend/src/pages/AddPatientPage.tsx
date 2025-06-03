@@ -14,6 +14,7 @@ interface FormData {
   first_name: string;
   last_name: string;
   birth_date: string;
+  admitted_date:string;
   age: number;
   bedId: string;
   mrn: string;
@@ -47,6 +48,7 @@ const AddPatientPage = () => {
     bedId: '',
     mrn: '',
     medical_info: '',
+    admitted_date:'',
     assignedStaffIds: [],
     is_behavioral: false,
     is_restrained: false,
@@ -107,8 +109,7 @@ const AddPatientPage = () => {
 
     try {
       setIsSubmitting(true);
-      const admittedDate = new Date().toISOString();
-      await dispatch(addPatient({ ...formData, admitted_date: admittedDate })).unwrap();
+      await dispatch(addPatient({ ...formData})).unwrap();
       navigate('/patients');
     } catch (err: any) {
       alert(`Error: ${err?.message || 'Failed to add patient'}`);
@@ -187,6 +188,18 @@ const AddPatientPage = () => {
                 readOnly
               />
             </div>
+               <div>
+            <label>Admitted Date</label>
+             <input
+                type="date"
+                id="admitted_date"
+                className="bg-white text-black placeholder-gray-400 border rounded py-2 px-3"
+                name="admitted_date"
+                value={formData.admitted_date}
+                onChange={handleChange}
+                required
+              />
+        </div>
 
             <div>
               <label htmlFor="mrn" className="block font-medium">MRN</label>

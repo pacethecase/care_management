@@ -5,6 +5,7 @@ export interface Patient {
     first_name: string;
     last_name: string;
     birth_date: string;
+   
     age?: number;
     bed_id?: string;
     medical_info?: string;
