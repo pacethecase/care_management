@@ -11,21 +11,25 @@ const getPatients = async (req, res) => {
     const hospitalId = req.user?.hospital_id;
     const timezone = req.headers["x-timezone"] || "America/New_York";
 
-   const today = DateTime.now().setZone(timezone).startOf('day').toUTC().toJSDate();
+    const todayEndInUTC = DateTime.now()
+      .setZone(timezone)
+      .endOf("day")
+      .toUTC()
+      .toJSDate();
+
 
     const result = await pool.query(`
-      SELECT 
-        p.*,
-        CASE
-          WHEN EXISTS (
-            SELECT 1 FROM patient_tasks pt
-            WHERE pt.patient_id = p.id AND pt.status = 'Missed' AND pt.is_visible = true
-          ) THEN 'missed'
-          WHEN EXISTS (
-            SELECT 1 FROM patient_tasks pt
-            WHERE pt.patient_id = p.id
-               AND pt.due_date <= $1::timestamp
-
+          SELECT 
+            p.*,
+            CASE
+              WHEN EXISTS (
+                SELECT 1 FROM patient_tasks pt
+                WHERE pt.patient_id = p.id AND pt.status = 'Missed' AND pt.is_visible = true
+              ) THEN 'missed'
+              WHEN EXISTS (
+                SELECT 1 FROM patient_tasks pt
+                WHERE pt.patient_id = p.id
+                AND pt.due_date <= $1::timestamp
               AND pt.status NOT IN ('Completed','Delayed Completed', 'Missed')
               AND pt.is_visible = true
           ) THEN 'in_progress'
@@ -35,7 +39,7 @@ const getPatients = async (req, res) => {
               AND pt.status IN ('Completed', 'Delayed Completed') 
               AND pt.is_visible = true
           ) THEN 'completed'
-         ELSE 'in_progress'
+         ELSE NULL
         END AS task_status,
         
         json_agg(json_build_object('id', u.id, 'name', u.name)) 
@@ -50,8 +54,8 @@ const getPatients = async (req, res) => {
       GROUP BY p.id
       ORDER BY p.created_at DESC
     `, isStaff 
-        ? [today, userId, hospitalId] 
-        : [today, hospitalId]);
+        ? [todayEndInUTC, userId, hospitalId] 
+        : [todayEndInUTC, hospitalId]);
 
 
     res.status(200).json(result.rows);
@@ -628,7 +632,12 @@ const getSearchedPatients = async (req, res) => {
       return res.status(400).json({ error: "Search query is required" });
     }
 
-    const today = DateTime.now().setZone(timezone).toFormat("yyyy-MM-dd");
+   const today = DateTime.now()
+  .setZone(timezone)
+  .endOf('day')
+  .toUTC()
+  .toJSDate(); 
+
     const query = `%${q.toLowerCase()}%`;
 
     const result = await pool.query(
@@ -642,7 +651,7 @@ const getSearchedPatients = async (req, res) => {
            WHEN EXISTS (
              SELECT 1 FROM patient_tasks pt
              WHERE pt.patient_id = p.id
-               AND (pt.due_date AT TIME ZONE 'UTC' AT TIME ZONE $4)::date <= $3::date
+               AND pt.due_date <= $3::timestamp
                AND pt.status NOT IN ('Completed','Delayed Completed', 'Missed')
                AND pt.is_visible = true
            ) THEN 'in_progress'
@@ -650,7 +659,7 @@ const getSearchedPatients = async (req, res) => {
              SELECT 1 FROM patient_tasks pt
              WHERE pt.patient_id = p.id AND pt.status IN ('Completed', 'Delayed Completed') AND pt.is_visible = true
            ) THEN 'completed'
-           ELSE 'in_progress'
+           ELSE NULL
          END AS task_status,
          json_agg(json_build_object('id', u.id, 'name', u.name)) 
            FILTER (WHERE u.id IS NOT NULL) AS assigned_staff
@@ -666,7 +675,7 @@ const getSearchedPatients = async (req, res) => {
          )
        GROUP BY p.id
        ORDER BY p.created_at DESC`,
-      [query, hospitalId, today, timezone]
+      [query, hospitalId, today]
     );
 
     res.status(200).json(result.rows);
@@ -681,7 +690,7 @@ const getPatientsByAdmin = async (req, res) => {
   const { adminId } = req.params;
   const hospitalId = req.user.hospital_id;
   const timezone = req.headers["x-timezone"] || "America/New_York";
-  const today = DateTime.now().setZone(timezone).toFormat("yyyy-MM-dd");
+  const today = DateTime.now().setZone(timezone).endOf('day').toUTC().toJSDate();
 
   try {
     const result = await pool.query(
@@ -695,7 +704,7 @@ const getPatientsByAdmin = async (req, res) => {
           WHEN EXISTS (
             SELECT 1 FROM patient_tasks pt
             WHERE pt.patient_id = p.id
-              AND (pt.due_date AT TIME ZONE 'UTC' AT TIME ZONE $4)::date <= $3::date
+             AND pt.due_date <= $3::timestamp
               AND pt.status NOT IN ('Completed','Delayed Completed','Missed')
               AND pt.is_visible = true
           ) THEN 'in_progress'
@@ -705,7 +714,7 @@ const getPatientsByAdmin = async (req, res) => {
               AND pt.status IN ('Completed','Delayed Completed')
               AND pt.is_visible = true
           ) THEN 'completed'
-          ELSE 'in_progress'
+          ELSE NULL
         END AS task_status,
         json_agg(json_build_object('id', u.id, 'name', u.name)) 
           FILTER (WHERE u.id IS NOT NULL) AS assigned_staff
@@ -715,7 +724,7 @@ const getPatientsByAdmin = async (req, res) => {
       WHERE p.added_by_user_id = $1 AND p.hospital_id = $2 AND p.status != 'Discharged'
       GROUP BY p.id
       ORDER BY p.created_at DESC`,
-      [adminId, hospitalId, today, timezone]
+      [adminId, hospitalId, today]
     );
 
     res.status(200).json(result.rows);
