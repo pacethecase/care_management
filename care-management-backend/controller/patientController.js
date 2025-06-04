@@ -3,7 +3,6 @@ const pool = require("../models/db");
 const assignTasksToPatient = require("../services/assignTasksToPatient");
 const { DateTime } = require('luxon');
 
-const { DateTime } = require('luxon');
 
 const getPatients = async (req, res) => {
   try {
