@@ -615,9 +615,9 @@ const updateTaskNote = async (req, res) => {
 };
 
 const acknowledgeTask = async (req, res) => {
-  const taskId = parseInt(req.params.id, 10); // Ensure it's a number
-  const userId = parseInt(req.user.id, 10);   // Ensure it's a number
-
+  const taskId = parseInt(req.params.id, 10); 
+  const userId = parseInt(req.user.id, 10); 
+ const nowUTC = new Date().toISOString();
   try {
     const result = await pool.query(
       `
@@ -625,13 +625,13 @@ const acknowledgeTask = async (req, res) => {
       SET status = 'Acknowledged',
           status_history = status_history || jsonb_build_object(
             'status', 'Acknowledged',
-            'timestamp', NOW(),
-            'staff_id', $1::INT
+            'timestamp',  $1::timestamptz,
+            'staff_id', $2::INT
           )::jsonb
-      WHERE id = $2::INT
+      WHERE id = $3::INT
       RETURNING *
       `,
-      [userId, taskId]
+      [nowUTC,userId, taskId]
     );
 
     if (result.rowCount === 0) {

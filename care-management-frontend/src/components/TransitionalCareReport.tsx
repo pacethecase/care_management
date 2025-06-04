@@ -9,10 +9,10 @@ type TransitionalCareReportProps = {
     date_of_report: string;
     sections: {
       algorithm: string;
-      contact_info: string;
       tasks_completed: {
         task_name: string;
         completed_at: string;
+        contact_info:string;
       }[];
     }[];
   } | null;
@@ -58,7 +58,7 @@ const TransitionalCareReport = ({ report }: TransitionalCareReportProps) => {
             <tr key={i} className="border-b">
               <td className="p-3">{task.task_name}</td>
               <td className="p-3">{task.completed_at || 'N/A'}</td>
-              <td className="p-3">{section.contact_info || '—'}</td>
+              <td className="p-3">{task.contact_info || '—'}</td>
             </tr>
           ))}
         </tbody>
@@ -71,7 +71,7 @@ const TransitionalCareReport = ({ report }: TransitionalCareReportProps) => {
         <div key={i} className="border rounded-lg p-4 shadow-sm bg-gray-50">
           <p className="font-semibold mb-1">{task.task_name}</p>
           <p className="text-sm"><strong>Completed Date:</strong> {task.completed_at || 'N/A'}</p>
-          <p className="text-sm"><strong>Contact Info:</strong> {section.contact_info || '—'}</p>
+          <p className="text-sm"><strong>Contact Info:</strong> {task.contact_info || '—'}</p>
         </div>
       ))}
 </div>
