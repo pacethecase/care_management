@@ -25,13 +25,13 @@ const signup = async (req, res) => {
     return res.status(400).json({ error: 'Missing required fields' });
   }
   if (!hospital_id) {
-  return res.status(400).json({ error: "Hospital ID is required." });
-}
+    return res.status(400).json({ error: "Hospital ID is required." });
+  }
 
   try {
     const normalizedEmail = email.toLowerCase();
 
-    // Optional: validate hospital exists
+    // Validate hospital ID exists
     const { rowCount: hospitalExists } = await pool.query(
       'SELECT 1 FROM hospitals WHERE id = $1',
       [hospital_id]
@@ -42,23 +42,19 @@ const signup = async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const result = await pool.query(
-      `INSERT INTO users (name, email, password, is_admin, is_staff, is_verified, hospital_id)
-       VALUES ($1, $2, $3, $4, $5, false, $6)
-       RETURNING id, email, name, is_admin, is_staff, is_verified, hospital_id`,
-      [name, normalizedEmail, hashedPassword, isAdmin, isStaff, hospital_id]
-    );
+    // Prepare a dummy JWT to send for verification
+    const tempUserObj = {
+      name,
+      email: normalizedEmail,
+      is_admin: isAdmin,
+      is_staff: isStaff,
+      hospital_id
+    };
 
-   const token = jwt.sign({
-  id: result.rows[0].id,
-  is_admin: result.rows[0].is_admin,
-  is_staff: result.rows[0].is_staff,
-  hospital_id: hospital_id  
-}, JWT_SECRET, { expiresIn: '1d' });
-
+    const token = jwt.sign(tempUserObj, JWT_SECRET, { expiresIn: '1d' });
     const verifyUrl = `${BASE_URL}/auth/verify?token=${token}`;
 
-    // 📧 Send email
+    // Send verification email first
     await transporter.sendMail({
       from: `"Pace The Case Support" <${process.env.EMAIL_USERNAME}>`,
       to: normalizedEmail,
@@ -75,20 +71,20 @@ const signup = async (req, res) => {
       `,
     });
 
+    // Only insert into DB if email sends successfully
+    const result = await pool.query(
+      `INSERT INTO users (name, email, password, is_admin, is_staff, is_verified, hospital_id)
+       VALUES ($1, $2, $3, $4, $5, false, $6)
+       RETURNING id, email, name, is_admin, is_staff, is_verified, hospital_id`,
+      [name, normalizedEmail, hashedPassword, isAdmin, isStaff, hospital_id]
+    );
+
     res.status(201).json({
       message: 'User created. Check your email to verify.',
       token,
-      user: {
-        id: result.rows[0].id,
-        email: result.rows[0].email,
-        name: result.rows[0].name,
-        is_admin: result.rows[0].is_admin,
-        is_staff: result.rows[0].is_staff,
-        is_verified: result.rows[0].is_verified,
-        hospital_id: result.rows[0].hospital_id
-        
-      },
+      user: result.rows[0],
     });
+
   } catch (err) {
     console.error("Signup error:", err);
     if (err.code === '23505') {
@@ -97,6 +93,7 @@ const signup = async (req, res) => {
     res.status(500).json({ error: 'Signup failed' });
   }
 };
+
   
 
 // VERIFY
@@ -141,7 +138,7 @@ const login = async (req, res) => {
       // ✅ Set the token as httpOnly cookie
       res.cookie("token", token, {
         httpOnly: true,
-       secure: true,
+        secure: true,
         sameSite: "None",
         maxAge: 24 * 60 * 60 * 1000, // 1 day
       });
@@ -167,7 +164,7 @@ const login = async (req, res) => {
   const logout = (req, res) => {
     res.clearCookie("token", {
       httpOnly: true,
-      secure: true,
+        secure: true,
         sameSite: "None",
     });
     res.json({ message: "Logged out successfully" });

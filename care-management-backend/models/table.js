@@ -97,10 +97,8 @@ const createTables = async () => {
           ltc_court_datetime TIMESTAMP WITH TIME ZONE DEFAULT NULL,
           created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
           added_by_user_id INTEGER REFERENCES users(id),
-        selected_algorithms TEXT[] DEFAULT '{}',
-        hospital_id INTEGER NOT NULL REFERENCES hospitals(id),
-
-
+          selected_algorithms TEXT[] DEFAULT '{}',
+          hospital_id INTEGER NOT NULL REFERENCES hospitals(id),
       );
 
 
@@ -124,7 +122,8 @@ const createTables = async () => {
           is_non_blocking BOOLEAN DEFAULT FALSE,
           created_at TIMESTAMP  WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
           algorithm VARCHAR(50),
-          is_overridable BOOLEAN DEFAULT FALSE
+          is_overridable BOOLEAN DEFAULT FALSE,
+          is_court_date BOOLEAN DEFAULT FALSE
       );
 
      
