@@ -31,7 +31,6 @@ const signup = async (req, res) => {
   try {
     const normalizedEmail = email.toLowerCase();
 
-    // Validate hospital ID exists
     const { rowCount: hospitalExists } = await pool.query(
       'SELECT 1 FROM hospitals WHERE id = $1',
       [hospital_id]
@@ -42,36 +41,7 @@ const signup = async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Prepare a dummy JWT to send for verification
-    const tempUserObj = {
-      name,
-      email: normalizedEmail,
-      is_admin: isAdmin,
-      is_staff: isStaff,
-      hospital_id
-    };
-
-    const token = jwt.sign(tempUserObj, JWT_SECRET, { expiresIn: '1d' });
-    const verifyUrl = `${BASE_URL}/auth/verify?token=${token}`;
-
-    // Send verification email first
-    await transporter.sendMail({
-      from: `"Pace The Case Support" <${process.env.EMAIL_USERNAME}>`,
-      to: normalizedEmail,
-      subject: "Confirm Your Email for Pace The Case",
-      text: `Hi ${name},\n\nThank you for signing up for Pace The Case. Please verify your account by clicking the link below:\n\n${verifyUrl}\n\nIf you did not request this, you can ignore this email.`,
-      html: `
-        <p>Hi ${name},</p>
-        <p>Thank you for signing up for <strong>Pace The Case</strong>.</p>
-        <p>Please verify your email address by clicking the button below:</p>
-        <p><a href="${verifyUrl}" style="padding: 10px 20px; background-color: #1e90ff; color: white; text-decoration: none; border-radius: 5px;">Verify My Email</a></p>
-        <p>If you did not request this, simply ignore this email.</p>
-        <br/>
-        <p>– The Pace The Case Team</p>
-      `,
-    });
-
-    // Only insert into DB if email sends successfully
+    // ✅ Insert into DB first
     const result = await pool.query(
       `INSERT INTO users (name, email, password, is_admin, is_staff, is_verified, hospital_id)
        VALUES ($1, $2, $3, $4, $5, false, $6)
@@ -79,10 +49,35 @@ const signup = async (req, res) => {
       [name, normalizedEmail, hashedPassword, isAdmin, isStaff, hospital_id]
     );
 
+    const user = result.rows[0];
+
+    // ✅ Now generate token with actual user ID
+    const token = jwt.sign({
+      id: user.id,
+      is_admin: user.is_admin,
+      is_staff: user.is_staff,
+      hospital_id: user.hospital_id
+    }, JWT_SECRET, { expiresIn: '1d' });
+
+    const verifyUrl = `${BASE_URL}/auth/verify?token=${token}`;
+
+    // ✅ Send verification email
+    await transporter.sendMail({
+      from: `"Pace The Case Support" <${process.env.EMAIL_USERNAME}>`,
+      to: normalizedEmail,
+      subject: "Confirm Your Email for Pace The Case",
+      html: `
+        <p>Hi ${name},</p>
+        <p>Thank you for signing up for <strong>Pace The Case</strong>.</p>
+        <p>Please verify your email by clicking below:</p>
+        <p><a href="${verifyUrl}" style="padding:10px 20px;background:#1e90ff;color:white;text-decoration:none;border-radius:5px;">Verify My Email</a></p>
+      `,
+    });
+
     res.status(201).json({
       message: 'User created. Check your email to verify.',
       token,
-      user: result.rows[0],
+      user,
     });
 
   } catch (err) {
@@ -138,7 +133,7 @@ const login = async (req, res) => {
       // ✅ Set the token as httpOnly cookie
       res.cookie("token", token, {
         httpOnly: true,
-        secure: true,
+         secure: true,
         sameSite: "None",
         maxAge: 24 * 60 * 60 * 1000, // 1 day
       });
@@ -164,7 +159,7 @@ const login = async (req, res) => {
   const logout = (req, res) => {
     res.clearCookie("token", {
       httpOnly: true,
-        secure: true,
+           secure: true,
         sameSite: "None",
     });
     res.json({ message: "Logged out successfully" });
