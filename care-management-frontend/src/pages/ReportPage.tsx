@@ -108,6 +108,10 @@ const [selectedAdminId, setSelectedAdminId] = useState<number | ''>('');
     }
   }, [selectedReport]);
 
+  useEffect(() => {
+  setSelectedAdminId(''); 
+}, [selectedReport]);
+
   const handlePrint = () => {
     const content = document.getElementById("report-content");
     const printWindow = window.open("", "_blank");

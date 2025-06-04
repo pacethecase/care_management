@@ -2,42 +2,52 @@ const pool = require("../models/db");
 const assignTasksToPatient = require("../services/assignTasksToPatient");
 const { DateTime } = require('luxon');
 
-// GET All Patients (with role filter)
+
 const getPatients = async (req, res) => {
   try {
-  const userId = req.user?.id;
-const isStaff = req.user?.is_staff;
-const hospitalId = req.user?.hospital_id;
+    const userId = req.user?.id;
+    const isStaff = req.user?.is_staff;
+    const hospitalId = req.user?.hospital_id;
+    const timezone = req.headers["x-timezone"] || "America/New_York";
 
-const result = await pool.query(`
-  SELECT 
-    p.*,
-    json_agg(json_build_object('id', u.id, 'name', u.name)) FILTER (WHERE u.id IS NOT NULL) AS assigned_staff,
-    CASE
-      WHEN EXISTS (
-          SELECT 1 FROM patient_tasks pt
-          WHERE pt.patient_id = p.id AND pt.status = 'Missed' AND pt.is_visible = true
-      ) THEN 'missed'
-      WHEN EXISTS (
-          SELECT 1 FROM patient_tasks pt
-          WHERE pt.patient_id = p.id
-            AND pt.ideal_due_date::date = CURRENT_DATE
-            AND pt.status != 'Completed'
-            AND pt.is_visible = true
-      ) THEN 'in_progress'
-      ELSE 'completed'
-    END AS task_status
-  FROM patients p
-  LEFT JOIN patient_staff ps ON p.id = ps.patient_id
-  LEFT JOIN users u ON ps.staff_id = u.id
-  ${isStaff 
-    ? `WHERE ps.staff_id = $1 AND p.status != 'Discharged' AND p.hospital_id = $2`
-    : `WHERE p.status != 'Discharged' AND p.hospital_id = $1`
-  }
-  GROUP BY p.id
-  ORDER BY p.created_at DESC
-`, isStaff ? [userId, hospitalId] : [hospitalId]);
+    // Get today’s date in specified timezone
+    const today = DateTime.now().setZone(timezone).toFormat("yyyy-MM-dd");
 
+    const result = await pool.query(`
+      SELECT 
+        p.*,
+        CASE
+          WHEN EXISTS (
+            SELECT 1 FROM patient_tasks pt
+            WHERE pt.patient_id = p.id AND pt.status = 'Missed' AND pt.is_visible = true
+          ) THEN 'missed'
+           
+          WHEN EXISTS (
+            SELECT 1 FROM patient_tasks pt
+            WHERE pt.patient_id = p.id
+              AND pt.due_date::date <= $1::date
+              AND pt.status NOT IN ('Completed','Delayed Completed', 'Missed')
+              AND pt.is_visible = true
+          ) THEN 'in_progress'
+           WHEN EXISTS (
+            SELECT 1 FROM patient_tasks pt
+            WHERE pt.patient_id = p.id AND pt.status IN ('Completed', 'Delayed Completed') AND pt.is_visible = true
+          ) THEN 'completed'
+          
+          ELSE NULL
+        END AS task_status,
+        json_agg(json_build_object('id', u.id, 'name', u.name)) 
+          FILTER (WHERE u.id IS NOT NULL) AS assigned_staff
+      FROM patients p
+      LEFT JOIN patient_staff ps ON p.id = ps.patient_id
+      LEFT JOIN users u ON ps.staff_id = u.id
+      ${isStaff 
+        ? `WHERE ps.staff_id = $2 AND p.status != 'Discharged' AND p.hospital_id = $3`
+        : `WHERE p.status != 'Discharged' AND p.hospital_id = $2`
+      }
+      GROUP BY p.id
+      ORDER BY p.created_at DESC
+    `, isStaff ? [today, userId, hospitalId] : [today, hospitalId]);
 
     res.status(200).json(result.rows);
   } catch (err) {
@@ -602,23 +612,50 @@ const getSearchedPatients = async (req, res) => {
   try {
     const { q } = req.query;
     const hospitalId = req.user.hospital_id;
+    const timezone = req.headers["x-timezone"] || "America/New_York";
 
     if (!q || q.trim() === "") {
       return res.status(400).json({ error: "Search query is required" });
     }
 
     const query = `%${q.toLowerCase()}%`;
-
-    const result = await pool.query(
-      `SELECT id, first_name, last_name, mrn, birth_date, admitted_date, status, created_at, bed_id,
-              is_behavioral, is_ltc, is_guardianship
-       FROM patients
-       WHERE hospital_id = $2 AND (
-         LOWER(first_name || ' ' || last_name) LIKE $1 OR LOWER(mrn) LIKE $1
-       )
-       ORDER BY created_at DESC`,
-      [query, hospitalId]
-    );
+   const result = await pool.query(
+  `SELECT 
+     p.*,
+     CASE
+       WHEN EXISTS (
+         SELECT 1 FROM patient_tasks pt
+         WHERE pt.patient_id = p.id AND pt.status = 'Missed' AND pt.is_visible = true
+       ) THEN 'missed'
+       WHEN EXISTS (
+         SELECT 1 FROM patient_tasks pt
+         WHERE pt.patient_id = p.id
+           AND pt.due_date::date <= CURRENT_DATE
+           AND pt.status NOT IN ('Completed','Delayed Completed', 'Missed')
+           AND pt.is_visible = true
+       ) THEN 'in_progress'
+       WHEN EXISTS (
+         SELECT 1 FROM patient_tasks pt
+         WHERE pt.patient_id = p.id AND pt.status IN ('Completed', 'Delayed Completed') AND pt.is_visible = true
+       ) THEN 'completed'
+       ELSE NULL
+     END AS task_status,
+     json_agg(json_build_object('id', u.id, 'name', u.name)) 
+       FILTER (WHERE u.id IS NOT NULL) AS assigned_staff
+   FROM patients p
+   LEFT JOIN patient_staff ps ON p.id = ps.patient_id
+   LEFT JOIN users u ON ps.staff_id = u.id
+   WHERE p.hospital_id = $2
+     AND (
+       LOWER(p.first_name || ' ' || p.last_name) LIKE $1 OR
+       LOWER(p.mrn) LIKE $1 OR
+       p.admitted_date::text LIKE $1 OR
+       p.created_at::text LIKE $1
+     )
+   GROUP BY p.id
+   ORDER BY p.created_at DESC`,
+  [query, hospitalId]
+);
 
     res.status(200).json(result.rows);
   } catch (err) {
@@ -630,41 +667,43 @@ const getSearchedPatients = async (req, res) => {
 const getPatientsByAdmin = async (req, res) => {
   const { adminId } = req.params;
   const hospitalId = req.user.hospital_id;
+  const timezone = req.headers["x-timezone"] || "America/New_York";
+  const today = DateTime.now().setZone(timezone).toFormat("yyyy-MM-dd");
 
   try {
-    const result = await pool.query(`
-      SELECT 
-        p.*,
-        -- Compute task status
-        COALESCE((
-          SELECT 
-            CASE 
-              WHEN EXISTS (
-                SELECT 1 FROM patient_tasks pt
-                WHERE pt.patient_id = p.id AND pt.status = 'Missed' AND pt.is_visible = true
-              ) THEN 'missed'
-              WHEN EXISTS (
-                SELECT 1 FROM patient_tasks pt
-                WHERE pt.patient_id = p.id AND pt.status IN ('In Progress', 'Pending') AND pt.is_visible = true
-              ) THEN 'in_progress'
-              WHEN EXISTS (
-                SELECT 1 FROM patient_tasks pt
-                WHERE pt.patient_id = p.id AND pt.status = 'Completed' AND pt.is_visible = true
-              ) THEN 'completed'
-              ELSE NULL
-            END
-        )) AS task_status,
+  const result = await pool.query(`
+  SELECT 
+    p.*,
+    CASE
+      WHEN EXISTS (
+        SELECT 1 FROM patient_tasks pt
+        WHERE pt.patient_id = p.id AND pt.status = 'Missed' AND pt.is_visible = true
+      ) THEN 'missed'
+      WHEN EXISTS (
+        SELECT 1 FROM patient_tasks pt
+        WHERE pt.patient_id = p.id
+          AND pt.due_date::date <= CURRENT_DATE
+          AND pt.status NOT IN ('Completed','Delayed Completed','Missed')
+          AND pt.is_visible = true
+      ) THEN 'in_progress'
+      WHEN EXISTS (
+        SELECT 1 FROM patient_tasks pt
+        WHERE pt.patient_id = p.id
+          AND pt.status IN ('Completed','Delayed Completed')
+          AND pt.is_visible = true
+      ) THEN 'completed'
+      ELSE NULL
+    END AS task_status,
+    json_agg(json_build_object('id', u.id, 'name', u.name)) 
+      FILTER (WHERE u.id IS NOT NULL) AS assigned_staff
+  FROM patients p
+  LEFT JOIN patient_staff ps ON p.id = ps.patient_id
+  LEFT JOIN users u ON ps.staff_id = u.id
+  WHERE p.added_by_user_id = $1 AND p.hospital_id = $2 AND p.status != 'Discharged'
+  GROUP BY p.id
+  ORDER BY p.created_at DESC
+`, [adminId, hospitalId]);
 
-        json_agg(json_build_object('id', u.id, 'name', u.name)) 
-          FILTER (WHERE u.id IS NOT NULL) AS assigned_staff
-
-      FROM patients p
-      LEFT JOIN patient_staff ps ON p.id = ps.patient_id
-      LEFT JOIN users u ON ps.staff_id = u.id
-      WHERE p.added_by_user_id = $1 AND p.hospital_id = $2 AND p.status != 'Discharged'
-      GROUP BY p.id
-      ORDER BY p.created_at DESC
-    `, [adminId, hospitalId]);
 
     res.status(200).json(result.rows);
   } catch (err) {
@@ -672,6 +711,7 @@ const getPatientsByAdmin = async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 };
+
 
 
 const updateCourtDate = async (req, res) => {
