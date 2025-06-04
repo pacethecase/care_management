@@ -12,7 +12,7 @@ const getPatients = async (req, res) => {
 
     // Get today’s date in specified timezone
     const today = DateTime.now().setZone(timezone).toFormat("yyyy-MM-dd");
-
+console.log(today);
     const result = await pool.query(`
       SELECT 
         p.*,
@@ -62,7 +62,7 @@ const getPatients = async (req, res) => {
 const addPatient = async (req, res) => {
   const added_by_user_id = req.user.id;
   const hospital_id = req.user.hospital_id;
- console.log(req.user);
+
   try {
     const {
       first_name,
@@ -85,98 +85,98 @@ const addPatient = async (req, res) => {
       is_guardianship_person,
       is_guardianship_emergency,
       admitted_date,
-      created_at,
-     
+      created_at
     } = req.body;
 
-    if (!first_name ||!last_name || !birth_date || !bedId || !age || !mrn) {
+    // Validate required fields
+    if (!first_name || !last_name || !birth_date || !bedId || !age || !mrn) {
       return res.status(400).json({ message: "Missing required fields" });
     }
+
     console.log("✅ Submitting patient with hospital_id:", hospital_id);
 
+    // Construct selected_algorithms from flags
+    const selectedAlgorithms = [];
+    if (is_behavioral) selectedAlgorithms.push("Behavioral");
+    if (is_guardianship) selectedAlgorithms.push("Guardianship");
+    if (is_ltc) selectedAlgorithms.push("LTC");
 
+    // Insert patient into DB
     const result = await pool.query(
-      `INSERT INTO patients (first_name,last_name, birth_date, age, bed_id,mrn, medical_info, is_behavioral, is_restrained, is_geriatric_psych_available, is_behavioral_team, is_ltc,
-      is_ltc_medical,
-      is_ltc_financial,
-      is_guardianship,
-      is_guardianship_financial,
-      is_guardianship_person,
-      is_guardianship_emergency,admitted_date,added_by_user_id, hospital_id,created_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22) RETURNING *`,
+      `INSERT INTO patients (
+        first_name, last_name, birth_date, age, bed_id, mrn, medical_info,
+        is_behavioral, is_restrained, is_geriatric_psych_available, is_behavioral_team,
+        is_ltc, is_ltc_medical, is_ltc_financial,
+        is_guardianship, is_guardianship_financial, is_guardianship_person, is_guardianship_emergency,
+        admitted_date, added_by_user_id, hospital_id, created_at, selected_algorithms
+      )
+      VALUES (
+        $1, $2, $3, $4, $5, $6, $7,
+        $8, $9, $10, $11,
+        $12, $13, $14,
+        $15, $16, $17, $18,
+        $19, $20, $21, $22, $23
+      )
+      RETURNING *`,
       [
-        first_name,
-        last_name,
-        birth_date,
-        age,
-        bedId,
-        mrn,
-        medical_info,
-        is_behavioral,
-        is_restrained,
-        is_geriatric_psych_available,
-        is_behavioral_team,
-        is_ltc,
-        is_ltc_medical,
-        is_ltc_financial,
-        is_guardianship,
-        is_guardianship_financial,
-        is_guardianship_person,
-        is_guardianship_emergency,
-        admitted_date,
-        added_by_user_id,
-         hospital_id,
-         created_at 
+        first_name, last_name, birth_date, age, bedId, mrn, medical_info,
+        is_behavioral, is_restrained, is_geriatric_psych_available, is_behavioral_team,
+        is_ltc, is_ltc_medical, is_ltc_financial,
+        is_guardianship, is_guardianship_financial, is_guardianship_person, is_guardianship_emergency,
+        admitted_date, added_by_user_id, hospital_id, created_at,
+        selectedAlgorithms
       ]
     );
-    const newPatient = result.rows[0];
-    if (assignedStaffIds.length > 0) {
-  const { rows: validStaff } = await pool.query(
-    `SELECT id FROM users WHERE id = ANY($1::int[]) AND hospital_id = $2`,
-    [assignedStaffIds, hospital_id]
-  );
 
-  const validStaffIds = validStaff.map(s => s.id);
-  if (validStaffIds.length !== assignedStaffIds.length) {
-    return res.status(400).json({ error: "One or more assigned staff are not in your hospital" });
-  }
-}
+    const newPatient = result.rows[0];
+
+    // Validate staff assignment
+    if (assignedStaffIds.length > 0) {
+      const { rows: validStaff } = await pool.query(
+        `SELECT id FROM users WHERE id = ANY($1::int[]) AND hospital_id = $2`,
+        [assignedStaffIds, hospital_id]
+      );
+      const validStaffIds = validStaff.map(s => s.id);
+      if (validStaffIds.length !== assignedStaffIds.length) {
+        return res.status(400).json({ error: "One or more assigned staff are not in your hospital" });
+      }
+    }
+
+    // Insert into patient_staff
     for (const staffId of assignedStaffIds) {
       await pool.query(
         `INSERT INTO patient_staff (patient_id, staff_id) VALUES ($1, $2)`,
         [newPatient.id, staffId]
       );
     }
+
+    // Assign tasks based on selected algorithms
     const timezone = req.headers['x-timezone'] || 'America/New_York';
-   const selectedAlgorithms = [];
-if (is_behavioral) selectedAlgorithms.push("Behavioral");
-if (is_guardianship) selectedAlgorithms.push("Guardianship");
-if (is_ltc) selectedAlgorithms.push("LTC");
+    await assignTasksToPatient(newPatient.id, timezone, selectedAlgorithms);
 
-await assignTasksToPatient(newPatient.id, timezone, selectedAlgorithms);
-
+    // Send real-time notifications to assigned staff
     if (assignedStaffIds.length > 0) {
       const io = req.app.get("io");
-    
       for (const staffId of assignedStaffIds) {
+        const message = `You are assigned to ${newPatient.first_name} ${newPatient.last_name}`;
         io.to(`user-${staffId}`).emit("notification", {
           title: "New Patient Assigned",
-          message: `You are assigned to ${newPatient.first_name} ${newPatient.last_name}`,
+          message
         });
-    
         await pool.query(
-          `INSERT INTO notifications (user_id, title, message)
-           VALUES ($1, $2, $3)`,
-          [staffId, "New Patient Assigned", `You are assigned to ${newPatient.first_name} ${newPatient.last_name}`]
+          `INSERT INTO notifications (user_id, title, message) VALUES ($1, $2, $3)`,
+          [staffId, "New Patient Assigned", message]
         );
       }
     }
+
     res.status(201).json({ message: "Patient added and tasks assigned", patient: newPatient });
   } catch (err) {
     console.error("❌ Error adding patient:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 };
+
 
 // Get Patient By ID
 const getPatientById = async (req, res) => {
