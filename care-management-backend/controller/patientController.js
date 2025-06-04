@@ -1,3 +1,4 @@
+const { time } = require("framer-motion");
 const pool = require("../models/db");
 const assignTasksToPatient = require("../services/assignTasksToPatient");
 const { DateTime } = require('luxon');
@@ -24,7 +25,7 @@ const getPatients = async (req, res) => {
           WHEN EXISTS (
             SELECT 1 FROM patient_tasks pt
             WHERE pt.patient_id = p.id
-              AND pt.due_date::date <= $1::date
+           AND (pt.due_date AT TIME ZONE 'UTC' AT TIME ZONE $4)::date <= $1::date
               AND pt.status NOT IN ('Completed','Delayed Completed', 'Missed')
               AND pt.is_visible = true
           ) THEN 'in_progress'
@@ -46,7 +47,7 @@ const getPatients = async (req, res) => {
       }
       GROUP BY p.id
       ORDER BY p.created_at DESC
-    `, isStaff ? [today, userId, hospitalId] : [today, hospitalId]);
+    `, isStaff ? [today, userId, hospitalId,timezone] : [today, hospitalId,timezone]);
 
     res.status(200).json(result.rows);
   } catch (err) {
@@ -61,6 +62,9 @@ const getPatients = async (req, res) => {
 const addPatient = async (req, res) => {
   const added_by_user_id = req.user.id;
   const hospital_id = req.user.hospital_id;
+
+  const timezone = req.headers['x-timezone'] || 'America/New_York';
+
 
   try {
     const {
@@ -99,7 +103,10 @@ const addPatient = async (req, res) => {
     if (is_behavioral) selectedAlgorithms.push("Behavioral");
     if (is_guardianship) selectedAlgorithms.push("Guardianship");
     if (is_ltc) selectedAlgorithms.push("LTC");
-
+    // Convert created_at to UTC
+    const createdAtUTC = created_at
+      ? DateTime.fromISO(created_at, { zone: timezone }).toUTC().toISO()
+      : DateTime.now().setZone(timezone).toUTC().toISO();
     // Insert patient into DB
     const result = await pool.query(
       `INSERT INTO patients (
@@ -122,7 +129,7 @@ const addPatient = async (req, res) => {
         is_behavioral, is_restrained, is_geriatric_psych_available, is_behavioral_team,
         is_ltc, is_ltc_medical, is_ltc_financial,
         is_guardianship, is_guardianship_financial, is_guardianship_person, is_guardianship_emergency,
-        admitted_date, added_by_user_id, hospital_id, created_at,
+        admitted_date, added_by_user_id, hospital_id, createdAtUTC,
         selectedAlgorithms
       ]
     );
@@ -149,8 +156,6 @@ const addPatient = async (req, res) => {
       );
     }
 
-    // Assign tasks based on selected algorithms
-    const timezone = req.headers['x-timezone'] || 'America/New_York';
     await assignTasksToPatient(newPatient.id, timezone, selectedAlgorithms);
 
     // Send real-time notifications to assigned staff
@@ -607,6 +612,7 @@ const updatePatient = async (req, res) => {
   }
 };
 
+
 const getSearchedPatients = async (req, res) => {
   try {
     const { q } = req.query;
@@ -617,44 +623,46 @@ const getSearchedPatients = async (req, res) => {
       return res.status(400).json({ error: "Search query is required" });
     }
 
+    const today = DateTime.now().setZone(timezone).toFormat("yyyy-MM-dd");
     const query = `%${q.toLowerCase()}%`;
-   const result = await pool.query(
-  `SELECT 
-     p.*,
-     CASE
-       WHEN EXISTS (
-         SELECT 1 FROM patient_tasks pt
-         WHERE pt.patient_id = p.id AND pt.status = 'Missed' AND pt.is_visible = true
-       ) THEN 'missed'
-       WHEN EXISTS (
-         SELECT 1 FROM patient_tasks pt
-         WHERE pt.patient_id = p.id
-           AND pt.due_date::date <= CURRENT_DATE
-           AND pt.status NOT IN ('Completed','Delayed Completed', 'Missed')
-           AND pt.is_visible = true
-       ) THEN 'in_progress'
-       WHEN EXISTS (
-         SELECT 1 FROM patient_tasks pt
-         WHERE pt.patient_id = p.id AND pt.status IN ('Completed', 'Delayed Completed') AND pt.is_visible = true
-       ) THEN 'completed'
-       ELSE NULL
-     END AS task_status,
-     json_agg(json_build_object('id', u.id, 'name', u.name)) 
-       FILTER (WHERE u.id IS NOT NULL) AS assigned_staff
-   FROM patients p
-   LEFT JOIN patient_staff ps ON p.id = ps.patient_id
-   LEFT JOIN users u ON ps.staff_id = u.id
-   WHERE p.hospital_id = $2
-     AND (
-       LOWER(p.first_name || ' ' || p.last_name) LIKE $1 OR
-       LOWER(p.mrn) LIKE $1 OR
-       p.admitted_date::text LIKE $1 OR
-       p.created_at::text LIKE $1
-     )
-   GROUP BY p.id
-   ORDER BY p.created_at DESC`,
-  [query, hospitalId]
-);
+
+    const result = await pool.query(
+      `SELECT 
+         p.*,
+         CASE
+           WHEN EXISTS (
+             SELECT 1 FROM patient_tasks pt
+             WHERE pt.patient_id = p.id AND pt.status = 'Missed' AND pt.is_visible = true
+           ) THEN 'missed'
+           WHEN EXISTS (
+             SELECT 1 FROM patient_tasks pt
+             WHERE pt.patient_id = p.id
+               AND (pt.due_date AT TIME ZONE 'UTC' AT TIME ZONE $4)::date <= $3::date
+               AND pt.status NOT IN ('Completed','Delayed Completed', 'Missed')
+               AND pt.is_visible = true
+           ) THEN 'in_progress'
+           WHEN EXISTS (
+             SELECT 1 FROM patient_tasks pt
+             WHERE pt.patient_id = p.id AND pt.status IN ('Completed', 'Delayed Completed') AND pt.is_visible = true
+           ) THEN 'completed'
+           ELSE NULL
+         END AS task_status,
+         json_agg(json_build_object('id', u.id, 'name', u.name)) 
+           FILTER (WHERE u.id IS NOT NULL) AS assigned_staff
+       FROM patients p
+       LEFT JOIN patient_staff ps ON p.id = ps.patient_id
+       LEFT JOIN users u ON ps.staff_id = u.id
+       WHERE p.hospital_id = $2
+         AND (
+           LOWER(p.first_name || ' ' || p.last_name) LIKE $1 OR
+           LOWER(p.mrn) LIKE $1 OR
+           p.admitted_date::text LIKE $1 OR
+           p.created_at::text LIKE $1
+         )
+       GROUP BY p.id
+       ORDER BY p.created_at DESC`,
+      [query, hospitalId, today, timezone]
+    );
 
     res.status(200).json(result.rows);
   } catch (err) {
@@ -663,6 +671,7 @@ const getSearchedPatients = async (req, res) => {
   }
 };
 
+
 const getPatientsByAdmin = async (req, res) => {
   const { adminId } = req.params;
   const hospitalId = req.user.hospital_id;
@@ -670,39 +679,39 @@ const getPatientsByAdmin = async (req, res) => {
   const today = DateTime.now().setZone(timezone).toFormat("yyyy-MM-dd");
 
   try {
-  const result = await pool.query(`
-  SELECT 
-    p.*,
-    CASE
-      WHEN EXISTS (
-        SELECT 1 FROM patient_tasks pt
-        WHERE pt.patient_id = p.id AND pt.status = 'Missed' AND pt.is_visible = true
-      ) THEN 'missed'
-      WHEN EXISTS (
-        SELECT 1 FROM patient_tasks pt
-        WHERE pt.patient_id = p.id
-          AND pt.due_date::date <= CURRENT_DATE
-          AND pt.status NOT IN ('Completed','Delayed Completed','Missed')
-          AND pt.is_visible = true
-      ) THEN 'in_progress'
-      WHEN EXISTS (
-        SELECT 1 FROM patient_tasks pt
-        WHERE pt.patient_id = p.id
-          AND pt.status IN ('Completed','Delayed Completed')
-          AND pt.is_visible = true
-      ) THEN 'completed'
-      ELSE NULL
-    END AS task_status,
-    json_agg(json_build_object('id', u.id, 'name', u.name)) 
-      FILTER (WHERE u.id IS NOT NULL) AS assigned_staff
-  FROM patients p
-  LEFT JOIN patient_staff ps ON p.id = ps.patient_id
-  LEFT JOIN users u ON ps.staff_id = u.id
-  WHERE p.added_by_user_id = $1 AND p.hospital_id = $2 AND p.status != 'Discharged'
-  GROUP BY p.id
-  ORDER BY p.created_at DESC
-`, [adminId, hospitalId]);
-
+    const result = await pool.query(
+      `SELECT 
+        p.*,
+        CASE
+          WHEN EXISTS (
+            SELECT 1 FROM patient_tasks pt
+            WHERE pt.patient_id = p.id AND pt.status = 'Missed' AND pt.is_visible = true
+          ) THEN 'missed'
+          WHEN EXISTS (
+            SELECT 1 FROM patient_tasks pt
+            WHERE pt.patient_id = p.id
+              AND (pt.due_date AT TIME ZONE 'UTC' AT TIME ZONE $4)::date <= $3::date
+              AND pt.status NOT IN ('Completed','Delayed Completed','Missed')
+              AND pt.is_visible = true
+          ) THEN 'in_progress'
+          WHEN EXISTS (
+            SELECT 1 FROM patient_tasks pt
+            WHERE pt.patient_id = p.id
+              AND pt.status IN ('Completed','Delayed Completed')
+              AND pt.is_visible = true
+          ) THEN 'completed'
+          ELSE NULL
+        END AS task_status,
+        json_agg(json_build_object('id', u.id, 'name', u.name)) 
+          FILTER (WHERE u.id IS NOT NULL) AS assigned_staff
+      FROM patients p
+      LEFT JOIN patient_staff ps ON p.id = ps.patient_id
+      LEFT JOIN users u ON ps.staff_id = u.id
+      WHERE p.added_by_user_id = $1 AND p.hospital_id = $2 AND p.status != 'Discharged'
+      GROUP BY p.id
+      ORDER BY p.created_at DESC`,
+      [adminId, hospitalId, today, timezone]
+    );
 
     res.status(200).json(result.rows);
   } catch (err) {
@@ -710,6 +719,7 @@ const getPatientsByAdmin = async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 };
+
 
 
 
