@@ -3,6 +3,7 @@ const pool = require("../models/db");
 const assignTasksToPatient = require("../services/assignTasksToPatient");
 const { DateTime } = require('luxon');
 
+const { DateTime } = require('luxon');
 
 const getPatients = async (req, res) => {
   try {
@@ -11,8 +12,8 @@ const getPatients = async (req, res) => {
     const hospitalId = req.user?.hospital_id;
     const timezone = req.headers["x-timezone"] || "America/New_York";
 
-    // Get today’s date in specified timezone
     const today = DateTime.now().setZone(timezone).toFormat("yyyy-MM-dd");
+
     const result = await pool.query(`
       SELECT 
         p.*,
@@ -21,19 +22,19 @@ const getPatients = async (req, res) => {
             SELECT 1 FROM patient_tasks pt
             WHERE pt.patient_id = p.id AND pt.status = 'Missed' AND pt.is_visible = true
           ) THEN 'missed'
-           
           WHEN EXISTS (
             SELECT 1 FROM patient_tasks pt
             WHERE pt.patient_id = p.id
-           AND (pt.due_date AT TIME ZONE 'UTC' AT TIME ZONE $4)::date <= $1::date
+              AND pt.due_date::date <= $1::date
               AND pt.status NOT IN ('Completed','Delayed Completed', 'Missed')
               AND pt.is_visible = true
           ) THEN 'in_progress'
-           WHEN EXISTS (
+          WHEN EXISTS (
             SELECT 1 FROM patient_tasks pt
-            WHERE pt.patient_id = p.id AND pt.status IN ('Completed', 'Delayed Completed') AND pt.is_visible = true
+            WHERE pt.patient_id = p.id 
+              AND pt.status IN ('Completed', 'Delayed Completed') 
+              AND pt.is_visible = true
           ) THEN 'completed'
-          
           ELSE NULL
         END AS task_status,
         json_agg(json_build_object('id', u.id, 'name', u.name)) 
@@ -47,7 +48,9 @@ const getPatients = async (req, res) => {
       }
       GROUP BY p.id
       ORDER BY p.created_at DESC
-    `, isStaff ? [today, userId, hospitalId,timezone] : [today, hospitalId,timezone]);
+    `, isStaff 
+        ? [today, userId, hospitalId] 
+        : [today, hospitalId]);
 
     res.status(200).json(result.rows);
   } catch (err) {
