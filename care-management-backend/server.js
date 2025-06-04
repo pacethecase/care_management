@@ -15,6 +15,13 @@ const http = require('http');
 const socketIo = require('socket.io');
 
 require("dotenv").config();
+require("dotenv").config();
+
+console.log("✅ ENV DEBUG:");
+console.log("EMAIL_USERNAME:", process.env.EMAIL_USERNAME);
+console.log("EMAIL_PASSWORD set:", !!process.env.EMAIL_PASSWORD); // shows true/false
+console.log("EMAIL_PASSWORD length:", process.env.EMAIL_PASSWORD?.length);
+
 const setupMissedTaskJob = require('./controller/missedTaskJob');
 const setupCourtReminderJob = require("./controller/setupCourtReminderJob");
 
