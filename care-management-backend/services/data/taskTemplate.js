@@ -1,4 +1,4 @@
-const { desc } = require("framer-motion/client");
+
 
 const tasks = [
     { name: "Behavioral Management Contract Created", description: "Create behavioral contract within 48 hours.",is_overridable: true,  is_repeating: false, recurrence_interval: null, max_repeats: null, condition_required: null, category: "Contract", dependency_name: null,algorithm:"Behavioral" },
