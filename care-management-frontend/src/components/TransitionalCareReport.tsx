@@ -55,6 +55,7 @@ const TransitionalCareReport = ({ report }: TransitionalCareReportProps) => {
         </thead>
         <tbody>
           {section.tasks_completed.map((task, i) => (
+            
             <tr key={i} className="border-b">
               <td className="p-3">{task.task_name}</td>
               <td className="p-3">{task.completed_at || 'N/A'}</td>

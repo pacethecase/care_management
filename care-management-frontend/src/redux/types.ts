@@ -1,6 +1,7 @@
 // redux/types.ts
 
 export interface Patient {
+    created_at_local: any;
     id: number;
     first_name: string;
     last_name: string;

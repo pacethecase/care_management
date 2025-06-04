@@ -62,7 +62,12 @@ const assignTasksToPatient = async (patientId, timezone, selectedAlgorithms = []
 
   if (!visible) return; // Don't assign if condition is false
 
-  const dueLocal = DateTime.local().setZone(timezone).plus({ days }).set({ hour: 23, minute: 59, second: 0, millisecond: 0 });
+const admittedDate = patient.created_at  || new Date();
+
+const dueLocal = DateTime.fromJSDate(admittedDate, { zone: timezone })
+  .plus({ days }) // Use your task-specific offset here
+  .set({ hour: 23, minute: 59, second: 0, millisecond: 0 });
+
   const dueDate = dueLocal.toUTC().toJSDate();
   const idealDueDate = dueLocal.toUTC().toJSDate();
   taskAssignments.push([patientId, taskId, 'Pending', dueDate, idealDueDate, true]);

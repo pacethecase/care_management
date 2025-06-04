@@ -548,7 +548,19 @@ const renderTaskColumns = () => {
             </h3>
           <p className="text-sm font-semibold">
           • Age {patient.age} • Bed {patient.bed_id} • Admitted on{" "}
-          {patient.admitted_date ? new Date(patient.admitted_date).toLocaleDateString() : "N/A"} • MRN {patient.mrn}
+                {patient.admitted_date ?new Date(patient.admitted_date).toLocaleString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+      }) : "N/A"} • System date of Entry{" "}
+                {patient.created_at ? new Date(patient.created_at).toLocaleString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+          })
+          : "N/A"} • MRN {patient.mrn}
           </p>
           <div className="text-xs mt-2 space-y-1">
             {patient.is_behavioral && (

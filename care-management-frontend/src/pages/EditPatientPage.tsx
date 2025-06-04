@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate, useParams, Link } from 'react-router-dom';
-import { fetchPatients, updatePatient } from '../redux/slices/patientSlice';
+import { fetchPatientById, updatePatient } from '../redux/slices/patientSlice';
 import { fetchStaffs } from '../redux/slices/userSlice';
 import { RootState } from '../redux/store';
 import Navbar from '../components/Navbar';
@@ -10,14 +10,14 @@ import Select from 'react-select';
 import AlgorithmSelection from "../components/AlgorithmSelection";
 import { reactSelectStyles } from '../reactSelectStyles';
 import type { AppDispatch } from '../redux/store';
-
+import dayjs from 'dayjs';
 const EditPatientPage = () => {
   const dispatch = useDispatch<AppDispatch>();
   const navigate = useNavigate();
   const { patientId } = useParams<{ patientId: string }>();
   const staffs = useSelector((state: RootState) => state.user.staffs);
-  const { patients } = useSelector((state: RootState) => state.patients);
-  const patient = patients.find((p) => p.id === Number(patientId));
+  const patient = useSelector((state: RootState) => state.patients.selectedPatient);
+
 
   const [formData, setFormData] = useState<any>({
     first_name: '',
@@ -45,10 +45,13 @@ const EditPatientPage = () => {
     is_guardianship_emergency: false,
   });
 
-  useEffect(() => {
-    dispatch(fetchPatients());
-    dispatch(fetchStaffs());
-  }, [dispatch]);
+
+    useEffect(() => {
+      if (patientId) {
+        dispatch(fetchPatientById(Number(patientId)));
+        dispatch(fetchStaffs());
+      }
+    }, [dispatch, patientId]);
 
   useEffect(() => {
     if (patient) {
@@ -80,6 +83,8 @@ const EditPatientPage = () => {
         is_guardianship_financial: patient.is_guardianship_financial || false,
         is_guardianship_person: patient.is_guardianship_person || false,
         is_guardianship_emergency: patient.is_guardianship_emergency || false,
+        admitted_date:patient.admitted_date || '',
+        created_at: patient.created_at || '',
       });
     }
   }, [patient]);
@@ -128,12 +133,12 @@ const EditPatientPage = () => {
   if (!patient) return <p className="p-6">Loading patient info...</p>;
 
   return (
-    <div className="flex flex-col min-h-screen bg-[var(--bg-light)] text-[var(--text-dark)]">
+    <div className="flex flex-col min-h-screen text-white">
       <Navbar />
       <main className="flex-grow container mx-auto px-6 py-10">
-        <div className="flex justify-between items-center mb-6">
-          <h3 className="text-3xl font-semibold text-[var(--deep-navy)]">Edit Patient</h3>
-          <Link to="/patients" className="text-[var(--funky-orange)] hover:underline font-medium text-sm">
+        <div className="flex justify-between items-center text-[var(--prussian-blue)] mb-6">
+          <h3 className="text-3xl font-semibold">Edit Patient</h3>
+          <Link to="/patients" className="hover:underline font-medium text-sm">
             ← Back to Patients
           </Link>
         </div>
@@ -142,34 +147,63 @@ const EditPatientPage = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label className="block font-medium">First Name*</label>
-              <input type="text" name="first_name" value={formData.first_name} onChange={handleChange} className="input" />
+              <input type="text" name="first_name" value={formData.first_name} onChange={handleChange} className="bg-white text-black placeholder-gray-400 border rounded py-2 px-3" />
             </div>
             <div>
               <label className="block font-medium">Last Name*</label>
-              <input type="text" name="last_name" value={formData.last_name} onChange={handleChange} className="input" />
+              <input type="text" name="last_name" value={formData.last_name} onChange={handleChange} className="bg-white text-black placeholder-gray-400 border rounded py-2 px-3" />
             </div>
             <div>
               <label className="block font-medium">Birth Date*</label>
-              <input type="date" name="birth_date" value={formData.birth_date} onChange={handleChange} className="input" />
+              <input type="date" name="birth_date" value={formData.birth_date} onChange={handleChange} className="bg-white text-black placeholder-gray-400 border rounded py-2 px-3" />
             </div>
             <div>
               <label className="block font-medium">Age</label>
-              <input type="number" name="age" value={formData.age} readOnly className="input" />
+              <input type="number" name="age" value={formData.age} readOnly className="bg-white text-black placeholder-gray-400 border rounded py-2 px-3" />
             </div>
+            
+           
             <div>
+            <label className="block font-medium">Admitted Hospital Date</label>
+            <input
+              type="date"
+              name="admitted_date"
+              value={formData.admitted_date?.split("T")[0] || ""}
+              readOnly
+              className="input text-black bg-gray-100 cursor-not-allowed"
+            />
+          </div>
+
+          <div>
+            <label className="block font-medium">System Date of Entry</label>
+            <input
+              type="datetime-local"
+              name="created_at"
+              value={
+                formData.created_at
+                  ? dayjs(formData.created_at).format("YYYY-MM-DDTHH:mm")
+                  : ""
+              }
+              readOnly
+              className="input text-black bg-gray-100 cursor-not-allowed"
+            />
+
+          </div>
+           <div>
               <label className="block font-medium">MRN</label>
-              <input type="text" name="mrn" value={formData.mrn} onChange={handleChange} className="input" />
+              <input type="text" name="mrn" value={formData.mrn} onChange={handleChange} className="bg-white text-black placeholder-gray-400 border rounded py-2 px-3ut" />
             </div>
+
             <div>
               <label className="block font-medium">Bed ID*</label>
-              <input type="text" name="bedId" value={formData.bedId} onChange={handleChange} className="input" />
+              <input type="text" name="bedId" value={formData.bedId} onChange={handleChange} className="bg-white text-black placeholder-gray-400 border rounded py-2 px-3" />
             </div>
             <div className="md:col-span-2">
               <label className="block font-medium">Medical Info</label>
-              <textarea name="medical_info" value={formData.medical_info} onChange={handleChange} className="input" />
+              <textarea name="medical_info" value={formData.medical_info} onChange={handleChange} className="bg-white text-black placeholder-gray-400 border rounded py-2 px-3" />
             </div>
-            <div className="md:col-span-2">
-              <label className="block font-medium">Assign Staff</label>
+            <div className="md:col-span-2 text-black">
+              <label className="block text-white font-medium">Assign Staff</label>
               <Select
                 isMulti
                 styles={reactSelectStyles}

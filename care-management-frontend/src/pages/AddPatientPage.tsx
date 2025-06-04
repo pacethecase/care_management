@@ -9,6 +9,7 @@ import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import Select from 'react-select';
 import { reactSelectStyles } from '../reactSelectStyles';
+import dayjs from 'dayjs';
 
 interface FormData {
   first_name: string;
@@ -31,6 +32,8 @@ interface FormData {
   is_guardianship_financial: boolean;
   is_guardianship_person: boolean;
   is_guardianship_emergency: boolean;
+  created_at: string; 
+ 
 }
 
 const AddPatientPage = () => {
@@ -61,11 +64,21 @@ const AddPatientPage = () => {
     is_guardianship_financial: false,
     is_guardianship_person: false,
     is_guardianship_emergency: false,
+    created_at: '', 
   });
 
   useEffect(() => {
     dispatch(fetchStaffs());
   }, [dispatch]);
+
+  useEffect(() => {
+  const now = dayjs().format("YYYY-MM-DDTHH:mm");
+  setFormData((prev) => ({
+    ...prev,
+    created_at: now,
+  }));
+}, []);
+
 
   useEffect(() => {
     if (formData.birth_date) {
@@ -188,9 +201,10 @@ const AddPatientPage = () => {
                 readOnly
               />
             </div>
-               <div>
-            <label>Admitted Date</label>
-             <input
+                    
+            <div>
+              <label htmlFor="admitted_date" className="block font-medium">Admitted Hospital Date</label>
+              <input
                 type="date"
                 id="admitted_date"
                 className="bg-white text-black placeholder-gray-400 border rounded py-2 px-3"
@@ -199,10 +213,23 @@ const AddPatientPage = () => {
                 onChange={handleChange}
                 required
               />
-        </div>
+            </div>
 
             <div>
-              <label htmlFor="mrn" className="block font-medium">MRN</label>
+            <label htmlFor="created_at" className="block font-medium">
+              System Date of Entry
+            </label>
+            <input
+              type="text" 
+              id="created_at"
+              className="bg-white text-black cursor-not-allowed border rounded py-2 px-3"
+              name="created_at"
+              value={dayjs(formData.created_at).format("MM/DD/YYYY hh:mm A")} // full timestamp
+              readOnly
+            />
+          </div>
+          <div>
+              <label htmlFor="mrn" className="block font-medium">MRN*</label>
               <input
                 type="text"
                 id="mrn"
@@ -212,6 +239,7 @@ const AddPatientPage = () => {
                 onChange={handleChange}
               />
             </div>
+
 
             <div>
               <label htmlFor="bedId" className="block font-medium">Bed ID*</label>

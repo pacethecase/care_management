@@ -23,12 +23,20 @@ const initialState: ReportState = {
   loading: false,
   error: null,
 };
+export interface ReportParams {
+  date: string;
+  adminId?: number;
+}
 
-export const fetchDailyReport = createAsyncThunk<any[], string, { rejectValue: string }>(
+
+export const fetchDailyReport = createAsyncThunk<any[], ReportParams, { rejectValue: string }>(
   "reports/fetchDailyReport",
-  async (date, { rejectWithValue }) => {
+  async ({ date, adminId }, { rejectWithValue }) => {
     try {
-      const response = await axios.get(`${BASE_URL}/reports/daily-report?date=${date}`, {
+      const queryParams = new URLSearchParams({ date });
+      if (adminId) queryParams.append("adminId", String(adminId));
+
+      const response = await axios.get(`${BASE_URL}/reports/daily-report?${queryParams.toString()}`, {
         withCredentials: true,
       });
       return response.data;
@@ -38,11 +46,14 @@ export const fetchDailyReport = createAsyncThunk<any[], string, { rejectValue: s
   }
 );
 
-export const fetchPriorityReport = createAsyncThunk<any[], string, { rejectValue: string }>(
+export const fetchPriorityReport = createAsyncThunk<any[], ReportParams, { rejectValue: string }>(
   "reports/fetchPriorityReport",
-  async (date, { rejectWithValue }) => {
+  async ({ date, adminId }, { rejectWithValue }) => {
     try {
-      const response = await axios.get(`${BASE_URL}/reports/daily-priority-report?date=${date}`, {
+      const queryParams = new URLSearchParams({ date });
+      if (adminId) queryParams.append("adminId", String(adminId));
+
+      const response = await axios.get(`${BASE_URL}/reports/daily-priority-report?${queryParams.toString()}`, {
         withCredentials: true,
       });
       return response.data;

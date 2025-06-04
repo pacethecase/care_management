@@ -6,6 +6,8 @@ import PriorityReport from "../components/PriorityReport";
 import TransitionalCareReport from "../components/TransitionalCareReport";
 import HistoricalTimelineReport from "../components/HistoricalTimelineReport";
 import ProjectedTimelineReport from "../components/ProjectedTimelineReport";
+import { fetchAdmins } from "../redux/slices/userSlice";
+
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import logo from "../assets/logo.png";
@@ -31,6 +33,9 @@ const ReportPage = () => {
   );
 
   const [selectedReport, setSelectedReport] = useState<ReportType | null>(null);
+  const { admins, user } = useSelector((state: RootState) => state.user);
+const [selectedAdminId, setSelectedAdminId] = useState<number | ''>('');
+
   const getLocalDateString = () =>
     new Date().toLocaleDateString("sv-SE"); 
   
@@ -45,6 +50,13 @@ const ReportPage = () => {
   }, [dispatch]);
 
   useEffect(() => {
+  if (user?.is_admin) {
+    dispatch(fetchAdmins());
+  }
+}, [dispatch, user?.is_admin]);
+
+
+  useEffect(() => {
     if (
       (selectedReport === "transitional" ||
         selectedReport === "historical" ||
@@ -55,10 +67,10 @@ const ReportPage = () => {
 
     switch (selectedReport) {
       case "daily":
-        dispatch(fetchDailyReport(selectedDate));
+      dispatch(fetchDailyReport({ date: selectedDate, adminId: selectedAdminId || undefined }));
         break;
       case "priority":
-        dispatch(fetchPriorityReport(selectedDate));
+        dispatch(fetchPriorityReport({ date: selectedDate, adminId: selectedAdminId || undefined} ));
         break;
       case "transitional":
         if (selectedPatientId)  dispatch(
@@ -84,7 +96,7 @@ const ReportPage = () => {
         if (selectedPatientId) dispatch(fetchProjectedTimelineReport(selectedPatientId));
         break;
     }
-  }, [selectedReport, selectedDate, selectedPatientId,  startRange, endRange, dispatch]);
+  }, [selectedReport, selectedDate, selectedPatientId,selectedAdminId,  startRange, endRange, dispatch]);
 
   useEffect(() => {
     if (
@@ -307,6 +319,29 @@ const ReportPage = () => {
   })}
 </div>
 
+  {(selectedReport === "daily"  ||
+      selectedReport === "priority") &&  (
+              <div className="mb-4">
+                <label htmlFor="adminFilter" className="font-semibold">
+                  Filter by Leader:
+                </label>
+                <select
+                  id="adminFilter"
+                  className="border rounded p-2"
+                  value={selectedAdminId}
+                  onChange={(e) =>
+                    setSelectedAdminId(e.target.value ? Number(e.target.value) : '')
+                  }
+                >
+                  <option value="">All Leaders</option>
+                  {admins.map((admin) => (
+                    <option key={admin.id} value={admin.id}>
+                      {admin.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
         {(selectedReport === "transitional" ||
           selectedReport === "historical" ||

@@ -73,7 +73,7 @@ const newNote = newNoteRes.rows[0];
 
     res.status(201).json({
       ...newNote,
-      name, 
+     nurse_name: name,
     });
   } catch (err) {
     console.error("❌ Error adding note:", err);

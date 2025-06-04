@@ -6,17 +6,19 @@ import { RootState } from "../redux/store";
 
 interface PriorityReportProps {
   date: string;
+  adminId?:number;
   
 }
 
-const PriorityReport: React.FC<PriorityReportProps> = ({ date }) => {
+const PriorityReport: React.FC<PriorityReportProps> = ({ date, adminId }) => {
   const dispatch = useDispatch<AppDispatch>();
   const { priorityReport, loading, error } = useSelector((state: RootState) => state.reports);
 
   // Fetch priority report when component mounts
   useEffect(() => {
-    dispatch(fetchPriorityReport(date)); // Pass the date for filtering
-  }, [dispatch, date]);
+   dispatch(fetchPriorityReport({ date, adminId }));
+
+  }, [dispatch, date,adminId]);
 
   return (
     <div>

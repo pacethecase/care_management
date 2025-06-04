@@ -1,6 +1,6 @@
 const pool = require("../models/db");
 const assignTasksToPatient = require("../services/assignTasksToPatient");
-
+const { DateTime } = require('luxon');
 
 // GET All Patients (with role filter)
 const getPatients = async (req, res) => {
@@ -75,6 +75,7 @@ const addPatient = async (req, res) => {
       is_guardianship_person,
       is_guardianship_emergency,
       admitted_date,
+      created_at,
      
     } = req.body;
 
@@ -91,8 +92,8 @@ const addPatient = async (req, res) => {
       is_guardianship,
       is_guardianship_financial,
       is_guardianship_person,
-      is_guardianship_emergency,admitted_date,added_by_user_id, hospital_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21) RETURNING *`,
+      is_guardianship_emergency,admitted_date,added_by_user_id, hospital_id,created_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22) RETURNING *`,
       [
         first_name,
         last_name,
@@ -114,7 +115,8 @@ const addPatient = async (req, res) => {
         is_guardianship_emergency,
         admitted_date,
         added_by_user_id,
-         hospital_id
+         hospital_id,
+         created_at 
       ]
     );
     const newPatient = result.rows[0];
@@ -169,7 +171,7 @@ await assignTasksToPatient(newPatient.id, timezone, selectedAlgorithms);
 // Get Patient By ID
 const getPatientById = async (req, res) => {
   const userHospitalId = req.user.hospital_id;
-
+    const timezone = req.headers['x-timezone'] || 'America/New_York';
   try {
     const { patientId } = req.params;
 
@@ -205,8 +207,11 @@ const getPatientById = async (req, res) => {
     if (result.rows.length === 0) {
       return res.status(404).json({ error: "Patient not found" });
     }
+  const patient = result.rows[0];
 
-    res.status(200).json(result.rows[0]);
+  
+
+    res.status(200).json(patient);
   } catch (err) {
     console.error("❌ Error fetching patient:", err);
     res.status(500).json({ error: "Internal server error" });
@@ -622,16 +627,37 @@ const getSearchedPatients = async (req, res) => {
   }
 };
 
-
 const getPatientsByAdmin = async (req, res) => {
-  const adminId = req.user.id;
+  const { adminId } = req.params;
   const hospitalId = req.user.hospital_id;
 
   try {
     const result = await pool.query(`
       SELECT 
         p.*,
-        json_agg(json_build_object('id', u.id, 'name', u.name)) FILTER (WHERE u.id IS NOT NULL) AS assigned_staff
+        -- Compute task status
+        COALESCE((
+          SELECT 
+            CASE 
+              WHEN EXISTS (
+                SELECT 1 FROM patient_tasks pt
+                WHERE pt.patient_id = p.id AND pt.status = 'Missed' AND pt.is_visible = true
+              ) THEN 'missed'
+              WHEN EXISTS (
+                SELECT 1 FROM patient_tasks pt
+                WHERE pt.patient_id = p.id AND pt.status IN ('In Progress', 'Pending') AND pt.is_visible = true
+              ) THEN 'in_progress'
+              WHEN EXISTS (
+                SELECT 1 FROM patient_tasks pt
+                WHERE pt.patient_id = p.id AND pt.status = 'Completed' AND pt.is_visible = true
+              ) THEN 'completed'
+              ELSE NULL
+            END
+        )) AS task_status,
+
+        json_agg(json_build_object('id', u.id, 'name', u.name)) 
+          FILTER (WHERE u.id IS NOT NULL) AS assigned_staff
+
       FROM patients p
       LEFT JOIN patient_staff ps ON p.id = ps.patient_id
       LEFT JOIN users u ON ps.staff_id = u.id

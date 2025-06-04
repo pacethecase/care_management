@@ -9,17 +9,18 @@ const { DateTime } = require('luxon');
 // Daily Report Controller
 const getDailyReport = async (req, res) => {
   const timezone = req.headers['x-timezone'] || 'America/New_York';
-  const { date } = req.query;
-  const {hospital_id} = req.user;
-const startOfDayUTC = DateTime.fromISO(date, { zone: timezone }).startOf('day').toUTC().toISO(); 
-const endOfDayUTC = DateTime.fromISO(date, { zone: timezone }).endOf('day').toUTC().toISO();    
+  const { date, adminId } = req.query;
+  const { hospital_id } = req.user;
+
   if (!date) {
     return res.status(400).json({ error: "Date parameter is required" });
   }
-  
+
+  const startOfDayUTC = DateTime.fromISO(date, { zone: timezone }).startOf('day').toUTC().toISO(); 
+  const endOfDayUTC = DateTime.fromISO(date, { zone: timezone }).endOf('day').toUTC().toISO();    
 
   try {
-    const result = await pool.query(`
+    let query = `
       SELECT 
         p.id AS patient_id,
         p.last_name || ', ' || p.first_name AS name,
@@ -41,16 +42,27 @@ const endOfDayUTC = DateTime.fromISO(date, { zone: timezone }).endOf('day').toUT
       LEFT JOIN patient_staff ps ON ps.patient_id = p.id
       LEFT JOIN users u ON u.id = ps.staff_id
       LEFT JOIN users u_added ON u_added.id = p.added_by_user_id
-      WHERE 
-        pt.status = 'Missed'
+      WHERE pt.status = 'Missed'
         AND pt.due_date >= $1::timestamp
-  AND pt.due_date <= $2::timestamp
+        AND pt.due_date <= $2::timestamp
         AND p.status != 'Discharged'
         AND pt.is_visible = TRUE
-         AND p.hospital_id = $3
+        AND p.hospital_id = $3
+    `;
+    
+    const values = [startOfDayUTC, endOfDayUTC, hospital_id];
+
+    if (adminId) {
+      query += ` AND p.added_by_user_id = $4`;
+      values.push(adminId);
+    }
+
+    query += `
       GROUP BY p.id, pt.id, t.id, u_added.name
       ORDER BY pt.due_date ASC
-    `, [startOfDayUTC, endOfDayUTC, hospital_id]);
+    `;
+
+    const result = await pool.query(query, values);
 
     if (result.rows.length === 0) {
       return res.json({ message: "No tasks for the selected date." });
@@ -74,17 +86,19 @@ const endOfDayUTC = DateTime.fromISO(date, { zone: timezone }).endOf('day').toUT
 
 
 const getPriorityReport = async (req, res) => {
-  const { date } = req.query;
-   const {hospital_id} = req.user;
-const timezone = req.headers['x-timezone'] || 'America/New_York';
+  const { date, adminId } = req.query;
+  const { hospital_id } = req.user;
+  const timezone = req.headers['x-timezone'] || 'America/New_York';
 
   if (!date) {
     return res.status(400).json({ error: "Date parameter is required" });
   }
-const startOfDayUTC = DateTime.fromISO(date, { zone: timezone }).startOf('day').toUTC().toISO(); 
-const endOfDayUTC = DateTime.fromISO(date, { zone: timezone }).endOf('day').toUTC().toISO();    
+
+  const startOfDayUTC = DateTime.fromISO(date, { zone: timezone }).startOf('day').toUTC().toISO(); 
+  const endOfDayUTC = DateTime.fromISO(date, { zone: timezone }).endOf('day').toUTC().toISO();    
+
   try {
-    const result = await pool.query(`
+    let query = `
       SELECT 
         p.id AS patient_id,
         p.last_name || ', ' || p.first_name AS name,
@@ -99,12 +113,22 @@ const endOfDayUTC = DateTime.fromISO(date, { zone: timezone }).endOf('day').toUT
       LEFT JOIN patient_staff ps ON ps.patient_id = p.id
       LEFT JOIN users u ON ps.staff_id = u.id
       LEFT JOIN users u_added ON u_added.id = p.added_by_user_id
-     WHERE pt.due_date >= $1::timestamp
+      WHERE pt.due_date >= $1::timestamp
         AND pt.due_date <= $2::timestamp
         AND pt.status IN ('Pending', 'In Progress', 'Missed')
         AND p.status != 'Discharged'
         AND pt.is_visible = TRUE
-          AND p.hospital_id = $3
+        AND p.hospital_id = $3
+    `;
+
+    const values = [startOfDayUTC, endOfDayUTC, hospital_id];
+
+    if (adminId) {
+      query += ` AND p.added_by_user_id = $4`;
+      values.push(adminId);
+    }
+
+    query += `
       GROUP BY p.id, pt.id, t.id, u_added.name
       ORDER BY 
         CASE pt.status
@@ -113,7 +137,9 @@ const endOfDayUTC = DateTime.fromISO(date, { zone: timezone }).endOf('day').toUT
           WHEN 'In Progress' THEN 3
           ELSE 4
         END;
-    `, [startOfDayUTC,endOfDayUTC,hospital_id]);
+    `;
+
+    const result = await pool.query(query, values);
 
     if (result.rows.length === 0) {
       return res.json({ message: "No tasks due for the selected date." });
@@ -205,7 +231,7 @@ const getTransitionalCareReport = async (req, res) => {
 
     for (const row of taskQuery.rows) {
       const algorithm = row.algorithm || "N/A";
-      const contact = row.contact_info || "N/A";
+
      const key = algorithm;
 
       if (!grouped[key]) {

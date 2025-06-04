@@ -165,11 +165,11 @@ const overrideDate = override_date
       .toJSDate()
   : null;
 
-if (task.ideal_due_date) {
+if (task.due_date) {
   const cutoff = new Date(
-    new Date(task.ideal_due_date).getFullYear(),
-    new Date(task.ideal_due_date).getMonth(),
-    new Date(task.ideal_due_date).getDate(),
+    new Date(task.due_date).getFullYear(),
+    new Date(task.due_date).getMonth(),
+    new Date(task.due_date).getDate(),
     23, 59, 0
   );
 

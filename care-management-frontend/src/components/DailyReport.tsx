@@ -5,6 +5,7 @@ import { fetchDailyReport } from '../redux/slices/reportSlice';
 
 interface Props {
   date: string;
+   adminId?: number;
 }
 
 interface ReportTask {
@@ -17,13 +18,13 @@ interface ReportTask {
   due_date?: Date | string;
 }
 
-const DailyReport: React.FC<Props> = ({ date }) => {
+const DailyReport: React.FC<Props> = ({ date,adminId }) => {
   const dispatch = useDispatch<AppDispatch>();
   const { dailyReport, loading, error } = useSelector((state: RootState) => state.reports);
-
   useEffect(() => {
-    dispatch(fetchDailyReport(date));
-  }, [dispatch, date]);
+    dispatch(fetchDailyReport({ date, adminId }));
+
+  }, [dispatch, date,adminId]);
 
   return (
     <div>
