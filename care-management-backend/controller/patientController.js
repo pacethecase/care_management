@@ -11,8 +11,8 @@ const getPatients = async (req, res) => {
     const hospitalId = req.user?.hospital_id;
     const timezone = req.headers["x-timezone"] || "America/New_York";
 
-    const today = DateTime.now().setZone(timezone).startOf('day').toUTC().toFormat("yyyy-MM-dd");
-    console.log(today);
+   const today = DateTime.now().setZone(timezone).startOf('day').toUTC().toJSDate();
+
     const result = await pool.query(`
       SELECT 
         p.*,
@@ -24,7 +24,8 @@ const getPatients = async (req, res) => {
           WHEN EXISTS (
             SELECT 1 FROM patient_tasks pt
             WHERE pt.patient_id = p.id
-              AND pt.due_date::date <= $1::date
+               AND pt.due_date <= $1::timestamp
+
               AND pt.status NOT IN ('Completed','Delayed Completed', 'Missed')
               AND pt.is_visible = true
           ) THEN 'in_progress'
@@ -34,8 +35,9 @@ const getPatients = async (req, res) => {
               AND pt.status IN ('Completed', 'Delayed Completed') 
               AND pt.is_visible = true
           ) THEN 'completed'
-          ELSE NULL
+         ELSE 'in_progress'
         END AS task_status,
+        
         json_agg(json_build_object('id', u.id, 'name', u.name)) 
           FILTER (WHERE u.id IS NOT NULL) AS assigned_staff
       FROM patients p
@@ -50,6 +52,7 @@ const getPatients = async (req, res) => {
     `, isStaff 
         ? [today, userId, hospitalId] 
         : [today, hospitalId]);
+
 
     res.status(200).json(result.rows);
   } catch (err) {
@@ -647,7 +650,7 @@ const getSearchedPatients = async (req, res) => {
              SELECT 1 FROM patient_tasks pt
              WHERE pt.patient_id = p.id AND pt.status IN ('Completed', 'Delayed Completed') AND pt.is_visible = true
            ) THEN 'completed'
-           ELSE NULL
+           ELSE 'in_progress'
          END AS task_status,
          json_agg(json_build_object('id', u.id, 'name', u.name)) 
            FILTER (WHERE u.id IS NOT NULL) AS assigned_staff
@@ -702,7 +705,7 @@ const getPatientsByAdmin = async (req, res) => {
               AND pt.status IN ('Completed','Delayed Completed')
               AND pt.is_visible = true
           ) THEN 'completed'
-          ELSE NULL
+          ELSE 'in_progress'
         END AS task_status,
         json_agg(json_build_object('id', u.id, 'name', u.name)) 
           FILTER (WHERE u.id IS NOT NULL) AS assigned_staff
