@@ -11,8 +11,8 @@ const getPatients = async (req, res) => {
     const hospitalId = req.user?.hospital_id;
     const timezone = req.headers["x-timezone"] || "America/New_York";
 
-    const today = DateTime.now().setZone(timezone).toFormat("yyyy-MM-dd");
-
+    const today = DateTime.now().setZone(timezone).startOf('day').toUTC().toFormat("yyyy-MM-dd");
+    console.log(today);
     const result = await pool.query(`
       SELECT 
         p.*,
