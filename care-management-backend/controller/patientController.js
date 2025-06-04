@@ -12,7 +12,6 @@ const getPatients = async (req, res) => {
 
     // Get today’s date in specified timezone
     const today = DateTime.now().setZone(timezone).toFormat("yyyy-MM-dd");
-console.log(today);
     const result = await pool.query(`
       SELECT 
         p.*,
