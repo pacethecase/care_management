@@ -10,7 +10,7 @@ function setupMissedTaskJob(io) {
       const now = DateTime.local().setZone(timezone);
 
       // Get the start of today (00:00:00) so anything before that is overdue
-      const todayStart = now.startOf('day');
+      const todayStart = now.startOf('day').toUTC().toJSDate();
 
       console.log("⏳ Running missed task job at", now.toFormat("yyyy-MM-dd HH:mm"));
 

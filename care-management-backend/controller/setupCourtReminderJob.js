@@ -7,8 +7,9 @@ function setupCourtReminderJob(io) {
     try {
       const timezone = "America/New_York";
       const now = DateTime.local().setZone(timezone);
-      const todayStart = now.startOf('day');
-      const todayEnd = now.endOf('day');
+    
+      const todayStart = now.startOf('day').toUTC().toJSDate();
+      const todayEnd = now.endOf('day').toUTC().toJSDate();
 
       console.log("📅 Running court reminder job at", now.toISO());
 
