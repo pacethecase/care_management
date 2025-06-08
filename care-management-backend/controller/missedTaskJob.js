@@ -26,7 +26,7 @@ function setupMissedTaskJob(io) {
         LEFT JOIN patient_staff ps ON pt.patient_id = ps.patient_id
         WHERE pt.status IN ('Pending', 'In Progress')
           AND COALESCE(pt.due_date, pt.ideal_due_date) < $1::timestamptz
-      `, [todayStart.toISO()]);
+      `, [todayStart]);
 
       console.log(`🔍 Found ${overdueTasks.length} overdue tasks`);
 
@@ -44,6 +44,15 @@ function setupMissedTaskJob(io) {
         console.log(`🚨 Task ${task.id} for patient ${task.patient_id} marked as missed`);
 
         if (task.assigned_staff_id) {
+           const { rows: [staffRow] } = await pool.query(
+              `SELECT is_approved FROM users WHERE id = $1`,
+              [task.assigned_staff_id]
+            );
+
+            if (!staffRow?.is_approved) {
+              console.log(`🚫 Skipping notification: Staff ${task.assigned_staff_id} is not approved.`);
+              continue;
+            }
           const { rows: [statusRow] } = await pool.query(
             `SELECT status FROM patients WHERE id = $1`,
             [task.patient_id]

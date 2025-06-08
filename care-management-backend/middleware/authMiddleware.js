@@ -10,7 +10,10 @@ const verifyToken = (req, res, next) => {
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
 
-    // ✅ Ensure hospital_id is present
+    if (!decoded.is_approved) {
+      return res.status(403).json({ error: "Your account is pending approval." });
+    }
+
     if (!decoded.hospital_id) {
       return res.status(403).json({ error: "Token missing hospital context." });
     }
@@ -22,6 +25,7 @@ const verifyToken = (req, res, next) => {
     res.status(401).json({ error: "Invalid token." });
   }
 };
+
 
 // 🔒 Role-Based Guards
 const requireAdmin = (req, res, next) => {

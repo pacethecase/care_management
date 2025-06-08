@@ -8,7 +8,7 @@ import { Mail, Lock } from "lucide-react";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import type { AppDispatch } from '../redux/store';
-
+import { fetchCurrentUser } from "../redux/slices/userSlice";
 const Login = () => {
   const dispatch = useDispatch<AppDispatch>();  
   const navigate = useNavigate();
@@ -29,6 +29,8 @@ const Login = () => {
     e.preventDefault();
     try {
       await dispatch(loginUser(formData)).unwrap();
+      await dispatch(fetchCurrentUser()).unwrap();
+
       toast.success("🎉 Logged in successfully!");
       navigate("/homepage");
     } catch (err: any) {

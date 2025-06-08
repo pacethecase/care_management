@@ -132,9 +132,12 @@ const AddPatientPage = () => {
     }
   };
 
-  const staffOptions = useMemo(() => {
-    return staffs.map(s => ({ value: s.id, label: s.name }));
-  }, [staffs]);
+ const staffOptions = useMemo(() => {
+  return staffs
+    .filter((s) => s.is_approved) 
+    .map((s) => ({ value: s.id, label: s.name }));
+}, [staffs]);
+
 
   return (
     <div className="flex flex-col min-h-screen text-white">

@@ -98,6 +98,11 @@ console.log(user);
 
               {/* Always shown */}
               <Link to="/edit-profile" className="block px-4 bg-[var(--prussian-blue)]  py-2 hover:bg-gray-100">Edit Profile</Link>
+              {user?.is_super_admin && (
+                <Link to="/admin" className="block px-4 bg-[var(--prussian-blue)] py-2 hover:bg-gray-100">
+                  Admin
+                </Link>
+              )}
               <button
                 onClick={handleLogout}
                 className="block w-full text-left px-4 py-2 hover:bg-gray-100"

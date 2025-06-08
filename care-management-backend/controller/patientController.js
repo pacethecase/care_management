@@ -5,6 +5,10 @@ const { DateTime } = require('luxon');
 
 
 const getPatients = async (req, res) => {
+  if (!req.user?.is_approved) {
+  return res.status(403).json({ error: "Access denied: User not approved." });
+}
+
   try {
     const userId = req.user?.id;
     const isStaff = req.user?.is_staff;
@@ -69,6 +73,10 @@ const getPatients = async (req, res) => {
 
 // Add Patient
 const addPatient = async (req, res) => {
+  if (!req.user?.is_approved) {
+  return res.status(403).json({ error: "Access denied: User not approved." });
+}
+
   const added_by_user_id = req.user.id;
   const hospital_id = req.user.hospital_id;
 
@@ -148,12 +156,12 @@ const addPatient = async (req, res) => {
     // Validate staff assignment
     if (assignedStaffIds.length > 0) {
       const { rows: validStaff } = await pool.query(
-        `SELECT id FROM users WHERE id = ANY($1::int[]) AND hospital_id = $2`,
+        `SELECT id FROM users WHERE id = ANY($1::int[]) AND hospital_id = $2  AND is_approved = true`,
         [assignedStaffIds, hospital_id]
       );
       const validStaffIds = validStaff.map(s => s.id);
       if (validStaffIds.length !== assignedStaffIds.length) {
-        return res.status(400).json({ error: "One or more assigned staff are not in your hospital" });
+        return res.status(400).json({ error: "One or more assigned staff are  not approve or not in your hospital" });
       }
     }
 
@@ -193,6 +201,10 @@ const addPatient = async (req, res) => {
 
 // Get Patient By ID
 const getPatientById = async (req, res) => {
+  if (!req.user?.is_approved) {
+  return res.status(403).json({ error: "Access denied: User not approved." });
+}
+
   const userHospitalId = req.user.hospital_id;
     const timezone = req.headers['x-timezone'] || 'America/New_York';
   try {
@@ -242,6 +254,10 @@ const getPatientById = async (req, res) => {
 };
 
 const getPatientTasks = async (req, res) => {
+  if (!req.user?.is_approved) {
+  return res.status(403).json({ error: "Access denied: User not approved." });
+}
+
   try {
     const { patientId } = req.params;
     const userHospitalId = req.user.hospital_id;
@@ -340,6 +356,10 @@ const getPatientTasks = async (req, res) => {
 };
 
 const dischargePatient = async (req, res) => {
+  if (!req.user?.is_approved) {
+  return res.status(403).json({ error: "Access denied: User not approved." });
+}
+
   try {
     const { patientId } = req.params;
     const { dischargeNote } = req.body;
@@ -407,6 +427,10 @@ const dischargePatient = async (req, res) => {
 const reactivatePatient = async (req, res) => {
   const { patientId } = req.params;
   const userHospitalId = req.user.hospital_id;
+  if (!req.user?.is_approved) {
+  return res.status(403).json({ error: "Access denied: User not approved." });
+}
+
 
   try {
     // Enforce hospital isolation
@@ -466,6 +490,10 @@ const reactivatePatient = async (req, res) => {
   }
 };
 const getDischargedPatients = async (req, res) => {
+  if (!req.user?.is_approved) {
+  return res.status(403).json({ error: "Access denied: User not approved." });
+}
+
   try {
     const userHospitalId = req.user.hospital_id;
 
@@ -494,6 +522,10 @@ const getDischargedPatients = async (req, res) => {
 };
 
 const updatePatient = async (req, res) => {
+  if (!req.user?.is_approved) {
+  return res.status(403).json({ error: "Access denied: User not approved." });
+}
+
   const patientId = req.params.patientId;
   const {
     first_name,
@@ -623,6 +655,10 @@ const updatePatient = async (req, res) => {
 
 
 const getSearchedPatients = async (req, res) => {
+  if (!req.user?.is_approved) {
+  return res.status(403).json({ error: "Access denied: User not approved." });
+}
+
   try {
     const { q } = req.query;
     const hospitalId = req.user.hospital_id;
@@ -687,6 +723,10 @@ const getSearchedPatients = async (req, res) => {
 
 
 const getPatientsByAdmin = async (req, res) => {
+  if (!req.user?.is_approved) {
+  return res.status(403).json({ error: "Access denied: User not approved." });
+}
+
   const { adminId } = req.params;
   const hospitalId = req.user.hospital_id;
   const timezone = req.headers["x-timezone"] || "America/New_York";
@@ -738,6 +778,10 @@ const getPatientsByAdmin = async (req, res) => {
 
 
 const updateCourtDate = async (req, res) => {
+  if (!req.user?.is_approved) {
+  return res.status(403).json({ error: "Access denied: User not approved." });
+}
+
   const { id } = req.params;
   const { type, newDate } = req.body;
 

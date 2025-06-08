@@ -1,5 +1,30 @@
 const pool = require("../models/db");
 const bcrypt = require("bcryptjs");
+const getAllUsers = async (req, res) => {
+  const { has_global_access, hospital_id, id: currentUserId } = req.user;
+
+  try {
+    const query = has_global_access
+      ? `SELECT id, name, email, is_admin, is_staff, is_approved, hospital_id 
+         FROM users 
+         WHERE id != $1 
+         ORDER BY created_at DESC`
+      : `SELECT id, name, email, is_admin, is_staff, is_approved, hospital_id 
+         FROM users 
+         WHERE hospital_id = $1 AND id != $2 
+         ORDER BY created_at DESC`;
+
+    const params = has_global_access ? [currentUserId] : [hospital_id, currentUserId];
+
+    const { rows } = await pool.query(query, params);
+    res.status(200).json(rows);
+  } catch (err) {
+    console.error("Error fetching all users:", err);
+    res.status(500).json({ error: "Failed to fetch users" });
+  }
+};
+
+
 
 const getAdmins = async (req, res) => {
    const { hospital_id } = req.user;
@@ -18,7 +43,7 @@ const getStaffs = async (req, res) => {
   const { hospital_id } = req.user;
   try {
     const result = await pool.query(
-      `SELECT id, name, email FROM users WHERE is_staff = true AND is_verified = true  AND hospital_id = $1`
+      `SELECT id, name, email,is_approved FROM users WHERE is_staff = true AND is_verified = true  AND hospital_id = $1`
    , [hospital_id]);
     res.status(200).json(result.rows);
   } catch (err) {
@@ -65,4 +90,5 @@ module.exports = {
   getAdmins,
   getStaffs,
   updateUser,
+  getAllUsers,
 };

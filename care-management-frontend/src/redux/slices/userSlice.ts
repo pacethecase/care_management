@@ -7,18 +7,21 @@ const BASE_URL = import.meta.env.VITE_API_BASE_URL;
 interface UserState {
   user: UserInfo | null;
   staffs: UserInfo[];
+   allUsers: UserInfo[]; 
   admins: { id: number; name: string }[]; 
   loading: boolean;          
   adminLoading: boolean;    
   error: string | null;
   authLoaded: boolean;
   message?: string;
+  has_global_access?:boolean;
 }
 
 const initialState: UserState = {
   user: null,
   staffs: [],
   admins: [],
+  allUsers: [],
   loading: false,
   adminLoading: false,      // ✅ new field
   error: null,
@@ -157,6 +160,20 @@ export const fetchAdmins = createAsyncThunk(
   }
 );
 
+export const fetchAllUsers = createAsyncThunk(
+  "admin/fetchAllUsers",
+  async (_, { rejectWithValue }) => {
+    try {
+      const res = await axios.get(`${BASE_URL}/users/all`, {
+        withCredentials: true,
+      });
+      return res.data;
+    } catch (err: any) {
+      return rejectWithValue(err.response?.data?.error || "Failed to load all users");
+    }
+  }
+);
+
 
 const userSlice = createSlice({
   name: "user",
@@ -168,6 +185,9 @@ const userSlice = createSlice({
       state.error = null;
       state.loading = false;
       state.message = undefined;
+       state.allUsers = [];  
+        state.message = undefined;
+        state.has_global_access = false;
 
     },
     clearError: (state) => {
@@ -202,6 +222,7 @@ const userSlice = createSlice({
       })
       .addCase(fetchCurrentUser.fulfilled, (state, action) => {
         state.user = action.payload || null;
+        state.has_global_access = !!action.payload?.has_global_access;
         state.authLoaded = true;
         state.loading = false;
       })
@@ -272,7 +293,15 @@ const userSlice = createSlice({
   state.admins = [];
   state.error = action.payload as string;
   state.adminLoading = false;
+})
+.addCase(fetchAllUsers.fulfilled, (state, action) => {
+  state.allUsers = action.payload;
+})
+
+.addCase(fetchAllUsers.rejected, (state, action) => {
+  state.error = action.payload as string;
 });
+
   },
 });
 

@@ -1,6 +1,9 @@
 const pool = require('../models/db');
 
 const getUserNotifications = async (req, res) => {
+   if (!req.user.is_approved) {
+    return res.status(403).json({ error: 'Access denied. User not approved.' });
+  }
   try {
     const result = await pool.query(
       `SELECT * FROM notifications WHERE user_id = $1 ORDER BY created_at DESC`,
@@ -14,6 +17,9 @@ const getUserNotifications = async (req, res) => {
 };
 
 const markNotificationRead = async (req, res) => {
+   if (!req.user.is_approved) {
+    return res.status(403).json({ error: 'Access denied. User not approved.' });
+  }
   try {
     await pool.query(
       `UPDATE notifications SET read = true WHERE id = $1 AND user_id = $2`,
@@ -26,6 +32,9 @@ const markNotificationRead = async (req, res) => {
 };
 
 const markAllRead = async (req, res) => {
+   if (!req.user.is_approved) {
+    return res.status(403).json({ error: 'Access denied. User not approved.' });
+  }
   try {
     await pool.query(
       `UPDATE notifications SET read = true WHERE user_id = $1`,
@@ -38,6 +47,9 @@ const markAllRead = async (req, res) => {
 };
 
 const deleteAllNotifications = async (req, res) => {
+   if (!req.user.is_approved) {
+    return res.status(403).json({ error: 'Access denied. User not approved.' });
+  }
   try {
     await pool.query(
       `DELETE FROM notifications WHERE user_id = $1`,
@@ -51,6 +63,9 @@ const deleteAllNotifications = async (req, res) => {
 };
 
 const deleteNotification = async (req, res) => {
+   if (!req.user.is_approved) {
+    return res.status(403).json({ error: 'Access denied. User not approved.' });
+  }
   try {
     const { id } = req.params;
     await pool.query(

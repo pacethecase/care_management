@@ -57,12 +57,14 @@ const createTables = async () => {
         password TEXT NOT NULL,
         is_admin BOOLEAN DEFAULT FALSE,
         is_staff BOOLEAN DEFAULT TRUE,
+        is_super_admin BOOLEAN DEFAULT FALSE,
         is_verified BOOLEAN DEFAULT FALSE,
+         is_approved BOOLEAN DEFAULT FALSE, 
         reset_token TEXT,
         reset_token_expires TIMESTAMP  WITH TIME ZONE,
         created_at TIMESTAMP  WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
         hospital_id INTEGER NOT NULL REFERENCES hospitals(id),
-
+        has_global_access BOOLEAN DEFAULT FALSE;
       );
 
   CREATE TABLE IF NOT EXISTS patients (

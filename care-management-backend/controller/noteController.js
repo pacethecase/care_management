@@ -4,7 +4,10 @@ const pool = require("../models/db");
 const getPatientNotes = async (req, res) => {
   try {
     const { patientId } = req.params;
-    const { hospital_id } = req.user;
+    const { hospital_id,is_approved } = req.user;
+    if (!is_approved) {
+          return res.status(403).json({ error: "Access denied. User not approved." });
+        }
 
     // Make sure patient belongs to the same hospital
     const patientCheck = await pool.query(
@@ -38,8 +41,11 @@ const addPatientNote = async (req, res) => {
   try {
     const { patientId } = req.params;
     const { staff_id, note_text } = req.body;
-    const { hospital_id } = req.user;
+    const { hospital_id,is_approved } = req.user;
 
+    if (!is_approved) {
+      return res.status(403).json({ error: "Access denied. User not approved." });
+    }
     if (!note_text.trim()) {
       return res.status(400).json({ error: "Note cannot be empty" });
     }
@@ -87,7 +93,10 @@ const updatePatientNote = async (req, res) => {
   try {
     const { noteId } = req.params;
     const { note_text } = req.body;
-    const { hospital_id } = req.user;
+    const { hospital_id,is_approved } = req.user;
+      if (!is_approved) {
+            return res.status(403).json({ error: "Access denied. User not approved." });
+          }
 
     if (!note_text.trim()) {
       return res.status(400).json({ error: "Note cannot be empty" });

@@ -25,6 +25,7 @@ import { Routes, Route } from 'react-router-dom';
   import Notifications from './components/Notifications';
   import EditPatientPage from './pages/EditPatientPage';
   import { fetchNotifications } from './redux/slices/notificationSlice';
+  import AdminPage from './pages/AdminPage'
   import { getLocalTimezone } from "./utils/timezone";
 import axios from "axios";
 
@@ -139,6 +140,14 @@ import axios from "axios";
           element={
             <PrivateRoute>
               <EditPatientPage />
+              </PrivateRoute>
+          }
+        />
+         <Route
+          path="/admin"
+          element={
+            <PrivateRoute>
+              <AdminPage />
               </PrivateRoute>
           }
         />

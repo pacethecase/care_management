@@ -1,63 +1,51 @@
-import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import axios from 'axios';
-import type { Hospital } from '../types';
+import { createSlice, createAsyncThunk, createAction } from "@reduxjs/toolkit";
+import axios from "axios";
+import type { Hospital } from "../types";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 interface HospitalState {
   hospitals: Hospital[];
-  loading: boolean;
   error: string | null;
 }
 
 const initialState: HospitalState = {
   hospitals: [],
-  loading: false,
   error: null,
 };
 
-export const loadHospitals = createAsyncThunk<
-  Hospital[],
-  void,
-  { rejectValue: string }
->(
-  'hospitals/loadHospitals',
+// ✅ Thunks
+export const loadHospitals = createAsyncThunk(
+  "hospital/loadHospitals",
   async (_, { rejectWithValue }) => {
     try {
       const res = await axios.get(`${BASE_URL}/hospitals`, {
         withCredentials: true,
       });
-      if (!Array.isArray(res.data)) {
-        return rejectWithValue('Unexpected response format');
-      }
-      return res.data;
+      return res.data as Hospital[];
     } catch (err: any) {
-      const message =
-        err.response?.data?.error || err.message || 'Failed to load hospitals';
-      return rejectWithValue(message);
+      return rejectWithValue(err.response?.data?.error || "Failed to load hospitals");
     }
   }
 );
 
+// ✅ Clear action
+export const clearHospitals = createAction("hospital/clearHospitals");
+
+// ✅ Slice
 const hospitalSlice = createSlice({
-  name: 'hospitals',
+  name: "hospital",
   initialState,
   reducers: {},
   extraReducers: (builder) => {
     builder
-      .addCase(loadHospitals.pending, (state) => {
-        state.loading = true;
-        state.error = null;
-      })
       .addCase(loadHospitals.fulfilled, (state, action) => {
-        state.loading = false;
         state.hospitals = action.payload;
       })
       .addCase(loadHospitals.rejected, (state, action) => {
-        state.loading = false;
-        state.hospitals = [];
-        state.error = action.payload ?? 'Unknown error loading hospitals';
-      });
+        state.error = action.payload as string;
+      })
+      .addCase(clearHospitals, () => initialState);
   },
 });
 

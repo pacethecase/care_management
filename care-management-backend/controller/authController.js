@@ -56,7 +56,10 @@ const signup = async (req, res) => {
       id: user.id,
       is_admin: user.is_admin,
       is_staff: user.is_staff,
-      hospital_id: user.hospital_id
+      hospital_id: user.hospital_id,
+      is_approved:user.is_approved,
+      is_super_admin:user.is_super_admin,
+      has_global_access:user.has_global_access
     }, JWT_SECRET, { expiresIn: '1d' });
 
     const verifyUrl = `${BASE_URL}/auth/verify?token=${token}`;
@@ -115,6 +118,7 @@ const login = async (req, res) => {
   
       if (!user) return res.status(400).json({ error: 'User not found' });
       if (!user.is_verified) return res.status(403).json({ error: 'Email not verified' });
+       if (!user.is_approved) return res.status(403).json({ error: 'Your account is pending approval by admin.' });
   
       const valid = await bcrypt.compare(password, user.password);
       if (!valid) return res.status(401).json({ error: 'Incorrect password' });
@@ -124,7 +128,10 @@ const login = async (req, res) => {
           id: user.id,
           is_admin: user.is_admin,
           is_staff: user.is_staff,
-          hospital_id: user.hospital_id  
+          hospital_id: user.hospital_id,
+          is_approved:user.is_approved,
+          is_super_admin:user.is_super_admin,
+          has_global_access:user.has_global_access
         },
         JWT_SECRET,
         { expiresIn: "24h" }
@@ -133,8 +140,8 @@ const login = async (req, res) => {
       // ✅ Set the token as httpOnly cookie
       res.cookie("token", token, {
         httpOnly: true,
-         secure: true,
-        sameSite: "None",
+       secure: false,
+        sameSite: "LAX",
         maxAge: 24 * 60 * 60 * 1000, // 1 day
       });
       
@@ -149,6 +156,10 @@ const login = async (req, res) => {
           is_staff: user.is_staff,
           hospital_id: user.hospital_id,
           is_verified: user.is_verified,
+          is_approved: user.is_approved,
+        has_global_access: user.has_global_access,
+        is_super_admin:user.is_super_admin,
+
         }
       });
     } catch (err) {
@@ -159,8 +170,8 @@ const login = async (req, res) => {
   const logout = (req, res) => {
     res.clearCookie("token", {
       httpOnly: true,
-           secure: true,
-        sameSite: "None",
+     secure: false,
+        sameSite: "LAX",
     });
     res.json({ message: "Logged out successfully" });
   };
@@ -169,7 +180,7 @@ const login = async (req, res) => {
     try {
       const { id } = req.user;
       const result = await pool.query(
-        'SELECT id, name, email, is_admin, is_staff,hospital_id , is_verified FROM users WHERE id = $1',
+        'SELECT id, name, email, is_admin, is_staff,hospital_id , is_verified,is_approved,is_super_admin,has_global_access FROM users WHERE id = $1',
         [id]
       );
   

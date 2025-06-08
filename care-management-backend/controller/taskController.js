@@ -16,7 +16,9 @@ const startTask = async (req, res) => {
     const { taskId } = req.params;
     const staffId = req.user.id;
     const hospitalId = req.user.hospital_id;
-
+if (!req.user?.is_approved) {
+  return res.status(403).json({ error: "Access denied: user not approved" });
+}
     // ✅ Step 1: Check if the task belongs to this hospital
     const authCheck = await pool.query(`
       SELECT pt.*, p.hospital_id
@@ -79,7 +81,9 @@ const completeTask = async (req, res) => {
     const { taskId } = req.params;
     const { court_date, override_date } = req.body;
     
-
+if (!req.user?.is_approved) {
+  return res.status(403).json({ error: "Access denied: user not approved" });
+}
     const timezone = req.headers['x-timezone'] || 'America/New_York';
     console.log("Completing task with ID:", taskId);
 
@@ -373,7 +377,9 @@ const markTaskAsMissed = async (req, res) => {
     const { taskId } = req.params;
     const { missed_reason } = req.body;
     const staffId = req.user.id;
-
+if (!req.user?.is_approved) {
+  return res.status(403).json({ error: "Access denied: user not approved" });
+}
  const hospitalId = req.user.hospital_id;
 
 const taskRes = await pool.query(`
@@ -419,7 +425,9 @@ const getPriorityTasks = async (req, res) => {
   try {
     const { id: staffId, hospital_id } = req.user;
     const { patientId } = req.query;
-
+if (!req.user?.is_approved) {
+  return res.status(403).json({ error: "Access denied: user not approved" });
+}
     let query = `
       SELECT 
         pt.id AS patient_task_id,
@@ -467,7 +475,9 @@ const getMissedTasks = async (req, res) => {
   try {
     const { id: staffId, hospital_id } = req.user;
     const { patientId } = req.query;
-
+if (!req.user?.is_approved) {
+  return res.status(403).json({ error: "Access denied: user not approved" });
+}
     let query = `
       SELECT   pt.id AS patient_task_id,
         pt.task_id AS task_id, pt.due_date,
@@ -510,7 +520,9 @@ const followUpCourtTask = async (req, res) => {
     const { followUpReason } = req.body;
     const { id: staffId, hospital_id } = req.user;
     const timezone = req.headers['x-timezone'] || 'America/New_York';
-
+if (!req.user?.is_approved) {
+  return res.status(403).json({ error: "Access denied: user not approved" });
+}
     if (!followUpReason || followUpReason.trim() === "") {
       return res.status(400).json({ error: "Follow-up reason is required." });
     }
@@ -576,7 +588,9 @@ const updateTaskNote = async (req, res) => {
     const { taskId } = req.params;
     const { task_note, include_note_in_report, contact_info } = req.body;
     const { hospital_id } = req.user;
-
+if (!req.user?.is_approved) {
+  return res.status(403).json({ error: "Access denied: user not approved" });
+}
     // ✅ Fetch task and validate hospital ownership
     const taskRes = await pool.query(`
       SELECT pt.*, p.hospital_id
@@ -618,6 +632,9 @@ const acknowledgeTask = async (req, res) => {
   const taskId = parseInt(req.params.id, 10); 
   const userId = parseInt(req.user.id, 10); 
  const nowUTC = new Date().toISOString();
+ if (!req.user?.is_approved) {
+  return res.status(403).json({ error: "Access denied: user not approved" });
+}
   try {
     const result = await pool.query(
       `

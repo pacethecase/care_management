@@ -5,7 +5,8 @@ import { clearNotes } from "../slices/noteSlice";
 import { clearUser } from "../slices/userSlice";
 import type { AppDispatch } from "../store";
 import { clearReports } from "../slices/reportSlice";
-
+import { clearAdmin } from "../slices/adminSlice";
+import { clearHospitals } from "../slices/hospitalSlice";
 export const logoutAndClearAll = (reason?: "manual" | "idle") => async (dispatch: AppDispatch) => {
   try {
     await dispatch(logoutUser()).unwrap();
@@ -17,6 +18,8 @@ export const logoutAndClearAll = (reason?: "manual" | "idle") => async (dispatch
   dispatch(clearPatients());
   dispatch(clearNotes());
 dispatch(clearReports());
+dispatch(clearAdmin());
+dispatch(clearHospitals());
 
   if (reason === "idle") {
     console.log("Logged out due to inactivity.");
@@ -24,3 +27,4 @@ dispatch(clearReports());
     console.log("User manually logged out.");
   }
 };
+

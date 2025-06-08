@@ -44,6 +44,9 @@ export interface Patient {
     email: string;
     is_admin: boolean;
     is_staff: boolean;
+    is_super_admin:boolean;
+    has_global_access:Boolean;
+    is_approved:boolean;
     token?: string;
   }
   
@@ -144,6 +147,15 @@ export interface PatientTask {
     include_note_in_report?: boolean;
   
   }
+export interface UnapprovedUser {
+  id: number;
+  name: string;
+  email: string;
+  is_admin: boolean;
+  is_staff: boolean;
+   is_approved: boolean; 
+  hospital_id?: number;
+}
 
   
   

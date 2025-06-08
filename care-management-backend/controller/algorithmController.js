@@ -2,7 +2,10 @@ const pool = require('../models/db');
 
 
 const getPatientCountsByAlgorithm = async (req, res) => {
-  const { is_admin, id: staffId, hospital_id } = req.user;
+  const { is_admin, id: staffId,is_approved, hospital_id } = req.user;
+   if (!is_approved) {
+    return res.status(403).json({ error: "Access denied. User is not approved." });
+  }
 
   try {
     let query;
@@ -57,7 +60,10 @@ const getPatientCountsByAlgorithm = async (req, res) => {
 
 const getPatientsByAlgorithm = async (req, res) => {
   const { algorithm } = req.params;
-  const { is_admin, id: staffId, hospital_id } = req.user;
+  const { is_admin, id: staffId,is_approved, hospital_id } = req.user;
+    if (!is_approved) {
+        return res.status(403).json({ error: "Access denied. User is not approved." });
+      }
 
   const mapping = {
     Behavioral: 'is_behavioral',

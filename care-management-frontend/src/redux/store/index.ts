@@ -8,6 +8,7 @@ import reportReducer from "../slices/reportSlice";
 import algorithmReducer from "../slices/algorithmSlice";
 import notificationReducer from "../slices/notificationSlice";
 import hospitalReducer from "../slices/hospitalSlice";
+import adminReducer from "../slices/adminSlice";
 
 export const store = configureStore({
   reducer: {
@@ -19,6 +20,7 @@ export const store = configureStore({
     algorithms: algorithmReducer,
     notifications: notificationReducer,
     hospitals: hospitalReducer, 
+    admin:adminReducer,
   },
 });
 
