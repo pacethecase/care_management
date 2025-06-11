@@ -36,10 +36,10 @@ function setupMissedTaskJob(io) {
           SET status = 'Missed',
               status_history = COALESCE(status_history, '[]'::jsonb) || jsonb_build_object(
                 'status', 'Missed',
-                'timestamp', NOW()
+               'timestamp', $2
               )
           WHERE id = $1
-        `, [task.id]);
+        `, [task.id,todayStart]);
 
         console.log(`🚨 Task ${task.id} for patient ${task.patient_id} marked as missed`);
 

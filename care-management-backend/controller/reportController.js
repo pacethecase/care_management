@@ -51,7 +51,13 @@ const getDailyReport = async (req, res) => {
         AND p.hospital_id = $2
     `;
 
-    if (adminId) {
+      if (!req.user.is_admin) {
+      values.push(req.user.id);
+      query += ` AND EXISTS (
+        SELECT 1 FROM patient_staff ps2
+        WHERE ps2.patient_id = p.id AND ps2.staff_id = $3
+      )`;
+    } else if (adminId) {
       values.push(adminId);
       query += ` AND p.added_by_user_id = $3`;
     }
@@ -127,12 +133,21 @@ const getDailyReport = async (req, res) => {
           AND p.hospital_id = $3
       `;
 
-      const values = [startOfDayUTC, endOfDayUTC, hospital_id];
+          const values = [startOfDayUTC, endOfDayUTC, hospital_id]; // $1, $2, $3
+      let paramIndex = 4;
 
-      if (adminId) {
-        query += ` AND p.added_by_user_id = $4`;
-        values.push(adminId);
+      if (!req.user.is_admin) {
+        values.push(req.user.id); // $4
+        query += `
+          AND EXISTS (
+            SELECT 1 FROM patient_staff ps2
+            WHERE ps2.patient_id = p.id AND ps2.staff_id = $${paramIndex}
+          )`;
+      } else if (adminId) {
+        values.push(adminId); // $4
+        query += ` AND p.added_by_user_id = $${paramIndex}`;
       }
+
 
       query += `
         GROUP BY p.id, pt.id, t.id, u_added.name

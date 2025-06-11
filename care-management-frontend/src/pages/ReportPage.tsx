@@ -323,29 +323,29 @@ const [selectedAdminId, setSelectedAdminId] = useState<number | ''>('');
   })}
 </div>
 
-  {(selectedReport === "daily"  ||
-      selectedReport === "priority") &&  (
-              <div className="mb-4">
-                <label htmlFor="adminFilter" className="font-semibold">
-                  Filter by Leader:
-                </label>
-                <select
-                  id="adminFilter"
-                  className="border rounded p-2"
-                  value={selectedAdminId}
-                  onChange={(e) =>
-                    setSelectedAdminId(e.target.value ? Number(e.target.value) : '')
-                  }
-                >
-                  <option value="">All Leaders</option>
-                  {admins.map((admin) => (
-                    <option key={admin.id} value={admin.id}>
-                      {admin.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
+{user?.is_admin &&
+  (selectedReport === "daily" || selectedReport === "priority") && (
+    <div className="mb-4">
+      <label htmlFor="adminFilter" className="font-semibold">
+        Filter by Leader:
+      </label>
+      <select
+        id="adminFilter"
+        className="border rounded p-2"
+        value={selectedAdminId}
+        onChange={(e) =>
+          setSelectedAdminId(e.target.value ? Number(e.target.value) : '')
+        }
+      >
+        <option value="">All Leaders</option>
+        {admins.map((admin) => (
+          <option key={admin.id} value={admin.id}>
+            {admin.name}
+          </option>
+        ))}
+      </select>
+    </div>
+)}
 
         {(selectedReport === "transitional" ||
           selectedReport === "historical" ||
