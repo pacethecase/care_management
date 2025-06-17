@@ -254,7 +254,7 @@ const taskSlice = createSlice({
       state.error = null;
       state.taskError = null;
     })
-    .addCase(completeTask.fulfilled, (state, action) => {
+    .addCase(completeTask.fulfilled, (state) => {
       state.loading = false;
     })
     .addCase(completeTask.rejected, (state, action) => {
