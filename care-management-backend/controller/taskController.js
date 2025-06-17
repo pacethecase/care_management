@@ -1,8 +1,8 @@
 const pool = require("../models/db");
 const { DateTime } = require('luxon');
 
-const appendStatusHistory = async (taskId, newEntry) => {
-  await pool.query(`
+const appendStatusHistory = async (taskId, newEntry,client) => {
+  await client.query(`
     UPDATE patient_tasks
     SET status_history = status_history || $2::jsonb
     WHERE id = $1
@@ -10,51 +10,65 @@ const appendStatusHistory = async (taskId, newEntry) => {
 };
 
 
-// 🚀 Start a Task
 const startTask = async (req, res) => {
+  const client = await pool.connect();
   try {
     const { taskId } = req.params;
     const staffId = req.user.id;
     const hospitalId = req.user.hospital_id;
-if (!req.user?.is_approved) {
-  return res.status(403).json({ error: "Access denied: user not approved" });
-}
-    // ✅ Step 1: Check if the task belongs to this hospital
-    const authCheck = await pool.query(`
+
+    if (!req.user?.is_approved) {
+      return res.status(403).json({ error: "Access denied: user not approved" });
+    }
+
+    await client.query("BEGIN");
+
+    // 🔐 Step 1: Lock task row & validate hospital
+    const { rows } = await client.query(`
       SELECT pt.*, p.hospital_id
       FROM patient_tasks pt
       JOIN patients p ON pt.patient_id = p.id
       WHERE pt.id = $1
+      FOR UPDATE
     `, [taskId]);
 
-    if (authCheck.rows.length === 0) {
+    if (rows.length === 0) {
+      await client.query("ROLLBACK");
       return res.status(404).json({ error: "Task not found" });
     }
 
-    const task = authCheck.rows[0];
+    const task = rows[0];
 
     if (task.hospital_id !== hospitalId) {
+      await client.query("ROLLBACK");
       return res.status(403).json({ error: "Unauthorized: Task not in your hospital" });
     }
 
-    // 🔒 Step 2: Check if task is missed without a reason
+    if (task.status !== 'Pending' && task.status !== 'Missed' && task.status !== 'Follow Up') {
+      await client.query("ROLLBACK");
+      return res.status(409).json({ error: "Task already in progress or completed." });
+    }
+
+    // ⛔ Missed Task: Check for valid reason
     if (task.status === 'Missed') {
-      const historyCheck = await pool.query(`
-        SELECT jsonb_array_elements(status_history) AS entry FROM patient_tasks WHERE id = $1
+      const { rows: historyRows } = await client.query(`
+        SELECT jsonb_array_elements(status_history) AS entry
+        FROM patient_tasks WHERE id = $1
       `, [taskId]);
 
-      const hasMissedWithReason = historyCheck.rows.some(row => {
+      const hasReason = historyRows.some(row => {
         const entry = row.entry;
         return entry.status === "Missed" && entry.reason;
       });
 
-      if (!hasMissedWithReason) {
+      if (!hasReason) {
+        await client.query("ROLLBACK");
         return res.status(400).json({ error: "Cannot start a missed task without a missed reason." });
       }
     }
 
-    // ✅ Step 3: Start task
-    await pool.query(`
+    // 🟢 Step 2: Update status to In Progress
+    await client.query(`
       UPDATE patient_tasks 
       SET status = 'In Progress', started_at = NOW()
       WHERE id = $1
@@ -64,47 +78,62 @@ if (!req.user?.is_approved) {
       status: "In Progress",
       timestamp: new Date().toISOString(),
       staff_id: staffId
-    });
+    }, client);
 
-    res.status(200).json({ message: "Task started successfully" });
+    await client.query("COMMIT");
+    return res.status(200).json({ message: "✅ Task started successfully" });
 
   } catch (err) {
+    await client.query("ROLLBACK");
     console.error("❌ Error starting task:", err);
-    res.status(500).json({ error: "Internal Server Error" });
+    return res.status(500).json({ error: "Internal Server Error" });
+  } finally {
+    client.release();
   }
 };
 
 
+
 // ✅ Complete Task (handle repeat + dependency)
 const completeTask = async (req, res) => {
+   const client = await pool.connect();
   try {
+    await client.query("BEGIN");
     const { taskId } = req.params;
     const { court_date, override_date } = req.body;
-    
-if (!req.user?.is_approved) {
-  return res.status(403).json({ error: "Access denied: user not approved" });
-}
+        
+    if (!req.user?.is_approved) {
+      return res.status(403).json({ error: "Access denied: user not approved" });
+    }
     const timezone = req.headers['x-timezone'] || 'America/New_York';
     console.log("Completing task with ID:", taskId);
 
     // Step 1: Fetch task from patient_tasks
 const hospitalId = req.user.hospital_id;
 
-const taskRes = await pool.query(`
+const taskRes = await client.query(`
   SELECT pt.*, p.hospital_id 
   FROM patient_tasks pt
   JOIN patients p ON pt.patient_id = p.id
   WHERE pt.id = $1
+  FOR UPDATE
 `, [taskId]);
 
     if (taskRes.rows.length === 0) {
+       await client.query("ROLLBACK");
       console.log("❌ Task not found");
       return res.status(404).json({ error: "Task not found" });
     }
 
     const task = taskRes.rows[0];
 
+      if (['Completed', 'Delayed Completed'].includes(task.status)) {
+    await client.query("ROLLBACK");
+    return res.status(409).json({ error: "Task has already been completed." });
+  }
+
     if (task.hospital_id !== hospitalId) {
+        await client.query("ROLLBACK");
       return res.status(403).json({ error: "Unauthorized: Task does not belong to your hospital." });
     }
 
@@ -112,19 +141,37 @@ const taskRes = await pool.query(`
 
 
     if (task.status === 'Missed') {
-      const latestStatus = task.status_history?.slice(-1)[0];
-      const missedReason = latestStatus?.reason;
-    
-      if (!missedReason || missedReason.trim() === "") {
-        return res.status(400).json({ error: "Task was missed. Please provide a reason before completing." });
-      }
-    }
+  let history = [];
+
+  try {
+    const historyRes = await client.query(
+      `SELECT status_history FROM patient_tasks WHERE id = $1`,
+      [taskId]
+    );
+    history = historyRes.rows[0]?.status_history || [];
+  } catch (e) {
+    await client.query("ROLLBACK");
+    return res.status(500).json({ error: "Failed to fetch task history." });
+  }
+
+  const lastMissed = [...history].reverse().find(
+    h => h.status === 'Missed' && h.reason?.trim()
+  );
+
+  if (!lastMissed) {
+    await client.query("ROLLBACK");
+    return res.status(400).json({
+      error: "This task was marked as missed, but no reason was provided. Please provide a reason first."
+    });
+  }
+}
+
     
     // Step 3: Fetch metadata
     const [taskDetailsRes, patientRes, patientStatusRes] = await Promise.all([
-      pool.query(`SELECT * FROM tasks WHERE id = $1`, [task.task_id]),
-      pool.query(`SELECT * FROM patients WHERE id = $1`, [task.patient_id]),
-      pool.query(`SELECT status FROM patients WHERE id = $1`, [task.patient_id]),
+      client.query(`SELECT * FROM tasks WHERE id = $1`, [task.task_id]),
+      client.query(`SELECT * FROM patients WHERE id = $1`, [task.patient_id]),
+      client.query(`SELECT status FROM patients WHERE id = $1`, [task.patient_id]),
     ]);
 
     const taskDetails = taskDetailsRes.rows[0];
@@ -150,7 +197,7 @@ if (taskDetails.is_court_date) {
     ? "ltc_court_datetime"
     : "guardianship_court_datetime";
 
-  await pool.query(
+  await client.query(
     `UPDATE patients SET ${fieldToUpdate} = $1 WHERE id = $2`,
     [courtDateUTC, patient.id]
   );
@@ -183,7 +230,7 @@ if (task.due_date) {
 }
 
 // ✅ Update task in DB
-await pool.query(`
+await client.query(`
   UPDATE patient_tasks 
   SET status = $1, completed_at = $2, override_due_date = $3
   WHERE id = $4
@@ -198,7 +245,7 @@ await appendStatusHistory(taskId, {
   status: finalStatus,
   timestamp: completedAt.toISOString(),
   staff_id: req.user.id,
-});
+},client);
 
     // Skip recurrence and dependency handling for non-blocking tasks
     if (taskDetails.is_non_blocking) {
@@ -249,7 +296,7 @@ if (
     ideal_due_date = idealLocal.toUTC().toJSDate();
   }
 
-  await pool.query(
+  await client.query(
     `INSERT INTO patient_tasks (patient_id, task_id, status, due_date, ideal_due_date)
      VALUES ($1, $2, 'Pending', $3, $4)`,
     [task.patient_id, taskDetails.id, nextDue, ideal_due_date]
@@ -262,7 +309,7 @@ if (
 
 
     // Step 5: Handle dependent tasks
-    const depRes = await pool.query(`
+    const depRes = await client.query(`
       SELECT t.*
       FROM tasks t
       JOIN task_dependencies td ON t.id = td.task_id
@@ -272,7 +319,7 @@ if (
     for (const dep of depRes.rows) {
       console.log(`Checking dependent task: ${dep.name}`);
 
-      const exists = await pool.query(
+      const exists = await client.query(
         `SELECT 1 FROM patient_tasks WHERE patient_id = $1 AND task_id = $2 AND status IN ('Pending', 'In Progress')`,
         [task.patient_id, dep.id]
       );
@@ -306,7 +353,7 @@ if (
       if (dep.is_non_blocking) {
         console.log("⏭ Skipping due date for non-blocking dependent task.");
         // Insert dependent task without a due date
-        await pool.query(
+        await client.query(
           `INSERT INTO patient_tasks (patient_id, task_id, status)
            VALUES ($1, $2, 'Pending')`,
           [task.patient_id, dep.id]
@@ -352,7 +399,7 @@ if (!due || !idealBaseDate) {
 
 
 
-await pool.query(
+await client.query(
   `INSERT INTO patient_tasks (patient_id, task_id, status, due_date, ideal_due_date)
    VALUES ($1, $2, 'Pending', $3, $4)`,
   [task.patient_id, dep.id, due, idealBaseDate]
@@ -361,11 +408,15 @@ await pool.query(
 console.log(`📌 Dependent task '${dep.name}' scheduled for ${due.toDateString()}`);
 
     }
-    console.log("DOne")
+    await client.query("COMMIT");
+
     res.status(200).json({ message: "Task completed successfully" });
   } catch (err) {
+    await client.query("ROLLBACK");
     console.error("❌ Error completing task:", err);
     res.status(500).json({ error: "Internal Server Error" });
+  }finally {
+    client.release();
   }
 };
 
@@ -373,53 +424,104 @@ console.log(`📌 Dependent task '${dep.name}' scheduled for ${due.toDateString(
 
 // 🟥 Mark a Task as Missed
 const markTaskAsMissed = async (req, res) => {
+  const client = await pool.connect();
   try {
     const { taskId } = req.params;
     const { missed_reason } = req.body;
     const staffId = req.user.id;
-if (!req.user?.is_approved) {
-  return res.status(403).json({ error: "Access denied: user not approved" });
-}
- const hospitalId = req.user.hospital_id;
 
-const taskRes = await pool.query(`
-  SELECT pt.*, p.hospital_id 
-  FROM patient_tasks pt
-  JOIN patients p ON pt.patient_id = p.id
-  WHERE pt.id = $1
-`, [taskId]);
-
-if (taskRes.rows.length === 0) return res.status(404).json({ error: "Task not found" });
-
-const task = taskRes.rows[0];
-if (task.hospital_id !== hospitalId) {
-  return res.status(403).json({ error: "Unauthorized: Task does not belong to your hospital." });
-}
-
-    if (task.status === "Completed") {
-      return res.status(400).json({ error: "Only pending/in-progress tasks can be missed" });
+    if (!req.user?.is_approved) {
+      return res.status(403).json({ error: "Access denied: user not approved" });
     }
 
-    await pool.query(`
+    if (!missed_reason || missed_reason.trim() === "") {
+      return res.status(400).json({ error: "Missed reason is required." });
+    }
+
+    const hospitalId = req.user.hospital_id;
+    await client.query("BEGIN");
+
+    // ✅ Use client.query here
+    const taskRes = await client.query(`
+      SELECT pt.*, p.hospital_id 
+      FROM patient_tasks pt
+      JOIN patients p ON pt.patient_id = p.id
+      WHERE pt.id = $1
+      FOR UPDATE
+    `, [taskId]);
+
+    if (taskRes.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ error: "Task not found" });
+    }
+
+    const task = taskRes.rows[0];
+
+    if (task.hospital_id !== hospitalId) {
+      await client.query("ROLLBACK");
+      return res.status(403).json({ error: "Unauthorized: Task does not belong to your hospital." });
+    }
+
+      if (task.status === "Missed") {
+  // Allow reason update if not already provided
+  const historyRes = await client.query(`SELECT status_history FROM patient_tasks WHERE id = $1`, [taskId]);
+  const history = historyRes.rows[0]?.status_history || [];
+
+  const hasReason = history.some(h => h.status === 'Missed' && h.reason?.trim());
+  
+  if (hasReason) {
+    await client.query("ROLLBACK");
+    return res.status(409).json({ error: "This task has already been marked as missed." });
+  }
+
+  // ✅ Add missing reason to history
+  await appendStatusHistory(taskId, {
+    status: "Missed",
+    timestamp: new Date().toISOString(),
+    reason: missed_reason,
+    staff_id: staffId
+  }, client);
+
+  await client.query("COMMIT");
+  return res.status(200).json({ message: "Missed reason updated." });
+}
+
+
+      if (task.status === "Completed") {
+        await client.query("ROLLBACK");
+        return res.status(409).json({ error: "This task is already completed and cannot be marked as missed." });
+      }
+
+      
+
+    // ✅ Update status
+    await client.query(`
       UPDATE patient_tasks 
       SET status = 'Missed'
       WHERE id = $1
     `, [taskId]);
 
+    // ✅ Append to status_history
     await appendStatusHistory(taskId, {
       status: "Missed",
       timestamp: new Date().toISOString(),
       reason: missed_reason,
       staff_id: staffId
-    });
+    }, client);
 
-    res.status(200).json({ message: "Task marked as missed" });
+    await client.query("COMMIT");
+
+    return res.status(200).json({ message: "Task marked as missed." });
 
   } catch (err) {
+    await client.query("ROLLBACK");
     console.error("❌ Error marking task missed:", err);
-    res.status(500).json({ error: "Internal Server Error" });
+    return res.status(500).json({ error: "Internal Server Error" });
+  } finally {
+    client.release();
   }
 };
+
 // 🚨 Get Priority Tasks (due today/tomorrow)
 const getPriorityTasks = async (req, res) => {
   try {
@@ -515,34 +617,43 @@ if (!req.user?.is_approved) {
 };
 
 const followUpCourtTask = async (req, res) => {
+  const client = await pool.connect();
   try {
     const { taskId } = req.params;
     const { followUpReason } = req.body;
     const { id: staffId, hospital_id } = req.user;
-    const timezone = req.headers['x-timezone'] || 'America/New_York';
-if (!req.user?.is_approved) {
-  return res.status(403).json({ error: "Access denied: user not approved" });
-}
+    const timezone = req.headers["x-timezone"] || "America/New_York";
+
+    if (!req.user?.is_approved) {
+      return res.status(403).json({ error: "Access denied: user not approved" });
+    }
+
     if (!followUpReason || followUpReason.trim() === "") {
       return res.status(400).json({ error: "Follow-up reason is required." });
     }
 
-    // Step 1: Fetch task from patient_tasks with hospital check
-    const taskRes = await pool.query(`
+    await client.query("BEGIN");
+
+    // 🔐 Lock task row
+    const taskRes = await client.query(`
       SELECT pt.*, p.hospital_id AS patient_hospital_id
       FROM patient_tasks pt
       JOIN patients p ON pt.patient_id = p.id
       WHERE pt.id = $1 AND p.hospital_id = $2
+      FOR UPDATE
     `, [taskId, hospital_id]);
 
     if (taskRes.rows.length === 0) {
+      await client.query("ROLLBACK");
       return res.status(404).json({ error: "Task not found or unauthorized hospital access" });
     }
 
     const task = taskRes.rows[0];
 
-    // Step 2: Fetch task details
-    const taskDetailsRes = await pool.query(`SELECT * FROM tasks WHERE id = $1`, [task.task_id]);
+
+
+    // Step 2: Check if task is eligible
+    const taskDetailsRes = await client.query(`SELECT * FROM tasks WHERE id = $1`, [task.task_id]);
     const taskDetails = taskDetailsRes.rows[0];
 
     const isManualFollowUpTask =
@@ -550,47 +661,73 @@ if (!req.user?.is_approved) {
       taskDetails.due_in_days_after_dependency !== null;
 
     if (!isManualFollowUpTask) {
+      await client.query("ROLLBACK");
       return res.status(400).json({
-        error: "This task is not eligible for manual follow-up based on properties.",
+        error: "This task is not eligible for manual follow-up based on its properties.",
       });
     }
 
+    // ⛔ If Missed: update missed entry with reason if not set
+    if (task.status === "Missed") {
+      const statusHistory = Array.isArray(task.status_history) ? task.status_history : [];
+      const missedIndex = [...statusHistory].reverse().findIndex(entry => entry.status === "Missed");
+      if (missedIndex !== -1) {
+        const realIndex = statusHistory.length - 1 - missedIndex;
+        if (!statusHistory[realIndex].note) {
+          statusHistory[realIndex].note = followUpReason;
+          await client.query(
+            `UPDATE patient_tasks SET status_history = $1 WHERE id = $2`,
+            [JSON.stringify(statusHistory), taskId]
+          );
+        }
+      }
+    }
+
+    // 🗓 Calculate new due date
     const nowLocal = DateTime.local().setZone(timezone);
     const nextDueLocal = nowLocal.plus({ days: taskDetails.recurrence_interval }).set({
       hour: 23, minute: 59, second: 0, millisecond: 0
     });
     const nextDue = nextDueLocal.toUTC().toJSDate();
 
-    await pool.query(`
+    // ✅ Update status and due date
+    await client.query(`
       UPDATE patient_tasks
       SET status = 'Follow Up', due_date = $1
       WHERE id = $2
     `, [nextDue, taskId]);
 
+    // ✅ Add to status_history
     await appendStatusHistory(taskId, {
       status: "Follow Up",
       timestamp: nowLocal.toUTC().toJSDate().toISOString(),
       note: followUpReason,
-      staff_id: staffId
-    });
+      staff_id: staffId,
+    }, client);
 
-    console.log(`🔁 Updated task '${taskDetails.name}' to follow up for ${nextDue.toDateString()}`);
-    res.status(200).json({ message: "Follow-up date extended on same task with reason." });
+    await client.query("COMMIT");
+
+    console.log(`🔁 Follow-up for '${taskDetails.name}' set for ${nextDue.toDateString()}`);
+    res.status(200).json({ message: "Follow-up scheduled successfully." });
 
   } catch (err) {
+    await client.query("ROLLBACK");
     console.error("❌ Error in followUpCourtTask:", err);
     res.status(500).json({ error: "Internal Server Error" });
+  } finally {
+    client.release();
   }
 };
+
 
 const updateTaskNote = async (req, res) => {
   try {
     const { taskId } = req.params;
     const { task_note, include_note_in_report, contact_info } = req.body;
     const { hospital_id } = req.user;
-if (!req.user?.is_approved) {
-  return res.status(403).json({ error: "Access denied: user not approved" });
-}
+      if (!req.user?.is_approved) {
+        return res.status(403).json({ error: "Access denied: user not approved" });
+      }
     // ✅ Fetch task and validate hospital ownership
     const taskRes = await pool.query(`
       SELECT pt.*, p.hospital_id

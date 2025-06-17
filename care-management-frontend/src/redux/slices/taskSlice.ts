@@ -83,7 +83,9 @@ export const startTask = createAsyncThunk(
       );
       return taskId;
     } catch (err: any) {
-      return rejectWithValue("Failed to start task");
+      const message =
+        err.response?.data?.error || "Failed to start task";
+      return rejectWithValue(message);
     }
   }
 );
@@ -136,7 +138,9 @@ export const markTaskAsMissed = createAsyncThunk(
       );
       return taskId;
     } catch (err: any) {
-      return rejectWithValue("Failed to mark task as missed");
+      const message =
+        err.response?.data?.error || "Failed to start task";
+      return rejectWithValue(message);
     }
   }
 );
@@ -155,7 +159,9 @@ export const followUpTask = createAsyncThunk(
       );
       return taskId;
     } catch (err: any) {
-      return rejectWithValue("Failed to follow up");
+      const message =
+        err.response?.data?.error || "Failed to start task";
+      return rejectWithValue(message);
     }
   }
 );
@@ -223,6 +229,41 @@ const taskSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
+    .addCase(startTask.pending, (state) => {
+  state.loading = true;
+  state.error = null;
+})
+      .addCase(startTask.fulfilled, (state, action) => {
+        state.loading = false;
+
+        const taskId = action.payload;
+        const taskIndex = state.patientTasks.findIndex(t => t.patient_task_id === taskId);
+        if (taskIndex !== -1) {
+          state.patientTasks[taskIndex].status = "In Progress";
+          state.patientTasks[taskIndex].started_at = new Date().toISOString();
+        }
+      })
+      .addCase(startTask.rejected, (state, action) => {
+        state.loading = false;
+        state.error = typeof action.payload === "string"
+          ? action.payload
+          : "Failed to start task";
+      })
+      .addCase(completeTask.pending, (state) => {
+      state.loading = true;
+      state.error = null;
+      state.taskError = null;
+    })
+    .addCase(completeTask.fulfilled, (state, action) => {
+      state.loading = false;
+    })
+    .addCase(completeTask.rejected, (state, action) => {
+      state.loading = false;
+      state.taskError =
+        typeof action.payload === 'string'
+          ? action.payload
+          : 'Failed to complete task';
+    })
       .addCase(loadPatientTasks.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -247,9 +288,16 @@ const taskSlice = createSlice({
       .addCase(followUpTask.pending, (state) => {
         state.loading = true;
       })
-      .addCase(followUpTask.fulfilled, (state) => {
+      .addCase(followUpTask.fulfilled, (state, action) => {
         state.loading = false;
+        const taskId = action.payload;
+        const idx = state.patientTasks.findIndex(t => t.patient_task_id === taskId);
+        if (idx !== -1) {
+          state.patientTasks[idx].status = "Follow Up";
+          state.patientTasks[idx].due_date = new Date().toISOString(); // or update with backend's `nextDue` if available
+        }
       })
+
       .addCase(followUpTask.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload as string;
@@ -282,6 +330,25 @@ const index = state.patientTasks.findIndex(
     };
   }
 })
+.addCase(markTaskAsMissed.pending, (state) => {
+  state.loading = true;
+  state.taskError = null;
+})
+.addCase(markTaskAsMissed.fulfilled, (state, action) => {
+  state.loading = false;
+  const taskId = action.payload;
+  const idx = state.patientTasks.findIndex(t => t.patient_task_id === taskId);
+  if (idx !== -1) {
+    state.patientTasks[idx].status = "Missed";
+  }
+})
+.addCase(markTaskAsMissed.rejected, (state, action) => {
+  state.loading = false;
+  state.taskError = typeof action.payload === 'string'
+    ? action.payload
+    : 'Failed to mark task as missed';
+})
+
 .addCase(acknowledgeTask.rejected, (state, action) => {
   state.taskError = typeof action.payload === "string"
     ? action.payload

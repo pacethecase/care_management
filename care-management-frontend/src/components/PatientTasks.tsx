@@ -93,15 +93,23 @@ const [activeTab, setActiveTab] = useState<"Tasks" | "Notes">("Tasks");
       }, [expandedTaskId, noteDrafts, patientTasks]);
   
 
-  const handleStart = (taskId: number) => {
-    dispatch(startTask(taskId))
-      .unwrap()
-      .then(() => {
-        toast.success("✅ Task started");
-        dispatch(loadPatientTasks(Number(patientId)));
-      })
-      .catch(() => toast.error("❌ Failed to start task"));
-  };
+const handleStart = async (taskId: number) => {
+  try {
+    await dispatch(startTask(taskId)).unwrap();
+    toast.success("✅ Task started");
+  } catch (err: any) {
+    const message =
+      typeof err === "string"
+        ? err
+        : err?.response?.data?.error || "❌ Failed to start task";
+    toast.error("❌ " + message);
+  } finally {
+    // Always reload tasks to reflect latest status
+    dispatch(loadPatientTasks(Number(patientId)));
+  }
+};
+
+
 
   const handleAcknowledge = async (taskId: number) => {
   try {
@@ -177,26 +185,40 @@ const handleComplete = async (taskId: number, courtTask: boolean) => {
         toast.error("❌ Failed to complete task even after reason");
       }
     } else {
-      toast.error("❌ Failed to complete task");
+    const message =
+    typeof err === "string"
+      ? err
+      : err?.message ||
+        err?.response?.data?.error ||
+        "❌ Failed to complete task";
+
+  toast.error(message);
     }
   }
 };
 
   
   
+const handleMissed = async (taskId: number) => {
+  const reason = prompt("Enter missed reason:");
+  if (!reason || reason.trim() === "") {
+    toast.error("❌ Missed reason is required");
+    return;
+  }
 
-  const handleMissed = (taskId: number) => {
-    const reason = prompt("Enter missed reason:");
-    if (reason) {
-      dispatch(markTaskAsMissed({ taskId, reason }))
-        .unwrap()
-        .then(() => {
-          toast.success("✅ Task marked as missed");
-          dispatch(loadPatientTasks(Number(patientId)));
-        })
-        .catch(() => toast.error("❌ Failed to mark as missed"));
-    }
-  };
+  try {
+    await dispatch(markTaskAsMissed({ taskId, reason })).unwrap();
+    toast.success("✅ Task marked as missed");
+    dispatch(loadPatientTasks(Number(patientId)));
+  } catch (err: any) {
+    const message =
+      typeof err === "string"
+        ? err
+        : err?.response?.data?.error || "❌ Failed to mark as missed";
+    toast.error(message);
+  }
+};
+
 
   const addNote = () => {
     if (!newNote.trim()) return toast.error("Note cannot be empty!");
@@ -219,10 +241,13 @@ const handleComplete = async (taskId: number, courtTask: boolean) => {
       // Dispatch the follow-up task with the provided reason
       await dispatch(followUpTask({ taskId, followUpReason: reason })).unwrap();
       toast.success("Follow-up task scheduled!");
-      dispatch(loadPatientTasks(Number(patientId))); // Reload tasks after follow-up
-    } catch {
-      toast.error("Failed to schedule follow-up");
+    if (patientId) {
+      dispatch(loadPatientTasks(Number(patientId)));
     }
+  } catch (err: any) {
+    const errorMsg = err?.message || "❌ Failed to schedule follow-up";
+    toast.error(errorMsg);
+  }
   };
   
 const getStatusBadge = (status: string) => {

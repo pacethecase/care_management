@@ -57,10 +57,11 @@ const Tasks = () => {
       await dispatch(startTask(taskId)).unwrap();
       toast.success("✅ Task started");
       refreshTasks();
-    } catch {
-      toast.error("❌ Failed to start task");
+    } catch (err: any) {
+      toast.error("❌ " + (typeof err === "string" ? err : "Failed to start task"));
     }
   };
+
 
 
 
@@ -105,7 +106,14 @@ const Tasks = () => {
           toast.error("❌ Failed to complete task even after reason");
         }
       } else {
-        toast.error("❌ Failed to complete task");
+         const message =
+          typeof err === "string"
+            ? err
+            : err?.message ||
+              err?.response?.data?.error ||
+              "❌ Failed to complete task";
+
+        toast.error(message);
       }
     }
   };

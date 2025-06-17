@@ -53,6 +53,19 @@ app.use(cors({
 }));
 
 
+app.options("*", cors({
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error("CORS not allowed"));
+    }
+  },
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+  allowedHeaders: ["Content-Type", "Authorization", "x-timezone"],
+  credentials: true
+}));
+
 // Body Parser and Cookie Parser
 app.use(cookieParser());
 app.use(bodyParser.json());

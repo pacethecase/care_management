@@ -36,7 +36,7 @@ function setupMissedTaskJob(io) {
           SET status = 'Missed',
               status_history = COALESCE(status_history, '[]'::jsonb) || jsonb_build_object(
                 'status', 'Missed',
-               'timestamp', $2
+               'timestamp', $2::timestamptz
               )
           WHERE id = $1
         `, [task.id,todayStart]);
