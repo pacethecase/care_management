@@ -279,6 +279,7 @@ const getPatientTasks = async (req, res) => {
     const result = await pool.query(
       `SELECT 
         pt.id AS patient_task_id,
+        pt.status_history, 
         pt.task_id AS task_id,
         t.name AS task_name,
         t.category,
@@ -557,6 +558,19 @@ const updatePatient = async (req, res) => {
     if (existing.hospital_id !== userHospitalId) {
       return res.status(403).json({ error: "Access denied: Patient belongs to a different hospital." });
     }
+    const clientUpdatedAt = req.body.updated_at;
+      if (!clientUpdatedAt) {
+        return res.status(400).json({ error: "Missing updated_at timestamp." });
+      }
+
+      const dbUpdatedAt = existing.updated_at?.toISOString();
+      const clientTime = new Date(clientUpdatedAt).toISOString();
+console.log(dbUpdatedAt);
+console.log(clientTime);
+      if (dbUpdatedAt !== clientTime) {
+        return res.status(409).json({ error: "This patient was already updated by someone else. Please refresh and try again." });
+      }
+
 
     const prevAlgorithms = existing.selected_algorithms || [];
     const addedAlgorithms = selected_algorithms.filter(a => !prevAlgorithms.includes(a));

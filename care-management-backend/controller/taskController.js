@@ -1,13 +1,20 @@
 const pool = require("../models/db");
 const { DateTime } = require('luxon');
 
-const appendStatusHistory = async (taskId, newEntry,client) => {
+const appendStatusHistory = async (taskId, newEntry, client) => {
+   const timezone = "America/New_York"; 
+  const timestamp = DateTime.local().setZone(timezone).toFormat("yyyy-MM-dd HH:mm:ssZZ");
+
   await client.query(`
     UPDATE patient_tasks
     SET status_history = status_history || $2::jsonb
     WHERE id = $1
-  `, [taskId, JSON.stringify([newEntry])]);
+  `, [taskId, JSON.stringify([{
+    ...newEntry,
+    timestamp
+  }])]);
 };
+
 
 
 const startTask = async (req, res) => {
@@ -76,7 +83,6 @@ const startTask = async (req, res) => {
 
     await appendStatusHistory(taskId, {
       status: "In Progress",
-      timestamp: new Date().toISOString(),
       staff_id: staffId
     }, client);
 
@@ -100,11 +106,14 @@ const completeTask = async (req, res) => {
   try {
     await client.query("BEGIN");
     const { taskId } = req.params;
-    const { court_date, override_date } = req.body;
-        
+    const { court_date, override_date,reason,missed_reason } = req.body;
+    
+  
     if (!req.user?.is_approved) {
       return res.status(403).json({ error: "Access denied: user not approved" });
     }
+
+
     const timezone = req.headers['x-timezone'] || 'America/New_York';
     console.log("Completing task with ID:", taskId);
 
@@ -126,7 +135,15 @@ const taskRes = await client.query(`
     }
 
     const task = taskRes.rows[0];
+  const completionReason = reason?.trim();
+  const missedReason = missed_reason?.trim();
+  let updatedMissed = false;
 
+   
+    if (task.status !== "Missed" && !completionReason) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ error: "Reason is required to complete this task." });
+    }
       if (['Completed', 'Delayed Completed'].includes(task.status)) {
     await client.query("ROLLBACK");
     return res.status(409).json({ error: "Task has already been completed." });
@@ -154,16 +171,46 @@ const taskRes = await client.query(`
     return res.status(500).json({ error: "Failed to fetch task history." });
   }
 
-  const lastMissed = [...history].reverse().find(
-    h => h.status === 'Missed' && h.reason?.trim()
+
+
+
+try {
+  const historyRes = await client.query(
+    `SELECT status_history FROM patient_tasks WHERE id = $1`,
+    [taskId]
+  );
+  history = historyRes.rows[0]?.status_history || [];
+} catch (e) {
+  await client.query("ROLLBACK");
+  return res.status(500).json({ error: "Failed to fetch task history." });
+}
+
+if (task.status === "Missed") {
+  const missedWithoutReason = [...history].reverse().find(
+    h => h.status === "Missed" && !h.reason
   );
 
-  if (!lastMissed) {
+  if (missedWithoutReason && missedReason) {
+    const index = history.findIndex(
+      h => h.status === "Missed" && !h.reason
+    );
+    if (index !== -1) {
+      history[index].reason = missedReason;
+      history[index].staff_id = req.user.id;
+      updatedMissed = true;
+
+      await client.query(
+        `UPDATE patient_tasks SET status_history = $1 WHERE id = $2`,
+        [JSON.stringify(history), taskId]
+      );
+    }
+  } else if (missedWithoutReason && !missedReason) {
     await client.query("ROLLBACK");
     return res.status(400).json({
       error: "This task was marked as missed, but no reason was provided. Please provide a reason first."
     });
   }
+} 
 }
 
     
@@ -173,7 +220,7 @@ const taskRes = await client.query(`
       client.query(`SELECT * FROM patients WHERE id = $1`, [task.patient_id]),
       client.query(`SELECT status FROM patients WHERE id = $1`, [task.patient_id]),
     ]);
-
+  
     const taskDetails = taskDetailsRes.rows[0];
     const patient = patientRes.rows[0];
     const patientStatus = patientStatusRes.rows[0]?.status;
@@ -237,15 +284,15 @@ await client.query(`
 `, [finalStatus, completedAt, overrideDate, taskId]);
 
 
-// ✅ ALSO update your in-memory `task` object!
-task.completed_at = completedAt;
-task.override_due_date = overrideDate; 
-// ✅ Append to history with the same status
-await appendStatusHistory(taskId, {
-  status: finalStatus,
-  timestamp: completedAt.toISOString(),
-  staff_id: req.user.id,
-},client);
+    task.completed_at = completedAt;
+    task.override_due_date = overrideDate; 
+
+      await appendStatusHistory(taskId, {
+        status: finalStatus,
+        staff_id: req.user.id,
+        ...(completionReason && { reason: completionReason }),
+      }, client);
+
 
     // Skip recurrence and dependency handling for non-blocking tasks
     if (taskDetails.is_non_blocking) {
@@ -477,7 +524,6 @@ const markTaskAsMissed = async (req, res) => {
   // ✅ Add missing reason to history
   await appendStatusHistory(taskId, {
     status: "Missed",
-    timestamp: new Date().toISOString(),
     reason: missed_reason,
     staff_id: staffId
   }, client);
@@ -504,7 +550,6 @@ const markTaskAsMissed = async (req, res) => {
     // ✅ Append to status_history
     await appendStatusHistory(taskId, {
       status: "Missed",
-      timestamp: new Date().toISOString(),
       reason: missed_reason,
       staff_id: staffId
     }, client);
@@ -635,13 +680,18 @@ const followUpCourtTask = async (req, res) => {
     await client.query("BEGIN");
 
     // 🔐 Lock task row
-    const taskRes = await client.query(`
-      SELECT pt.*, p.hospital_id AS patient_hospital_id
-      FROM patient_tasks pt
-      JOIN patients p ON pt.patient_id = p.id
-      WHERE pt.id = $1 AND p.hospital_id = $2
-      FOR UPDATE
-    `, [taskId, hospital_id]);
+   const taskRes = await client.query(`
+  SELECT 
+    pt.*, 
+    p.hospital_id AS patient_hospital_id,
+    t.is_non_blocking
+  FROM patient_tasks pt
+  JOIN patients p ON pt.patient_id = p.id
+  JOIN tasks t ON pt.task_id = t.id
+  WHERE pt.id = $1 AND p.hospital_id = $2
+  FOR UPDATE
+`, [taskId, hospital_id]);
+
 
     if (taskRes.rows.length === 0) {
       await client.query("ROLLBACK");
@@ -655,17 +705,21 @@ const followUpCourtTask = async (req, res) => {
     // Step 2: Check if task is eligible
     const taskDetailsRes = await client.query(`SELECT * FROM tasks WHERE id = $1`, [task.task_id]);
     const taskDetails = taskDetailsRes.rows[0];
+    console.log(task);
 
-    const isManualFollowUpTask =
-      taskDetails.is_repeating === true &&
-      taskDetails.due_in_days_after_dependency !== null;
+   const isManualFollowUpTask =
+        taskDetails.is_repeating === true &&
+        taskDetails.due_in_days_after_dependency !== null;
 
-    if (!isManualFollowUpTask) {
-      await client.query("ROLLBACK");
-      return res.status(400).json({
-        error: "This task is not eligible for manual follow-up based on its properties.",
-      });
-    }
+      const isNonBlocking = task.is_non_blocking === true;
+console.log(isNonBlocking);
+      if (!isManualFollowUpTask && !isNonBlocking) {
+        await client.query("ROLLBACK");
+        return res.status(400).json({
+          error: "This task is not eligible for follow-up.",
+        });
+      }
+
 
     // ⛔ If Missed: update missed entry with reason if not set
     if (task.status === "Missed") {
@@ -682,7 +736,35 @@ const followUpCourtTask = async (req, res) => {
         }
       }
     }
+if (isNonBlocking) {
+  const newStatusHistory = [
+    {
+      status: "Pending",
+      timestamp: new Date().toISOString(),
+      reason: followUpReason,
+      staff_id: staffId
+    }
+  ];
+const insertRes = await client.query(`
+  INSERT INTO patient_tasks (
+    patient_id,
+    task_id,
+    status,
+    status_history
+  )
+  VALUES ($1, $2, 'Pending', $3)
+  RETURNING id
+`, [
+  task.patient_id,
+  task.task_id,
+  JSON.stringify(newStatusHistory)
+]);
 
+  await client.query("COMMIT");
+
+  console.log(`🆕 Follow-up non-blocking task inserted with ID ${insertRes.rows[0].id}`);
+  return res.status(200).json({ message: "Non-blocking follow-up task created." });
+}
     // 🗓 Calculate new due date
     const nowLocal = DateTime.local().setZone(timezone);
     const nextDueLocal = nowLocal.plus({ days: taskDetails.recurrence_interval }).set({
@@ -700,8 +782,7 @@ const followUpCourtTask = async (req, res) => {
     // ✅ Add to status_history
     await appendStatusHistory(taskId, {
       status: "Follow Up",
-      timestamp: nowLocal.toUTC().toJSDate().toISOString(),
-      note: followUpReason,
+      reason: followUpReason,
       staff_id: staffId,
     }, client);
 
@@ -766,38 +847,81 @@ const updateTaskNote = async (req, res) => {
 };
 
 const acknowledgeTask = async (req, res) => {
-  const taskId = parseInt(req.params.id, 10); 
-  const userId = parseInt(req.user.id, 10); 
- const nowUTC = new Date().toISOString();
- if (!req.user?.is_approved) {
-  return res.status(403).json({ error: "Access denied: user not approved" });
-}
+  const client = await pool.connect();
   try {
-    const result = await pool.query(
-      `
-      UPDATE patient_tasks
-      SET status = 'Acknowledged',
-          status_history = status_history || jsonb_build_object(
-            'status', 'Acknowledged',
-            'timestamp',  $1::timestamptz,
-            'staff_id', $2::INT
-          )::jsonb
-      WHERE id = $3::INT
-      RETURNING *
-      `,
-      [nowUTC,userId, taskId]
-    );
+    const taskId = parseInt(req.params.id, 10);
+    const staffId = parseInt(req.user.id, 10);
+    const { reason } = req.body;
+    const nowUTC = new Date().toISOString();
 
-    if (result.rowCount === 0) {
-      return res.status(404).json({ error: 'Task not found or already acknowledged' });
+    if (!req.user?.is_approved) {
+      return res.status(403).json({ error: "Access denied: user not approved" });
     }
 
-    res.json({ message: 'Task acknowledged successfully', task: result.rows[0] });
+    if (!reason || reason.trim() === "") {
+      return res.status(400).json({ error: "Reason is required to acknowledge this task." });
+    }
+
+    if (isNaN(taskId)) {
+      return res.status(400).json({ error: "Invalid task ID." });
+    }
+
+    await client.query("BEGIN");
+
+    // ✅ Lock and fetch the task
+    const taskRes = await client.query(`
+      SELECT pt.*, p.hospital_id
+      FROM patient_tasks pt
+      JOIN patients p ON pt.patient_id = p.id
+      WHERE pt.id = $1
+      FOR UPDATE
+    `, [taskId]);
+
+    if (taskRes.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ error: "Task not found" });
+    }
+
+    const task = taskRes.rows[0];
+    const hospitalId = req.user.hospital_id;
+
+    if (task.hospital_id !== hospitalId) {
+      await client.query("ROLLBACK");
+      return res.status(403).json({ error: "Unauthorized: Task does not belong to your hospital." });
+    }
+
+    if (task.status === "Acknowledged") {
+      await client.query("ROLLBACK");
+      return res.status(409).json({ error: "This task is already acknowledged." });
+    }
+
+    // ✅ Update task status
+    await client.query(`
+      UPDATE patient_tasks
+      SET status = 'Acknowledged'
+      WHERE id = $1
+    `, [taskId]);
+
+    // ✅ Append to status history
+    await appendStatusHistory(taskId, {
+      status: "Acknowledged",
+      staff_id: staffId,
+      reason: reason.trim(),
+    }, client);
+
+    await client.query("COMMIT");
+
+    res.status(200).json({ message: "Task acknowledged successfully." });
+
   } catch (err) {
-    console.error('❌ Error acknowledging task:', err);
-    res.status(500).json({ error: 'Internal server error' });
+    await client.query("ROLLBACK");
+    console.error("❌ Error acknowledging task:", err);
+    res.status(500).json({ error: "Internal Server Error" });
+  } finally {
+    client.release();
   }
 };
+
 
 
 

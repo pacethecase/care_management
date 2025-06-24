@@ -93,33 +93,43 @@ const [activeTab, setActiveTab] = useState<"Tasks" | "Notes">("Tasks");
       }, [expandedTaskId, noteDrafts, patientTasks]);
   
 
-const handleStart = async (taskId: number) => {
-  try {
-    await dispatch(startTask(taskId)).unwrap();
-    toast.success("✅ Task started");
-  } catch (err: any) {
-    const message =
-      typeof err === "string"
-        ? err
-        : err?.response?.data?.error || "❌ Failed to start task";
-    toast.error("❌ " + message);
-  } finally {
-    // Always reload tasks to reflect latest status
-    dispatch(loadPatientTasks(Number(patientId)));
-  }
-};
+        const handleStart = async (taskId: number) => {
+          try {
+            await dispatch(startTask(taskId)).unwrap();
+            toast.success("✅ Task started");
+          } catch (err: any) {
+            const message =
+              typeof err === "string"
+                ? err
+                : err?.response?.data?.error || "❌ Failed to start task";
+            toast.error("❌ " + message);
+          } finally {
+            dispatch(loadPatientTasks(Number(patientId)));
+          }
+        };
 
 
 
   const handleAcknowledge = async (taskId: number) => {
   try {
-    await dispatch(acknowledgeTask(taskId)).unwrap();
+    const reason = prompt("📝 Please enter a reason to acknowledge this task:");
+    if (!reason || reason.trim() === "") {
+      toast.error("❌ Reason is required to acknowledge the task.");
+      return;
+    }
+
+    await dispatch(acknowledgeTask({ taskId, reason })).unwrap();
     toast.success("✅ Task acknowledged");
     dispatch(loadPatientTasks(Number(patientId)));
-  } catch {
-    toast.error("❌ Failed to acknowledge task");
+  } catch (err: any) {
+    const message =
+      typeof err === "string"
+        ? err
+        : err?.response?.data?.error || "❌ Failed to acknowledge task";
+    toast.error(message);
   }
 };
+
 
 const handleEditCourtDate = async (type: "guardianship" | "ltc") => {
   const newDate = await showCourtDatePopup();
@@ -135,69 +145,82 @@ const handleEditCourtDate = async (type: "guardianship" | "ltc") => {
 };
 
 
+const handleComplete = async (
+  taskId: number,
+  courtTask: boolean
+) => {
+  let courtDate: string | undefined = undefined;
+  let reason: string | undefined = undefined;
+  let missedReason: string | undefined = undefined;
 
-
-const handleComplete = async (taskId: number, courtTask: boolean) => {
-    let courtDate: string | undefined = undefined;
   try {
-   
-
     if (courtTask) {
-       courtDate = (await showCourtDatePopup()) || undefined;
+        courtDate = (await showCourtDatePopup()) || undefined;
       if (!courtDate) {
         toast.error("Court date is required.");
         return;
       }
     }
 
+    reason = prompt("📝 Please enter a reason to complete this task:")?.trim();
+    if (!reason) {
+      toast.error("❌ Completion reason is required.");
+      return;
+    }
+
     await dispatch(
-      completeTask({ taskId, court_date: courtDate, override_date: overrideDates[taskId] || null })
+      completeTask({
+        taskId,
+        reason,
+        court_date: courtDate,
+        override_date: overrideDates[taskId] || undefined,
+      })
     ).unwrap();
+
     toast.success("✅ Task completed");
 
-    if (patientId) {
-      dispatch(fetchPatientById(Number(patientId)));
-      dispatch(loadPatientTasks(Number(patientId)));
-    }
   } catch (err: any) {
-    if (err?.toString().includes("Please provide a reason")) {
-      const reason = prompt("📝 This task was missed earlier. Please enter a missed reason to proceed:");
+    const errorMsg =
+      err?.response?.data?.error ||
+      err?.message ||
+      err?.toString();
 
-      if (!reason || reason.trim() === "") {
-        toast.error("❌ Reason is required to complete this task.");
+    if (errorMsg.toLowerCase().includes("missed")) {
+      missedReason = prompt("📝 This task was missed earlier. Please enter a missed reason:")?.trim();
+      if (!missedReason) {
+        toast.error("❌ Missed reason is required.");
         return;
       }
 
       try {
-        await dispatch(markTaskAsMissed({ taskId, reason })).unwrap();
-        toast.success("✅ Missed reason recorded");
-
         await dispatch(
-          completeTask({ taskId, court_date: courtDate, override_date: overrideDates[taskId] || null })
+          completeTask({
+            taskId,
+            reason, // ✅ still using original reason
+            missed_reason: missedReason,
+            court_date: courtDate,
+            override_date: overrideDates[taskId] || undefined,
+          })
         ).unwrap();
-        toast.success("✅ Task completed after reason provided");
 
-        if (patientId) {
-          dispatch(fetchPatientById(Number(patientId)));
-          dispatch(loadPatientTasks(Number(patientId)));
-        }
+        toast.success("✅ Task completed after missed reason");
+
       } catch {
-        toast.error("❌ Failed to complete task even after reason");
+        toast.error("❌ Failed to complete task after both reasons.");
       }
     } else {
-    const message =
-    typeof err === "string"
-      ? err
-      : err?.message ||
-        err?.response?.data?.error ||
-        "❌ Failed to complete task";
-
-  toast.error(message);
+      toast.error(errorMsg || "❌ Failed to complete task.");
     }
+  }
+
+  if (patientId) {
+    dispatch(fetchPatientById(Number(patientId)));
+    dispatch(loadPatientTasks(Number(patientId)));
   }
 };
 
-  
+
+
   
 const handleMissed = async (taskId: number) => {
   const reason = prompt("Enter missed reason:");
@@ -288,72 +311,70 @@ const tasksByStatus = useMemo(() => {
 }, [patientTasks, selectedAlgorithm]);
 
 
-
-
-
 const renderTaskCard = (task: Task) => {
-  const isExpanded = expandedTaskId === task.patient_task_id ;
-  const draft = noteDrafts[task.patient_task_id ] || {
+  const isExpanded = expandedTaskId === task.patient_task_id;
+  const draft = noteDrafts[task.patient_task_id] || {
     task_note: "",
     contact_info: "",
     include_note_in_report: false,
   };
 
+  const latestByStatus = (status: string) =>
+    task.status_history
+      ?.filter((entry) => entry.status === status)
+      ?.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0];
+
+  const missedEntry = latestByStatus("Missed");
+  const followUpEntry = latestByStatus("Follow Up");
+  const completedEntry = latestByStatus("Completed");
+  const delayedcompletedEntry = latestByStatus("Delayed Completed");
+  const acknowledgeEntry =  latestByStatus("Acknowledged");
+
   const updateDraft = (field: keyof typeof draft, value: any) => {
     setNoteDrafts((prev) => ({
       ...prev,
-      [task.patient_task_id ]: {
-        ...prev[task.patient_task_id ],
+      [task.patient_task_id]: {
+        ...prev[task.patient_task_id],
         [field]: value,
       },
     }));
   };
 
-const handleSaveMeta = (taskId: number, data: any) => {
-  console.log("Saving note for task_id (patient_tasks.id):", task.patient_task_id );
+  const handleSaveMeta = (taskId: number, data: any) => {
+    dispatch(updateTaskNoteMeta({ taskId, data }))
+      .unwrap()
+      .then(() => {
+        toast.success("Task note updated");
+        setExpandedTaskId(null);
+      })
+      .catch(() => toast.error("Failed to update task note"));
+  };
 
-  dispatch(updateTaskNoteMeta({
-    taskId,
-    data,
-  }))
-    .unwrap()
-    .then(() => {
-      toast.success("Task note updated");
-      setExpandedTaskId(null);
-    })
-    .catch(() => toast.error("Failed to update task note"));
-};
-
-
-  const borderColor = algoColorMap[task.algorithm as keyof typeof algoColorMap] || "var(--border-muted)";
-
+  const borderColor =
+    algoColorMap[task.algorithm as keyof typeof algoColorMap] || "var(--border-muted)";
 
   return (
-   
     <div
-      key={task.patient_task_id }
+      key={task.patient_task_id}
       className={`card border p-4 mb-4 rounded-lg text-black ${
-        task.is_non_blocking ?"non-blocking":""
-      } ${task.status === "Missed" ? "card-missed" : ""}
-        ${task.status === "Completed"  || task.status === "Delayed Completed" ? "card-completed" : ""}
-      `}
+        task.is_non_blocking ? "non-blocking" : ""
+      } ${task.status === "Missed" ? "card-missed" : ""} ${
+        task.status === "Completed" || task.status === "Delayed Completed" ? "card-completed" : ""
+      }`}
       style={{ borderLeft: `12px solid ${borderColor}` }}
     >
-       <div className="flex justify-end mb-2">
-        <div className="flex gap-2 flex-wrap">
-          {getStatusBadge(task.status)}
-    
-        </div>
-        </div>
+      <div className="flex justify-end mb-2">
+        <div className="flex gap-2 flex-wrap">{getStatusBadge(task.status)}</div>
+      </div>
+
       <div className="flex justify-between rounded items-start mb-2">
         <div>
           <h4 className="font-bold text-sm">{task.task_name}</h4>
           <p className="text-xs text-semibold">{task.description}</p>
         </div>
-      
       </div>
 
-    <div className="text-sm mb-2 font-bold">
+      <div className="text-sm mb-2 font-bold">
         {!task.is_non_blocking && task.due_date && (
           <div>Due: {new Date(task.due_date).toLocaleDateString()}</div>
         )}
@@ -365,21 +386,51 @@ const handleSaveMeta = (taskId: number, data: any) => {
           </div>
         )}
 
-        {!task.is_non_blocking &&  task.completed_at && (
+        {!task.is_non_blocking && task.completed_at && (
           <div>
             Completed: {new Date(task.completed_at).toLocaleString()} by <b>{task.completed_by}</b>
           </div>
         )}
+    <div style={{ backgroundColor: '#abe6ff' }}>
 
+        {completedEntry && (
+          <div className="text-xs text-gray-700">
+             <b>Completed Note:</b> {completedEntry.reason || "None"}
+          </div>
+        )}
+         {delayedcompletedEntry && (
+          <div className="text-xs text-gray-700">
+             <b>Completed Note:</b> {delayedcompletedEntry.reason || "None"}
+          </div>
+        )}
+
+        {followUpEntry && (
+          <div className="text-xs text-gray-700">
+             <b>Follow-Up Note:</b> {followUpEntry.reason || "None"}
+          </div>
+        )}
+
+        {missedEntry && (
+          <div className="text-xs text-red-700">
+             <b>Missed Reason:</b> {missedEntry.reason || "None"}
+
+          </div>
+        )}
+         {acknowledgeEntry && (
+          <div className="text-xs text-red-700">
+            <b>Acknowledged Note:</b> {acknowledgeEntry.reason || "None"}
+
+          </div>
+        )}
+
+</div>
         {task.is_non_blocking && task.status === "Acknowledged" && task.acknowledged_at && (
-        <div>
-          Acknowledged: {new Date(task.acknowledged_at).toLocaleString()}
-          {task.acknowledged_by && <> by <b>{task.acknowledged_by}</b></>}
-        </div>
-      )}
-
-
-        {!task.is_non_blocking &&
+          <div>
+            Acknowledged: {new Date(task.acknowledged_at).toLocaleString()}
+            {task.acknowledged_by && <> by <b>{task.acknowledged_by}</b></>}
+          </div>
+        )}
+{!task.is_non_blocking &&
           task.is_overridable &&
           task.status !== "Completed" &&
           task.status !== "Delayed Completed" && (
@@ -390,69 +441,107 @@ const handleSaveMeta = (taskId: number, data: any) => {
               <input
                 type="date"
                 className="mt-1 block w-full rounded-md border-gray-300 shadow-sm"
-                value={overrideDates[task.patient_task_id ] || ""}
+                value={overrideDates[task.patient_task_id] || ""}
                 onChange={(e) =>
                   setOverrideDates((prev) => ({
                     ...prev,
-                    [task.patient_task_id ]: e.target.value,
+                    [task.patient_task_id]: e.target.value,
                   }))
                 }
               />
             </div>
-        )}
+          )}
       </div>
 
-
+    <div className="flex gap-2 flex-wrap mb-2">
+  {!task.is_non_blocking &&
+    task.status !== "Completed" &&
+    task.status !== "Delayed Completed" && (
       <div className="flex gap-2 flex-wrap mb-2">
-       
-      {!task.is_non_blocking && task.status !== "Completed"  && task.status!= "Delayed Completed" && (
-  <div className="flex gap-2 flex-wrap mb-2">
-    {task.status !== "In Progress" && task.status !== "Missed" && (
-      <button className="btn btn-xs" onClick={() => handleStart(task.patient_task_id )}>
-        Start
-      </button>
+        {overrideDates[task.patient_task_id] ? (
+          // 👇 Only show Complete button if override date exists
+          <button
+            className="btn btn-xs btn-outline"
+            onClick={() => handleComplete(task.patient_task_id, task.is_court_date ?? false)}
+          >
+            Complete
+          </button>
+        ) : (
+          <>
+            {task.status !== "In Progress" && task.status !== "Missed" && (
+              <button
+                className="btn btn-xs"
+                onClick={() => handleStart(task.patient_task_id)}
+              >
+                Start
+              </button>
+            )}
+            <button
+              className="btn btn-xs btn-outline"
+              onClick={() => handleComplete(task.patient_task_id, task.is_court_date ?? false)}
+            >
+              Complete
+            </button>
+            <button
+              className="btn btn-xs bg-red-600 text-white"
+              onClick={() => handleMissed(task.patient_task_id)}
+            >
+              Missed
+            </button>
+            {task.is_repeating && task.due_in_days_after_dependency != null && (
+              <button
+                className="btn btn-xs btn-outline"
+                onClick={() => handleFollowUp(task.patient_task_id)}
+              >
+                Follow Up
+              </button>
+            )}
+          </>
+        )}
+      </div>
     )}
-    <button
-      className="btn btn-xs btn-outline"
-      onClick={() =>
-        handleComplete(task.patient_task_id , task.is_court_date ?? false)
-      }
-    >
-      Complete
-    </button>
-    <button
-      className="btn btn-xs bg-red-600 text-white"
-      onClick={() => handleMissed(task.patient_task_id )}
-    >
-      Missed
-    </button>
-    {task.is_repeating && task.due_in_days_after_dependency != null && (
+
+ {task.is_non_blocking && (
+  <>
+    {task.status !== "Acknowledged" && (
+      <>
+        <button
+          className="btn btn-xs bg-blue-500 text-white"
+          onClick={() => handleAcknowledge(task.patient_task_id)}
+        >
+          Acknowledge
+        </button>
+
+        <button
+          className="btn btn-xs btn-outline"
+          onClick={() => handleFollowUp(task.patient_task_id)}
+        >
+          Follow Up
+        </button>
+      </>
+    )}
+
+    {task.status === "Acknowledged" && (
       <button
         className="btn btn-xs btn-outline"
-        onClick={() => handleFollowUp(task.patient_task_id )}
+        onClick={() => handleFollowUp(task.patient_task_id)}
       >
         Follow Up
       </button>
     )}
-  </div>
+  </>
 )}
 
-{task.is_non_blocking && task.status !== "Acknowledged" && (
-  <button
-    className="btn btn-xs bg-blue-500 text-white"
-    onClick={() => handleAcknowledge(task.patient_task_id )}
-  >
-    Acknowledge
-  </button>
-)}
+  
+</div>
 
-
-      </div>
 
       <div className="text-xs">
         <button
           className="underline text-black"
-          onClick={() => setExpandedTaskId(isExpanded ? null : task.patient_task_id)}
+          onClick={() =>
+            setExpandedTaskId(isExpanded ? null : task.patient_task_id)
+          }
         >
           {isExpanded ? "Hide Note Options" : "Add/Edit Note or Contact Info"}
         </button>
@@ -480,21 +569,24 @@ const handleSaveMeta = (taskId: number, data: any) => {
             <input
               type="checkbox"
               checked={draft.include_note_in_report}
-              onChange={(e) => updateDraft("include_note_in_report", e.target.checked)}
+              onChange={(e) =>
+                updateDraft("include_note_in_report", e.target.checked)
+              }
             />
             Include note in report
           </label>
-          
-        <button className="btn btn-xs" onClick={() => handleSaveMeta(task.patient_task_id, draft)}>
-          💾 Save
-        </button>
 
+          <button
+            className="btn btn-xs"
+            onClick={() => handleSaveMeta(task.patient_task_id, draft)}
+          >
+            💾 Save
+          </button>
         </div>
       )}
     </div>
   );
 };
-
 
 
 const renderTaskColumns = () => {

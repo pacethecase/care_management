@@ -11,6 +11,7 @@ import AlgorithmSelection from "../components/AlgorithmSelection";
 import { reactSelectStyles } from '../reactSelectStyles';
 import type { AppDispatch } from '../redux/store';
 import dayjs from 'dayjs';
+import { toast } from 'react-toastify';
 const EditPatientPage = () => {
   const dispatch = useDispatch<AppDispatch>();
   const navigate = useNavigate();
@@ -122,13 +123,27 @@ const EditPatientPage = () => {
       ...formData,
       selected_algorithms: algorithms,
       age: Number(formData.age),
+      updated_at: patient?.updated_at,
     };
-    await dispatch(updatePatient({ id: Number(patientId), data: updatedForm }));
+    await dispatch(updatePatient({ id: Number(patientId), data: updatedForm })).unwrap();
+
+    toast.success("✅ Patient updated successfully");
       navigate('/patients');
-    } catch (err) {
-      console.error('Update failed:', err);
+    } catch (err: any) {
+
+  // If thunk rejected withValue(err.response), it shows up here as `err`
+      const errorMsg = err?.data?.error;
+
+      if (errorMsg?.includes("already updated")) {
+        toast.error("⚠️ Someone else already updated this patient. Please refresh and try again.");
+      } else {
+        toast.error("❌ Failed to update patient.");
+      }
+
+      console.error("Update failed:", err);
     }
-  };
+
+};
 
   if (!patient) return <p className="p-6">Loading patient info...</p>;
 

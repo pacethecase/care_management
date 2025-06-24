@@ -36,6 +36,7 @@ export interface Patient {
     is_guardianship_emergency: boolean;
     added_by_user_id:number;
     selected_algorithms?: string[];
+    updated_at?:string;
   }
   
   export interface UserInfo {
@@ -92,6 +93,15 @@ export interface Note {
     contact_info?: string;
     include_note_in_report?: boolean;
     is_court_date?:boolean;
+   status_history?: {
+  status: string;
+  timestamp: string;
+  staff_id: number;
+  reason?: string;
+}[];
+
+
+
   }
   export interface Notification {
     id:  number;

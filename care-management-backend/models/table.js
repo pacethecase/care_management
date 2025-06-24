@@ -101,6 +101,7 @@ const createTables = async () => {
           added_by_user_id INTEGER REFERENCES users(id),
           selected_algorithms TEXT[] DEFAULT '{}',
           hospital_id INTEGER NOT NULL REFERENCES hospitals(id),
+         updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
       );
 
 
@@ -136,7 +137,7 @@ const createTables = async () => {
           status VARCHAR(50) DEFAULT 'Pending',  -- Pending, In Progress, Completed, Missed, FollowUp,Completed with Delay
           due_date TIMESTAMP  WITH TIME ZONE ,
           completed_at TIMESTAMP  WITH TIME ZONE ,
-           ideal_due_date TIMESTAMP  WITH TIME ZONE ,
+          ideal_due_date TIMESTAMP  WITH TIME ZONE ,
           status_history JSONB DEFAULT '[]',
           started_at TIMESTAMP  WITH TIME ZONE ,
           created_at TIMESTAMP  WITH TIME ZONE  DEFAULT CURRENT_TIMESTAMP,

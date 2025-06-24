@@ -117,8 +117,8 @@ export const updatePatient = createAsyncThunk(
         withCredentials: true,
       });
       return res.data.patient;
-    } catch (err: any) {
-      return rejectWithValue(err.response?.data || 'Failed to update patient');
+    }catch (err: any) {
+      return rejectWithValue(err.response);
     }
   }
 );

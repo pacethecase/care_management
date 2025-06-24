@@ -98,10 +98,14 @@ export const completeTask = createAsyncThunk(
       taskId,
       court_date,
       override_date,
+      reason,
+      missed_reason, 
     }: {
       taskId: number;
       court_date?: string;
       override_date?: string | null;
+      reason?: string;
+      missed_reason?: string; 
     },
     { rejectWithValue }
   ) => {
@@ -109,6 +113,8 @@ export const completeTask = createAsyncThunk(
       const payload: any = {};
       if (court_date) payload.court_date = court_date;
       if (override_date) payload.override_date = override_date;
+      if (reason) payload.reason = reason;
+      if (missed_reason) payload.missed_reason = missed_reason; // ✅ SEND IT
 
       const res = await axios.post(
         `${BASE_URL}/tasks/${taskId}/complete`,
@@ -122,6 +128,8 @@ export const completeTask = createAsyncThunk(
     }
   }
 );
+
+
 
 
 export const markTaskAsMissed = createAsyncThunk(
@@ -191,11 +199,14 @@ export const updateTaskNoteMeta = createAsyncThunk<
 
 export const acknowledgeTask = createAsyncThunk(
   "tasks/acknowledgeTask",
-  async (taskId: number, { rejectWithValue }) => {
+  async (
+    { taskId, reason }: { taskId: number; reason?: string },
+    { rejectWithValue }
+  ) => {
     try {
       const res = await axios.patch(
         `${BASE_URL}/tasks/${taskId}/acknowledge`,
-        {},
+        { reason },
         { withCredentials: true }
       );
       return res.data;
@@ -204,6 +215,7 @@ export const acknowledgeTask = createAsyncThunk(
     }
   }
 );
+
 
 
 const taskSlice = createSlice({
