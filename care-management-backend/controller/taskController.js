@@ -234,10 +234,7 @@ if (taskDetails.is_court_date) {
   }
 
   // Convert to UTC using timezone
-  const utcString = new Date(
-    new Date(court_date).toLocaleString("en-US", { timeZone: timezone })
-  ).toISOString();
-  const courtDateUTC = new Date(utcString);
+  const courtDateUTC = DateTime.fromISO(court_date, { zone: timezone }).toUTC().toISO();
 
   // Determine which field to update
   const fieldToUpdate = taskDetails.name.includes("State")
