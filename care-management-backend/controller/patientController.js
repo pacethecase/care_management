@@ -202,50 +202,78 @@ const addPatient = async (req, res) => {
 // Get Patient By ID
 const getPatientById = async (req, res) => {
   if (!req.user?.is_approved) {
-  return res.status(403).json({ error: "Access denied: User not approved." });
-}
+    return res.status(403).json({ error: "Access denied: User not approved." });
+  }
 
   const userHospitalId = req.user.hospital_id;
-    const timezone = req.headers['x-timezone'] || 'America/New_York';
+  const timezone = req.headers['x-timezone'] || 'America/New_York';
+
   try {
     const { patientId } = req.params;
 
     const result = await pool.query(`
-  SELECT 
-    p.*,
-    json_agg(json_build_object('id', u.id, 'name', u.name)) FILTER (WHERE u.id IS NOT NULL) AS assigned_staff,
-    CASE
-      WHEN EXISTS (
-        SELECT 1 FROM patient_tasks pt
-        WHERE pt.patient_id = p.id AND pt.status = 'Missed'
-      ) THEN 'missed'
-      WHEN NOT EXISTS (
-        SELECT 1 FROM patient_tasks pt
-        WHERE pt.patient_id = p.id AND pt.ideal_due_date::date = CURRENT_DATE
-      ) THEN 'completed'
-      WHEN NOT EXISTS (
-        SELECT 1 FROM patient_tasks pt
-        WHERE pt.patient_id = p.id
-          AND pt.ideal_due_date::date = CURRENT_DATE
-          AND pt.status != 'Completed'
-      ) THEN 'completed'
-      ELSE 'in_progress'
-    END AS task_status
-  FROM patients p
-  LEFT JOIN patient_staff ps ON p.id = ps.patient_id
-  LEFT JOIN users u ON ps.staff_id = u.id
-  WHERE p.id = $1 AND p.hospital_id = $2
-  GROUP BY p.id
-`, [patientId, userHospitalId]);
-
+      SELECT 
+        p.id,
+        p.first_name,
+        p.last_name,
+        p.birth_date,
+        p.age,
+        p.bed_id,
+        p.medical_info,
+        p.status,
+        p.discharge_date,
+        p.discharge_note,
+        p.mrn,
+        p.admitted_date,
+        p.is_behavioral,
+        p.is_restrained,
+        p.is_geriatric_psych_available,
+        p.is_behavioral_team,
+        p.is_ltc,
+        p.is_ltc_financial,
+        p.is_ltc_medical,
+        p.is_guardianship,
+        p.is_guardianship_financial,
+        p.is_guardianship_person,
+        p.is_guardianship_emergency,
+        p.guardianship_court_datetime::timestamptz AS guardianship_court_datetime,
+        p.ltc_court_datetime::timestamptz AS ltc_court_datetime,
+        p.created_at,
+        p.added_by_user_id,
+        p.selected_algorithms,
+        p.hospital_id,
+        p.updated_at,
+        json_agg(json_build_object('id', u.id, 'name', u.name)) 
+          FILTER (WHERE u.id IS NOT NULL) AS assigned_staff,
+        CASE
+          WHEN EXISTS (
+            SELECT 1 FROM patient_tasks pt
+            WHERE pt.patient_id = p.id AND pt.status = 'Missed'
+          ) THEN 'missed'
+          WHEN NOT EXISTS (
+            SELECT 1 FROM patient_tasks pt
+            WHERE pt.patient_id = p.id AND pt.ideal_due_date::date = CURRENT_DATE
+          ) THEN 'completed'
+          WHEN NOT EXISTS (
+            SELECT 1 FROM patient_tasks pt
+            WHERE pt.patient_id = p.id
+              AND pt.ideal_due_date::date = CURRENT_DATE
+              AND pt.status != 'Completed'
+          ) THEN 'completed'
+          ELSE 'in_progress'
+        END AS task_status
+      FROM patients p
+      LEFT JOIN patient_staff ps ON p.id = ps.patient_id
+      LEFT JOIN users u ON ps.staff_id = u.id
+      WHERE p.id = $1 AND p.hospital_id = $2
+      GROUP BY p.id
+    `, [patientId, userHospitalId]);
 
     if (result.rows.length === 0) {
       return res.status(404).json({ error: "Patient not found" });
     }
-  const patient = result.rows[0];
 
-  
-
+    const patient = result.rows[0];
     res.status(200).json(patient);
   } catch (err) {
     console.error("❌ Error fetching patient:", err);
