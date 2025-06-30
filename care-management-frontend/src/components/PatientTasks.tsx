@@ -1,5 +1,6 @@
 import  { useState, useEffect } from "react";
 import { useParams, Link ,useLocation} from "react-router-dom";
+import { DateTime } from "luxon";
 import { useDispatch, useSelector } from "react-redux";
 import {
   loadPatientTasks,
@@ -424,12 +425,22 @@ const renderTaskCard = (task: Task) => {
         )}
 
 </div>
-        {task.is_non_blocking && task.status === "Acknowledged" && task.acknowledged_at && (
+      {task.is_non_blocking &&
+        task.status === "Acknowledged" &&
+        task.acknowledged_at && (
           <div>
-            Acknowledged: {new Date(task.acknowledged_at).toLocaleString()}
-            {task.acknowledged_by && <> by <b>{task.acknowledged_by}</b></>}
+            Acknowledged:{" "}
+            {DateTime.fromISO(task.acknowledged_at)
+              .setZone("America/New_York")
+              .toFormat("MMM d, yyyy, h:mm a")}
+            {task.acknowledged_by && (
+              <>
+                {" "}by <b>{task.acknowledged_by}</b>
+              </>
+            )}
           </div>
-        )}
+      )}
+       
 {!task.is_non_blocking &&
           task.is_overridable &&
           task.status !== "Completed" &&

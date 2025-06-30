@@ -24,6 +24,6 @@ router.patch("/:patientId/update", verifyToken, updatePatient);
 router.patch('/:patientId/reactivate', verifyToken, reactivatePatient);
 router.get('/by-admin/:adminId',verifyToken, getPatientsByAdmin);
 
-router.patch("/:id/court-date", updateCourtDate);
+router.patch("/:id/court-date",verifyToken, updateCourtDate);
 
 module.exports = router;

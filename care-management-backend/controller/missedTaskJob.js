@@ -4,14 +4,18 @@ const { DateTime } = require("luxon");
 
 function setupMissedTaskJob(io) {
   // Runs every day at midnight (NY time)
-  cron.schedule("0 0 * * *", async () => {
+  cron.schedule("* * * * *", async () => {
     try {
-      const timezone = "America/New_York";
+       const timezone = "America/New_York";
       const now = DateTime.local().setZone(timezone);
 
-      // Get the start of today (00:00:00) so anything before that is overdue
-     const todayStart = now.startOf('day').toJSDate();
-      console.log("⏳ Running missed task job at", now.toFormat("yyyy-MM-dd HH:mm"));
+      // Get start of today and convert to UTC for DB filtering
+      const todayStartUTC = now.startOf("day").toUTC();
+      const nowUTC = now.toUTC();
+
+      console.log("⏳ Running missed task job at:", now.toFormat("yyyy-MM-dd HH:mm z"));
+      console.log("🔎 Checking tasks due before:", todayStartUTC.toISO());
+
 
       const { rows: overdueTasks } = await pool.query(`
         SELECT 
@@ -25,7 +29,7 @@ function setupMissedTaskJob(io) {
         LEFT JOIN patient_staff ps ON pt.patient_id = ps.patient_id
         WHERE pt.status IN ('Pending', 'In Progress')
           AND COALESCE(pt.due_date, pt.ideal_due_date) < $1::timestamptz
-      `, [todayStart]);
+      `, [todayStartUTC.toISO()]);
 
       console.log(`🔍 Found ${overdueTasks.length} overdue tasks`);
 
@@ -38,7 +42,7 @@ function setupMissedTaskJob(io) {
                'timestamp', $2::timestamptz
               )
           WHERE id = $1
-        `, [task.id,todayStart]);
+        `, [task.id,nowUTC]);
 
         console.log(`🚨 Task ${task.id} for patient ${task.patient_id} marked as missed`);
 
