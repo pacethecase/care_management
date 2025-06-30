@@ -717,7 +717,10 @@ const renderTaskColumns = () => {
              Court Date:{" "}
             {patient.guardianship_court_datetime ? (
               <>
-              {DateTime.fromISO(patient.guardianship_court_datetime).toFormat("MMM d, yyyy, h:mm a")}
+             {DateTime.fromISO(patient.guardianship_court_datetime, { zone: 'utc' })
+          .setZone('America/New_York')
+          .toFormat('MMM d, yyyy, h:mm a')}
+
               
                 <button
                   onClick={() => handleEditCourtDate("guardianship")}
@@ -745,7 +748,11 @@ const renderTaskColumns = () => {
                Court Date:{" "}
             {patient.ltc_court_datetime ? (
               <>
-               {DateTime.fromISO(patient.ltc_court_datetime).toFormat("MMM d, yyyy, h:mm a")}
+              {DateTime.fromISO(patient.ltc_court_datetime, { zone: 'utc' })
+  .setZone('America/New_York')
+  .toFormat('MMM d, yyyy, h:mm a')}
+
+             
         
                 <button
                   onClick={() => handleEditCourtDate("ltc")}

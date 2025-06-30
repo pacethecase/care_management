@@ -237,7 +237,7 @@ const getPatientById = async (req, res) => {
         p.is_guardianship_person,
         p.is_guardianship_emergency,
        p.guardianship_court_datetime::timestamptz AS guardianship_court_datetime,
-  p.ltc_court_datetime::timestamptz AS ltc_court_datetime,
+        p.ltc_court_datetime::timestamptz AS ltc_court_datetime,
         p.created_at,
         p.added_by_user_id,
         p.selected_algorithms,
