@@ -717,7 +717,8 @@ const renderTaskColumns = () => {
              Court Date:{" "}
             {patient.guardianship_court_datetime ? (
               <>
-                {new Date(patient.guardianship_court_datetime).toLocaleString()}
+              {DateTime.fromISO(patient.guardianship_court_datetime).toFormat("MMM d, yyyy, h:mm a")}
+              
                 <button
                   onClick={() => handleEditCourtDate("guardianship")}
                   className="ml-4 hover:underline text-sm inline-flex items-center gap-1"
@@ -744,7 +745,8 @@ const renderTaskColumns = () => {
                Court Date:{" "}
             {patient.ltc_court_datetime ? (
               <>
-                {new Date(patient.ltc_court_datetime).toLocaleString()}
+               {DateTime.fromISO(patient.ltc_court_datetime).toFormat("MMM d, yyyy, h:mm a")}
+        
                 <button
                   onClick={() => handleEditCourtDate("ltc")}
                   className="ml-4  hover:underline text-sm inline-flex items-center gap-1"
