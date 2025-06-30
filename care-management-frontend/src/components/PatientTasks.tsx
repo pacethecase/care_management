@@ -707,69 +707,61 @@ const renderTaskColumns = () => {
                 Geriatric Psych Available: {patient.is_geriatric_psych_available ? "Yes" : "No"}
               </p>
             )}
-            {patient.is_guardianship && (
-             <p  className="p-3 rounded-md text-sm text-white"
-             style={{ backgroundColor: "var(--algo-guardianship)" }}>
-                <strong>Workflow Map:</strong> Guardianship Workflow <br />
-                Emergency: {patient.is_guardianship_emergency ? "Yes" : "No"} | Financial:{" "}
-                {patient.is_guardianship_financial ? "Yes" : "No"} | Person:{" "}
-                {patient.is_guardianship_person ? "Yes" : "No"} | 
-             Court Date:{" "}
-            {patient.guardianship_court_datetime ? (
-              <>
-             {DateTime.fromISO(patient.guardianship_court_datetime, { zone: 'utc' })
+           {patient.is_guardianship && (
+  <p className="p-3 rounded-md text-sm text-white"
+     style={{ backgroundColor: "var(--algo-guardianship)" }}>
+    <strong>Workflow Map:</strong> Guardianship Workflow <br />
+    Emergency: {patient.is_guardianship_emergency ? "Yes" : "No"} | 
+    Financial: {patient.is_guardianship_financial ? "Yes" : "No"} | 
+    Person: {patient.is_guardianship_person ? "Yes" : "No"} | 
+    Court Date:{" "}
+    {patient.guardianship_court_datetime ? (
+      <>
+        {DateTime.fromISO(patient.guardianship_court_datetime, { zone: 'utc' })
           .setZone('America/New_York')
           .toFormat('MMM d, yyyy, h:mm a')}
+        <button
+          onClick={() => handleEditCourtDate("guardianship")}
+          className="ml-4 hover:underline text-sm inline-flex items-center gap-1"
+          title="Edit Court Date"
+        >
+          <Pencil size={14} />
+          Edit
+        </button>
+      </>
+    ) : (
+      "Not Set"
+    )}
+  </p>
+)}
 
-              
-                <button
-                  onClick={() => handleEditCourtDate("guardianship")}
-                  className="ml-4 hover:underline text-sm inline-flex items-center gap-1"
-                  title="Edit Court Date"
-                >
-                  <Pencil size={14} />
-                  Edit
-                </button>
-              </>
-            ) : (
-              "Not Set"
-            )}
+           {patient.is_ltc && (
+  <p className="p-3 rounded-md text-sm text-white"
+     style={{ backgroundColor: "var(--algo-ltc)" }}>
+    <strong>Workflow Map:</strong> Long-Term Care (LTC) <br />
+    Financial: {patient.is_ltc_financial ? "Yes" : "No"} | 
+    Medical: {patient.is_ltc_medical ? "Yes" : "No"} | 
+    Court Date:{" "}
+    {patient.ltc_court_datetime ? (
+      <>
+        {DateTime.fromISO(patient.ltc_court_datetime, { zone: 'utc' })
+          .setZone('America/New_York')
+          .toFormat('MMM d, yyyy, h:mm a')}
+        <button
+          onClick={() => handleEditCourtDate("ltc")}
+          className="ml-4 hover:underline text-sm inline-flex items-center gap-1"
+          title="Edit Court Date"
+        >
+          <Pencil size={14} />
+          Edit
+        </button>
+      </>
+    ) : (
+      "Not Set"
+    )}
+  </p>
+)}
 
-
-              </p>
-            )}
-            {patient.is_ltc && (
-              <p  className="p-3 rounded-md text-sm text-white"
-              style={{ backgroundColor: "var(--algo-ltc)" }}>
-                <strong>Workflow Map:</strong> Long-Term Care (LTC) <br />
-                Financial: {patient.is_ltc_financial ? "Yes" : "No"} | Medical:{" "}
-                {patient.is_ltc_medical ? "Yes" : "No"} |
-                Court Date:{" "}
-               Court Date:{" "}
-            {patient.ltc_court_datetime ? (
-              <>
-              {DateTime.fromISO(patient.ltc_court_datetime, { zone: 'utc' })
-  .setZone('America/New_York')
-  .toFormat('MMM d, yyyy, h:mm a')}
-
-             
-        
-                <button
-                  onClick={() => handleEditCourtDate("ltc")}
-                  className="ml-4  hover:underline text-sm inline-flex items-center gap-1"
-                  title="Edit Court Date"
-                >
-                  <Pencil size={14} />
-                  Edit
-                </button>
-              </>
-            ) : (
-              "Not Set"
-            )}
-
-                          
-            </p>
-            )}
           </div>
         </div>
 

@@ -273,7 +273,9 @@ const getPatientById = async (req, res) => {
       return res.status(404).json({ error: "Patient not found" });
     }
 
+
     const patient = result.rows[0];
+    console.log(patient)
     res.status(200).json(patient);
   } catch (err) {
     console.error("❌ Error fetching patient:", err);
