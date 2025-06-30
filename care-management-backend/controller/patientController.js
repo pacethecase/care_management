@@ -334,7 +334,7 @@ const getPatientTasks = async (req, res) => {
       LEFT JOIN LATERAL (
         SELECT 
           (elem.value ->> 'staff_id')::INTEGER AS staff_id,
-          (elem.value ->> 'timestamp')::timestampz AS timestamp
+          (elem.value ->> 'timestamp')::timestamptz AS timestamp
         FROM jsonb_array_elements(pt.status_history) AS elem
         WHERE elem.value ->> 'status' = 'Acknowledged'
         ORDER BY (elem.value ->> 'timestamp')::timestamp DESC
