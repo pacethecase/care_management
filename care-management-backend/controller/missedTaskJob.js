@@ -4,7 +4,7 @@ const { DateTime } = require("luxon");
 
 function setupMissedTaskJob(io) {
   // Runs every day at midnight (NY time)
-  cron.schedule("* * * * *", async () => {
+  cron.schedule("0 0 * * *", async () => {
     try {
        const timezone = "America/New_York";
       const now = DateTime.local().setZone(timezone);
