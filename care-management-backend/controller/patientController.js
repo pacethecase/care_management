@@ -821,13 +821,15 @@ const getPatientsByAdmin = async (req, res) => {
 
 
 
+
 const updateCourtDate = async (req, res) => {
   if (!req.user?.is_approved) {
-  return res.status(403).json({ error: "Access denied: User not approved." });
-}
+    return res.status(403).json({ error: "Access denied: User not approved." });
+  }
 
   const { id } = req.params;
   const { type, newDate } = req.body;
+  const timezone = req.headers['x-timezone'] || 'America/New_York';
 
   if (!["guardianship", "ltc"].includes(type)) {
     return res.status(400).json({ error: "Invalid type. Must be 'guardianship' or 'ltc'." });
@@ -838,10 +840,15 @@ const updateCourtDate = async (req, res) => {
     : "ltc_court_datetime";
 
   try {
+    // Convert input datetime string (e.g. 2025-07-01T10:00) in local time to UTC
+    const localDateTime = DateTime.fromISO(newDate, { zone: timezone });
+    const utcDateTime = localDateTime.toUTC().toISO();
+
     await pool.query(
       `UPDATE patients SET ${column} = $1 WHERE id = $2`,
-      [newDate, id]
+      [utcDateTime, id]
     );
+
     res.status(200).json({ message: "Court date updated successfully." });
   } catch (error) {
     console.error("❌ Error updating court date:", error);
