@@ -425,21 +425,21 @@ const renderTaskCard = (task: Task) => {
         )}
 
 </div>
-      {task.is_non_blocking &&
-        task.status === "Acknowledged" &&
-        task.acknowledged_at && (
-          <div>
-            Acknowledged:{" "}
-            {DateTime.fromISO(task.acknowledged_at)
-              .setZone("America/New_York")
-              .toFormat("MMM d, yyyy, h:mm a")}
-            {task.acknowledged_by && (
-              <>
-                {" "}by <b>{task.acknowledged_by}</b>
-              </>
-            )}
-          </div>
+   {task.is_non_blocking &&
+  task.status === "Acknowledged" &&
+  task.acknowledged_at && (
+    <div>
+      Acknowledged:{" "}
+      {DateTime.fromISO(task.acknowledged_at)
+        .toFormat("MMM d, yyyy, h:mm a")}
+      {task.acknowledged_by && (
+        <>
+          {" "}done by <b>{task.acknowledged_by}</b>
+        </>
       )}
+    </div>
+)}
+
        
 {!task.is_non_blocking &&
           task.is_overridable &&
