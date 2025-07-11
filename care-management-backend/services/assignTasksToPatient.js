@@ -60,12 +60,12 @@ const assignTasksToPatient = async (patientId, timezone, selectedAlgorithms = []
     return;
   }
 
-  if (!visible) return; // Don't assign if condition is false
+  if (!visible) return; 
 
 const admittedDate = patient.created_at  || new Date();
 
 const dueLocal = DateTime.fromJSDate(admittedDate, { zone: timezone })
-  .plus({ days }) // Use your task-specific offset here
+  .plus({ days }) 
   .set({ hour: 23, minute: 59, second: 0, millisecond: 0 });
 
   const dueDate = dueLocal.toUTC().toJSDate();

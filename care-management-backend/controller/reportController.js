@@ -552,5 +552,72 @@ if (!req.user?.is_approved) {
   };
 
 
+const getLengthOfStaySummary = async (req, res) => {
+  const user = req.user;
+  const hospitalId = user.hospital_id;
 
-  module.exports = { getDailyReport, getPriorityReport,getTransitionalCareReport ,getHistoricalTimelineReport,getProjectedTimelineReport};
+  const includeDischarged = req.query.includeDischarged === 'true';
+
+  try {
+    const query = `
+      SELECT
+        p.id,
+        p.admitted_date,
+        p.discharge_date,
+        p.created_at,
+        p.is_behavioral,
+        p.is_guardianship,
+        p.is_ltc,
+        p.status,
+        h.daily_bed_cost
+      FROM patients p
+      JOIN hospitals h ON p.hospital_id = h.id
+      WHERE p.hospital_id = $1
+      ${includeDischarged ? "" : "AND p.status = 'Admitted'"}
+    `;
+
+    const { rows } = await pool.query(query, [hospitalId]);
+    const today = new Date();
+
+    const summary = {
+      behavioral: { totalDays: 0, count: 0, cost: 0 },
+      guardianship: { totalDays: 0, count: 0, cost: 0 },
+      ltc: { totalDays: 0, count: 0, cost: 0 }
+    };
+
+    for (const row of rows) {
+      const admittedDate = new Date(row.admitted_date);
+      const dischargeDate = row.discharge_date ? new Date(row.discharge_date) : today;
+      const los = Math.max(Math.ceil((dischargeDate - admittedDate) / (1000 * 60 * 60 * 24)), 0);
+      const costPerDay = row.daily_bed_cost || 2883;
+
+      if (row.is_behavioral) {
+        summary.behavioral.totalDays += los;
+        summary.behavioral.count++;
+        summary.behavioral.cost += los * costPerDay;
+      }
+      if (row.is_guardianship) {
+        summary.guardianship.totalDays += los;
+        summary.guardianship.count++;
+        summary.guardianship.cost += los * costPerDay;
+      }
+      if (row.is_ltc) {
+        summary.ltc.totalDays += los;
+        summary.ltc.count++;
+        summary.ltc.cost += los * costPerDay;
+      }
+    }
+
+    for (const type of Object.keys(summary)) {
+      const entry = summary[type];
+      entry.avgDays = entry.count ? Math.round(entry.totalDays / entry.count) : 0;
+    }
+
+    res.json(summary);
+  } catch (error) {
+    console.error("Error generating LOS summary:", error);
+    res.status(500).json({ error: "Failed to calculate LOS summary" });
+  }
+};
+
+  module.exports = { getDailyReport, getPriorityReport,getTransitionalCareReport ,getHistoricalTimelineReport,getProjectedTimelineReport,getLengthOfStaySummary};

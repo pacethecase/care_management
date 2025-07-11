@@ -27,10 +27,21 @@ const Tasks = () => {
   const { user } = useSelector((state: RootState) => state.user);
   const { priorityTasks, missedTasks } = useSelector((state: RootState) => state.tasks);
   const { patients } = useSelector((state: RootState) => state.patients);
-
+ const [searchTerm, setSearchTerm] = useState('');
   const [selectedPatient, setSelectedPatient] = useState<number | null>(null);
-  const [tab, setTab] = useState<'priority' | 'missed'>('priority');
+  const [tab, setTab] = useState<'priority' | 'missed'>('missed');
   const [reasonInputs, setReasonInputs] = useState<Record<number, string>>({});
+
+
+const matchedPatientIds = useMemo(() => {
+  if (!searchTerm.trim()) return null;
+  const lower = searchTerm.toLowerCase();
+  return patients
+    .filter((p) =>
+      `${p.first_name} ${p.last_name}`.toLowerCase().includes(lower)
+    )
+    .map((p) => p.id);
+}, [patients, searchTerm]);
 
   useEffect(() => {
     if (user) {
@@ -156,32 +167,56 @@ const Tasks = () => {
     }
   };
 
-  const filteredPriorityTasks = useMemo(
-    () => priorityTasks.filter((task) => task.status !== 'Completed' && !task.is_non_blocking),
-    [priorityTasks]
+const filteredPriorityTasks = useMemo(() => {
+  let filtered = priorityTasks.filter(
+    (task) => task.status !== 'Completed' && !task.is_non_blocking
   );
+  if (matchedPatientIds) {
+    filtered = filtered.filter((task) =>
+      matchedPatientIds.includes(task.patient_id)
+    );
+  }
+  return filtered;
+}, [priorityTasks, matchedPatientIds]);
+
+const filteredMissedTasks = useMemo(() => {
+  if (!searchTerm.trim()) return missedTasks;
+
+  const lower = searchTerm.toLowerCase();
+  return missedTasks.filter((task) =>
+    task.patient_name?.toLowerCase().includes(lower)
+  );
+}, [missedTasks, searchTerm]);
 
   return (
     <div className="min-h-screen flex flex-col bg-hospital-neutral">
       <Navbar />
       <main className="flex-1 p-6 max-w-4xl mx-auto max-h-[calc(100vh-120px)] overflow-y-auto">
-        <div className="flex justify-end mb-6">
-          <select
-            className="p-2 border rounded w-48"
-            onChange={handlePatientChange}
-            value={selectedPatient || ''}
-          >
-            <option value="">-- Select Patient --</option>
-            {patients
-              .slice()
-              .sort((a, b) => a.last_name.localeCompare(b.last_name))
-              .map((patient) => (
-                <option key={patient.id} value={patient.id}>
-                  {patient.last_name}, {patient.first_name} – MRN {patient.mrn || "N/A"}
-                </option>
-              ))}
-          </select>
-        </div>
+      <div className="flex justify-end items-center gap-4 mb-6">
+  <input
+    value={searchTerm}
+    onChange={(e) => setSearchTerm(e.target.value)}
+    placeholder="Search by name or MRN"
+    className="p-2 border rounded w-64"
+  />
+
+  <select
+    className="p-2 border rounded w-48"
+    onChange={handlePatientChange}
+    value={selectedPatient || ''}
+  >
+    <option value="">-- Select Patient --</option>
+    {patients
+      .slice()
+      .sort((a, b) => a.last_name.localeCompare(b.last_name))
+      .map((patient) => (
+        <option key={patient.id} value={patient.id}>
+          {patient.last_name}, {patient.first_name} – MRN {patient.mrn || "N/A"}
+        </option>
+      ))}
+  </select>
+</div>
+
 
         <div className="flex gap-4 mb-6 justify-center">
           <button
@@ -200,11 +235,12 @@ const Tasks = () => {
 
         {tab === 'missed' && (
           <div className="space-y-6">
-            {missedTasks.length === 0 ? (
+            {filteredMissedTasks.length === 0 ? (
               <p className="text-center text-gray-500">🎉 No missed tasks without reason</p>
             ) : (
-              missedTasks.map((task) => (
+              filteredMissedTasks.map((task) => (
                 <div key={task.patient_task_id} className="border p-5 rounded shadow-sm bg-white">
+
                   <h3 className="text-lg font-semibold text-red-600">{task.task_name}</h3>
                   <p className="text-sm text-gray-600">Patient: {task.patient_name}</p>
                   <p className="text-sm text-gray-600">
@@ -236,7 +272,7 @@ const Tasks = () => {
             ) : (
               filteredPriorityTasks.map((task) => (
                 <div key={task.patient_task_id} className="border p-5 rounded shadow-sm bg-white">
-                  <h3 className="text-lg font-semibold">{task.task_name}</h3>
+                <h3 className={`text-lg font-semibold ${ task.status === 'Missed' ? 'text-red-600' : ''}`}>{task.task_name}</h3>
                   <p className="text-sm text-gray-600">Patient: {task.patient_name}</p>
                   <p className="text-sm text-gray-600">
                     <CalendarDays className="inline w-4 h-4 mr-1" />

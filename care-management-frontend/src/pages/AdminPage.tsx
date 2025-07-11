@@ -11,7 +11,7 @@ import {
   clearHospitalMessage,
 } from "../redux/slices/adminSlice";
 import { fetchAllUsers } from "../redux/slices/userSlice";
-import { loadHospitals } from "../redux/slices/hospitalSlice";
+import { loadHospitals,updateDailyBedCost } from "../redux/slices/hospitalSlice";
 import { toast } from "react-toastify";
 import type { Hospital } from "../redux/types";
 import Navbar from "../components/Navbar";
@@ -22,14 +22,19 @@ const AdminPage: React.FC = () => {
   const { unapprovedUsers, allUsers, hospitalMessage, loading } = useSelector(
     (state: RootState) => state.admin
   );
+
+
   const hospitals: Hospital[] = useSelector((state: RootState) => state.hospitals.hospitals || []);
   const hasGlobalAccess = useSelector((state: RootState) => state.user?.has_global_access);
+  const isSuperAdmin = useSelector((state: RootState) => state.user?.is_super_admin);
+ const hospitalId = useSelector((state: RootState) => state.user.user?.hospital_id);
 
   const [filterHospitalId, setFilterHospitalId] = useState("all");
   const [filterRole, setFilterRole] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [viewAllUsers, setViewAllUsers] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [rates, setRates] = useState<Record<number, number>>({});
   const [showViewModal, setShowViewModal] = useState(false);
   const usersPerPage = 10;
 
@@ -83,10 +88,17 @@ const handleRevoke = async (id: number) => {
     }
   };
 
-  const handleDeleteHospital = async (id: number) => {
-    await dispatch(deleteHospital(id));
+const handleDeleteHospital = async (id: number) => {
+  try {
+    await dispatch(deleteHospital(id)).unwrap();
     await dispatch(loadHospitals());
-  };
+    toast.success("Hospital deleted");
+  } catch (err: any) {
+    const errorMsg = typeof err === "string" ? err : err?.message || "Failed to delete hospital";
+    toast.error(errorMsg);
+  }
+};
+
 
   const getHospitalName = (id: number | undefined) => {
     if (!id) return "N/A";
@@ -127,7 +139,51 @@ const handleRevoke = async (id: number) => {
           )}
         </div>
 
+        <div>
+             {isSuperAdmin && (
+              <div className="mt-6">
+                <h2 className="text-lg font-bold mb-2">Edit Hospital Bed Rates</h2>
+                <ul className="divide-y max-w-md">
+                  {[...hospitals]
+                  .filter((h) => h.id === hospitalId)
+                  .sort((a, b) => a.name.localeCompare(b.name))
+                  .map((h) => (
+                    <li key={h.id} className="py-2 flex justify-between items-center">
+                      <span>{h.name}</span>
+                      <form
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          const newRate = rates[h.id] ?? h.daily_bed_cost;
+                          dispatch(updateDailyBedCost({ hospitalId: h.id, daily_bed_cost: newRate }))
+                            .unwrap()
+                            .then(() => toast.success(`Updated rate for ${h.name}`))
+                            .catch((_err) => toast.error("Failed to update"));
+                        }}
+                        className="flex items-center gap-2"
+                      >
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={rates[h.id] ?? h.daily_bed_cost}
+                          onChange={(e) =>
+                            setRates((prev) => ({ ...prev, [h.id]: Number(e.target.value) }))
+                          }
+                          className="w-24 px-2 py-1 border rounded text-sm"
+                        />
+                        <button type="submit" className="text-sm px-3 py-1 bg-[var(--prussian-blue)] text-white rounded">
+                          Save
+                        </button>
+                      </form>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+        </div>
+
         <div className="flex justify-end gap-4 items-end mb-4">
+       
+
           {hasGlobalAccess && (
             <select
               value={filterHospitalId}
@@ -142,7 +198,7 @@ const handleRevoke = async (id: number) => {
               ))}
             </select>
           )}
-
+    
           <select value={filterRole} onChange={(e) => setFilterRole(e.target.value)} className="px-3 py-2 border rounded">
             <option value="all">All Roles</option>
             <option value="admin">Admins</option>
@@ -260,7 +316,14 @@ const handleRevoke = async (id: number) => {
             <ul className="divide-y">
               {[...hospitals].sort((a, b) => a.name.localeCompare(b.name)).map(h => (
                 <li key={h.id} className="py-2 flex justify-between items-center">
-                  {h.name}
+                          <div>{h.name}</div>
+                <div className="text-sm text-gray-600">
+                  ${h.daily_bed_cost.toLocaleString(undefined, {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}
+                  /day
+                </div>
                   <button onClick={() => handleDeleteHospital(h.id)} className="text-red-600 text-sm">
                     Delete
                   </button>

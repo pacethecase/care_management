@@ -10,6 +10,7 @@
   --primary-green:   #16a34a;  /* Tailwind green-500 */
   --primary-yellow:  #facc15;  /* Tailwind yellow-500 */
   --primary-blue:    #3b82f6;  /* Tailwind blue-500 */
+  --primary-orange: #FFA500;
   /* Neutrals */
   --bg-light: #fdfdfd;
   --text-main: #000;
@@ -151,6 +152,10 @@ input:focus, select:focus, textarea:focus {
 .card.card-completed{
   background-color: var(--primary-green);
 }
+.card.non-blocking-complete{
+  background-color: var(--primary-orange); 
+}
+
 
 /* 🧭 Tabs */
 .tab {

@@ -216,6 +216,39 @@ export const acknowledgeTask = createAsyncThunk(
   }
 );
 
+export const createManualTask = createAsyncThunk(
+  "tasks/createManualTask",
+  async (
+    {
+      patientId,
+      taskData,
+    }: {
+      patientId: number;
+      taskData: {
+        name: string;
+        description: string;
+        is_repeating: boolean;
+        recurrence_interval?: number | null;
+        is_overridable: boolean;
+        condition_required?: string;
+        category?: string;
+        algorithm?: string;
+      };
+    },
+    { rejectWithValue }
+  ) => {
+    try {
+      const res = await axios.post(
+        `${BASE_URL}/tasks/patients/${patientId}/manual-task`,
+        taskData,
+        { withCredentials: true }
+      );
+      return res.data;
+    } catch (err: any) {
+      return rejectWithValue(err.response?.data?.error || "Failed to create manual task");
+    }
+  }
+);
 
 
 const taskSlice = createSlice({
@@ -360,6 +393,22 @@ const index = state.patientTasks.findIndex(
     ? action.payload
     : 'Failed to mark task as missed';
 })
+.addCase(createManualTask.pending, (state) => {
+  state.loading = true;
+  state.taskError = null;
+})
+.addCase(createManualTask.fulfilled, (state, _action) => {
+  state.loading = false;
+  // Optional: You can toast here or refresh task list in your component after dispatch
+})
+.addCase(createManualTask.rejected, (state, action) => {
+  state.loading = false;
+  state.taskError =
+    typeof action.payload === 'string'
+      ? action.payload
+      : 'Failed to create manual task';
+})
+
 
 .addCase(acknowledgeTask.rejected, (state, action) => {
   state.taskError = typeof action.payload === "string"

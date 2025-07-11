@@ -12,8 +12,16 @@ interface ReportState {
   projectedTimelineReport: any | null;
   loading: boolean;
   error: string | null;
+   los: {
+    data: any | null;
+    loading: boolean;
+    error: string | null;
+  };
 }
 
+interface LOSReportParams {
+  includeDischarged?: boolean;
+}
 const initialState: ReportState = {
   dailyReport: [],
   priorityReport: [],
@@ -22,6 +30,11 @@ const initialState: ReportState = {
   projectedTimelineReport: null,
   loading: false,
   error: null,
+  los: {
+    data: null,
+    loading: false,
+    error: null,
+  },
 };
 export interface ReportParams {
   date: string;
@@ -124,6 +137,30 @@ export const fetchProjectedTimelineReport = createAsyncThunk<any, number, { reje
   }
 );
 
+export const fetchLengthOfStayReport = createAsyncThunk(
+  "reports/fetchLengthOfStayReport",
+  async (
+    { includeDischarged = false }: LOSReportParams = {},
+    { rejectWithValue }
+  ) => {
+    try {
+      const query = new URLSearchParams();
+      if (includeDischarged) query.append("includeDischarged", "true");
+
+      const res = await axios.get(`${BASE_URL}/reports/length-of-stay?${query.toString()}`, {
+        withCredentials: true,
+      });
+
+      return res.data;
+    } catch (err: any) {
+      return rejectWithValue(
+        err.response?.data?.error || "Failed to load LOS report"
+      );
+    }
+  }
+);
+
+
 const reportSlice = createSlice({
   name: "reports",
   initialState,
@@ -200,7 +237,20 @@ const reportSlice = createSlice({
       .addCase(fetchProjectedTimelineReport.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload as string;
+      })
+      .addCase(fetchLengthOfStayReport.pending, (state) => {
+        state.los.loading = true;
+        state.los.error = null;
+      })
+      .addCase(fetchLengthOfStayReport.fulfilled, (state, action) => {
+        state.los.loading = false;
+        state.los.data = action.payload;
+      })
+      .addCase(fetchLengthOfStayReport.rejected, (state, action) => {
+        state.los.loading = false;
+        state.los.error = action.payload as string;
       });
+
   },
 });
 

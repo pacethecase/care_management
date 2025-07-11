@@ -8,7 +8,7 @@ import {
 } from '../redux/slices/notificationSlice';
 import type { AppDispatch } from '../redux/store';
 import type { Notification } from '../redux/types';
-
+import { DateTime } from "luxon";
 const NotificationPanel = () => {
   const dispatch = useDispatch<AppDispatch>();
   const { items: notifications, loading } = useSelector((state: RootState) => state.notifications);
@@ -61,7 +61,11 @@ const NotificationPanel = () => {
 
             <div className="font-medium text-gray-500 text-sm">{n.title}</div>
             <div className="text-xs text-gray-500">
-              {n.created_at ? new Date(n.created_at).toLocaleString() : n.timestamp}
+           {n.created_at
+          ? DateTime.fromISO(n.created_at, { zone: 'utc' })
+              .setZone('America/New_York')
+              .toFormat("MMM d, yyyy, h:mm a")
+          : "N/A"}
             </div>
             <div className="text-sm text-gray-700 mt-1">{n.message}</div>
           </div>

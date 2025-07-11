@@ -86,7 +86,7 @@ const getPatientsByAlgorithm = async (req, res) => {
 
     if (is_admin) {
       query = `
-        SELECT id, first_name, last_name, birth_date, bed_id, created_at
+        SELECT id, first_name, last_name, birth_date, bed_id, created_at,admitted_date
         FROM patients
         WHERE ${column} = true AND status != 'Discharged' AND hospital_id = $1
       `;

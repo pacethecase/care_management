@@ -10,6 +10,7 @@ const {
   followUpCourtTask,
   updateTaskNote,
   acknowledgeTask,
+  addManualTaskForPatient
 } = require("../controller/taskController");
 const { verifyToken } = require("../middleware/authMiddleware");
 
@@ -27,6 +28,6 @@ router.get("/missed", verifyToken, getMissedTasks);
 router.post("/:taskId/follow-up",verifyToken, followUpCourtTask);
 router.patch("/patient_tasks/:taskId/note", verifyToken, updateTaskNote);
 router.patch("/:id/acknowledge", verifyToken, acknowledgeTask);
-
+router.post("/patients/:id/manual-task",verifyToken, addManualTaskForPatient);
 
 module.exports = router;

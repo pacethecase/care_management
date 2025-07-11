@@ -10,6 +10,8 @@ import {
   followUpTask,
   acknowledgeTask
 } from "../redux/slices/taskSlice";
+import CreateTaskModal from "../components/CreateTaskModal";
+
 import { fetchPatientById,updateCourtDate } from "../redux/slices/patientSlice";
 import { fetchPatientNotes, addPatientNote } from "../redux/slices/noteSlice";
 import { updateTaskNoteMeta } from "../redux/slices/taskSlice";
@@ -35,7 +37,8 @@ const PatientTasks = () => {
   const location = useLocation();
   const backLink = location.state?.from || "/patients";
   
- 
+ const [showCreateModal, setShowCreateModal] = useState(false);
+
   const [newNote, setNewNote] = useState("");
   const [expandedTaskId, setExpandedTaskId] = useState<number | null>(null);
 const [noteDrafts, setNoteDrafts] = useState<Record<number, {
@@ -358,8 +361,12 @@ const renderTaskCard = (task: Task) => {
     <div
       key={task.patient_task_id}
       className={`card border p-4 mb-4 rounded-lg text-black ${
-        task.is_non_blocking ? "non-blocking" : ""
-      } ${task.status === "Missed" ? "card-missed" : ""} ${
+    task.is_non_blocking
+      ? task.status === "Acknowledged"
+        ? "non-blocking-complete"
+        : "non-blocking"
+      : ""
+  } ${task.status === "Missed" ? "card-missed" : ""} ${
         task.status === "Completed" || task.status === "Delayed Completed" ? "card-completed" : ""
       }`}
       style={{ borderLeft: `12px solid ${borderColor}` }}
@@ -778,8 +785,17 @@ const renderTaskColumns = () => {
   >
     Notes
   </button>
+    <button className="btn btn-primary" onClick={() => setShowCreateModal(true)}>
+     Create Task
+  </button>
+ 
 </div>
-
+{showCreateModal && (
+  <CreateTaskModal
+    onClose={() => setShowCreateModal(false)}
+    patientId={Number(patientId)}
+  />
+)}
       
         {/* Algorithm Filter */}
 
@@ -799,6 +815,7 @@ const renderTaskColumns = () => {
               {patient.is_guardianship && <option value="Guardianship">Guardianship</option>}
               {patient.is_ltc && <option value="LTC">LTC</option>}
             </select>
+            
           </div>
       
               

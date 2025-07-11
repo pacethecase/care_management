@@ -14,7 +14,10 @@ interface UserState {
   error: string | null;
   authLoaded: boolean;
   message?: string;
+  hospital_id?: number; 
   has_global_access?:boolean;
+  is_super_admin?:boolean;
+  
 }
 
 const initialState: UserState = {
@@ -223,6 +226,7 @@ const userSlice = createSlice({
       .addCase(fetchCurrentUser.fulfilled, (state, action) => {
         state.user = action.payload || null;
         state.has_global_access = !!action.payload?.has_global_access;
+        state.is_super_admin = !!action.payload?.is_super_admin;
         state.authLoaded = true;
         state.loading = false;
       })

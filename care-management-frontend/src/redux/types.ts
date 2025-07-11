@@ -47,6 +47,7 @@ export interface Patient {
     is_staff: boolean;
     is_super_admin:boolean;
     has_global_access:Boolean;
+    hospital_id:number;
     is_approved:boolean;
     token?: string;
   }
@@ -70,6 +71,7 @@ export interface Note {
   export interface Task {
     patient_task_id:number;
     task_id: number;
+    patient_id:number;
     task_name: string;
     is_overridable?:boolean;
     description: string;
@@ -123,6 +125,7 @@ export interface AlgorithmPatientCount {
 export interface Hospital {
   id: number;
   name: string;
+  daily_bed_cost: number; 
 }
 
 export interface PatientTask {

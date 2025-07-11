@@ -45,6 +45,7 @@ const createTables = async () => {
         CREATE TABLE hospitals (
         id SERIAL PRIMARY KEY,
         name TEXT NOT NULL,
+         daily_bed_cost NUMERIC DEFAULT 2883.00
         created_at TIMESTAMP DEFAULT NOW()
       );
 

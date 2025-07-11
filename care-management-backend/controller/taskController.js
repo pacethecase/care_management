@@ -849,7 +849,7 @@ const acknowledgeTask = async (req, res) => {
     const taskId = parseInt(req.params.id, 10);
     const staffId = parseInt(req.user.id, 10);
     const { reason } = req.body;
-    const nowUTC = new Date().toISOString();
+  
 
     if (!req.user?.is_approved) {
       return res.status(403).json({ error: "Access denied: user not approved" });
@@ -919,7 +919,74 @@ const acknowledgeTask = async (req, res) => {
   }
 };
 
+const addManualTaskForPatient = async (req, res) => {
+  const patientId = Number(req.params.id);
+  const timezone = req.headers["x-timezone"] || "America/New_York";
 
+  const {
+    name,
+    description,
+    is_repeating = false,
+    recurrence_interval = null,
+    is_overridable = false,
+    is_non_blocking = false, // ✅ NEW FIELD
+    condition_required = null,
+    category = null,
+    algorithm = null,
+  } = req.body;
+
+  if (!name || !description) {
+    return res.status(400).json({ error: "Name and description are required." });
+  }
+
+  try {
+  
+    const taskInsertRes = await pool.query(
+      `INSERT INTO tasks (
+        name, description, is_repeating, recurrence_interval, 
+        is_overridable, is_non_blocking, condition_required, 
+        category, algorithm
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      RETURNING id`,
+      [
+        name,
+        description,
+        is_repeating,
+        recurrence_interval,
+        is_overridable,
+        is_non_blocking,
+        condition_required,
+        category,
+        algorithm,
+      ]
+    );
+
+    const taskId = taskInsertRes.rows[0].id;
+
+    
+    const dueLocal = DateTime.now().setZone(timezone).set({
+      hour: 23,
+      minute: 59,
+      second: 0,
+      millisecond: 0,
+    });
+
+    const dueDateUTC = dueLocal.toUTC().toJSDate();
+
+
+    await pool.query(
+      `INSERT INTO patient_tasks (
+        patient_id, task_id, status, due_date, ideal_due_date, is_visible
+      ) VALUES ($1, $2, 'Pending', $3, $3, TRUE)`,
+      [patientId, taskId, dueDateUTC]
+    );
+
+    res.status(201).json({ message: "✅ Manual task created and assigned successfully." });
+  } catch (err) {
+    console.error("❌ Error creating manual task:", err);
+    res.status(500).json({ error: "Failed to create manual task." });
+  }
+};
 
 
 module.exports = {
@@ -931,5 +998,6 @@ module.exports = {
   followUpCourtTask,
   updateTaskNote,
   acknowledgeTask,
+  addManualTaskForPatient
 
 };

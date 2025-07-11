@@ -28,7 +28,7 @@ import { Routes, Route } from 'react-router-dom';
   import AdminPage from './pages/AdminPage'
   import { getLocalTimezone } from "./utils/timezone";
 import axios from "axios";
-
+import LengthOfStayReport from "./pages/LengthOfStayReport";
   function App() {
     const dispatch = useDispatch<AppDispatch>();
 
@@ -148,6 +148,14 @@ import axios from "axios";
           element={
             <PrivateRoute>
               <AdminPage />
+              </PrivateRoute>
+          }
+        />
+           <Route
+          path="/reports/los"
+          element={
+            <PrivateRoute>
+              <LengthOfStayReport />
               </PrivateRoute>
           }
         />
