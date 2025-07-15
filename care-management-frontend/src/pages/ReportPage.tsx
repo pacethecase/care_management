@@ -360,7 +360,15 @@ const [selectedAdminId, setSelectedAdminId] = useState<number | ''>('');
               <option value="">-- Select Patient --</option>
               {patients
                 .slice() 
-                .sort((a, b) => a.last_name.localeCompare(b.last_name))
+                .sort((a, b) => {
+                const lastA = a.last_name?.toLowerCase() || '';
+                const lastB = b.last_name?.toLowerCase() || '';
+                if (lastA !== lastB) return lastA.localeCompare(lastB);
+
+                const firstA = a.first_name?.toLowerCase() || '';
+                const firstB = b.first_name?.toLowerCase() || '';
+                return firstA.localeCompare(firstB);
+              })
                 .map((patient) => (
                   <option key={patient.id} value={patient.id}>
                     {patient.last_name}, {patient.first_name} – MRN {patient.mrn || "N/A"}

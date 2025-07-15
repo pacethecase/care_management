@@ -36,6 +36,7 @@ const allowedOrigins = [
   'https://care-management-nine.vercel.app',
   'https://www.pacethecase.com',
   'https://pacethecase.com',
+   
 ];
 
 // CORS Middleware Setup

@@ -551,15 +551,24 @@ if (!req.user?.is_approved) {
     }
   };
 
-
 const getLengthOfStaySummary = async (req, res) => {
   const user = req.user;
   const hospitalId = user.hospital_id;
+  const isStaff = user.is_staff;
+  const staffId = user.id;
 
   const includeDischarged = req.query.includeDischarged === 'true';
 
   try {
-    const query = `
+    // Get national average for this hospital
+    const { rows: hospitalRows } = await pool.query(
+      `SELECT daily_bed_cost FROM hospitals WHERE id = $1`,
+      [hospitalId]
+    );
+    const nationalAvg = hospitalRows[0]?.daily_bed_cost || 2883;
+
+    // Build query
+    let query = `
       SELECT
         p.id,
         p.admitted_date,
@@ -568,15 +577,17 @@ const getLengthOfStaySummary = async (req, res) => {
         p.is_behavioral,
         p.is_guardianship,
         p.is_ltc,
-        p.status,
-        h.daily_bed_cost
+        p.status
       FROM patients p
-      JOIN hospitals h ON p.hospital_id = h.id
+      ${isStaff ? 'JOIN patient_staff ps ON ps.patient_id = p.id' : ''}
       WHERE p.hospital_id = $1
-      ${includeDischarged ? "" : "AND p.status = 'Admitted'"}
+      ${isStaff ? 'AND ps.staff_id = $2' : ''}
+      ${includeDischarged ? '' : 'AND p.status = \'Admitted\''}
     `;
 
-    const { rows } = await pool.query(query, [hospitalId]);
+    const queryParams = isStaff ? [hospitalId, staffId] : [hospitalId];
+
+    const { rows } = await pool.query(query, queryParams);
     const today = new Date();
 
     const summary = {
@@ -589,7 +600,7 @@ const getLengthOfStaySummary = async (req, res) => {
       const admittedDate = new Date(row.admitted_date);
       const dischargeDate = row.discharge_date ? new Date(row.discharge_date) : today;
       const los = Math.max(Math.ceil((dischargeDate - admittedDate) / (1000 * 60 * 60 * 24)), 0);
-      const costPerDay = row.daily_bed_cost || 2883;
+      const costPerDay = nationalAvg;
 
       if (row.is_behavioral) {
         summary.behavioral.totalDays += los;
@@ -613,11 +624,15 @@ const getLengthOfStaySummary = async (req, res) => {
       entry.avgDays = entry.count ? Math.round(entry.totalDays / entry.count) : 0;
     }
 
-    res.json(summary);
+    res.json({
+      ...summary,
+      nationalAverage: Number(nationalAvg)
+    });
   } catch (error) {
     console.error("Error generating LOS summary:", error);
     res.status(500).json({ error: "Failed to calculate LOS summary" });
   }
 };
+
 
   module.exports = { getDailyReport, getPriorityReport,getTransitionalCareReport ,getHistoricalTimelineReport,getProjectedTimelineReport,getLengthOfStaySummary};

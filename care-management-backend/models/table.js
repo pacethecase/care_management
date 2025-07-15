@@ -115,7 +115,7 @@ const createTables = async () => {
 
       CREATE TABLE IF NOT EXISTS tasks (
           id SERIAL PRIMARY KEY,
-          name VARCHAR(200) NOT NULL UNIQUE,
+     name VARCHAR(200) NOT NULL
           description TEXT,
           is_repeating BOOLEAN DEFAULT FALSE,  -- Determines if the task should repeat
           recurrence_interval INTEGER,  -- Number of days before it repeats (e.g., 7 for weekly)

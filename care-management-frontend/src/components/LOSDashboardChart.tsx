@@ -18,6 +18,7 @@ type Props = {
     totalDays: number;
     totalCost: number;
   }[];
+   nationalAverage: number;
 };
 
 const COLORS: Record<string, string> = {
@@ -26,14 +27,15 @@ const COLORS: Record<string, string> = {
   LTC: "var(--algo-ltc)",
 };
 
-const LOSDashboardChart: React.FC<Props> = ({ data }) => {
+const LOSDashboardChart: React.FC<Props> = ({ data ,nationalAverage}) => {
   return (
     <div className="grid gap-10 md:grid-cols-2 mt-10">
       {/* Total Length of Stay (Days) */}
       <div className="p-4 bg-white rounded-xl shadow-md">
         <h2 className="text-xl font-semibold mb-2">Total Length of Stay (Days)</h2>
         <ResponsiveContainer width="100%" height={300}>
-          <BarChart data={data}>
+          <BarChart data={data}
+          margin={{ top: 40, right: 30, left: 0, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis dataKey="workflow" />
             <YAxis />
@@ -53,7 +55,8 @@ const LOSDashboardChart: React.FC<Props> = ({ data }) => {
       <div className="p-4 bg-white rounded-xl shadow-md">
         <h2 className="text-xl font-semibold mb-2">Total Cost (USD)</h2>
         <ResponsiveContainer width="100%" height={300}>
-          <BarChart data={data}>
+          <BarChart data={data}
+          margin={{ top: 40, right: 30, left: 0, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis dataKey="workflow" />
             <YAxis tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
@@ -73,7 +76,10 @@ const LOSDashboardChart: React.FC<Props> = ({ data }) => {
             </Bar>
           </BarChart>
         </ResponsiveContainer>
-      </div>
+                    <p className="text-sm text-gray-500 italic mt-2">
+                *Total cost is calculated using a National Hospitalization Average of ${nationalAverage.toLocaleString(undefined, { maximumFractionDigits: 2 })}/day.
+            </p>
+                </div>
     </div>
   );
 };

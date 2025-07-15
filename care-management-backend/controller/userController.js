@@ -1,5 +1,7 @@
 const pool = require("../models/db");
 const bcrypt = require("bcryptjs");
+const { DateTime } = require("luxon");
+
 const getAllUsers = async (req, res) => {
   const { has_global_access, hospital_id, id: currentUserId } = req.user;
 
@@ -85,10 +87,65 @@ const updateUser = async (req, res) => {
   }
 };
 
+const getStaffStarRating = async (req, res) => {
+  const staffId = parseInt(req.params.id, 10);
+  const hospitalId = req.user.hospital_id;
+  const hasGlobalAccess = req.user.has_global_access;
+
+  if (isNaN(staffId)) return res.status(400).json({ error: "Invalid staff ID" });
+
+  const now = DateTime.local().setZone("America/New_York");
+  const past30Days = now.minus({ days: 30 }).toUTC().toISO();
+
+  try {
+    let query = `
+      SELECT pt.status, pt.due_date, pt.completed_at
+      FROM patient_tasks pt
+      JOIN patient_staff ps ON pt.patient_id = ps.patient_id
+      JOIN patients p ON pt.patient_id = p.id
+      WHERE ps.staff_id = $1
+        AND pt.due_date >= $2
+    `;
+
+    const params = [staffId, past30Days];
+
+    if (!hasGlobalAccess) {
+      query += ` AND p.hospital_id = $3`;
+      params.push(hospitalId);
+    }
+
+    const { rows: tasks } = await pool.query(query, params);
+
+    const total = tasks.length;
+    const completedOnTime = tasks.filter(
+      (t) =>
+        t.status === "Completed" &&
+        t.completed_at &&
+        t.due_date &&
+        new Date(t.completed_at) <= new Date(t.due_date)
+    ).length;
+
+    const completionRate = total === 0 ? 0 : (completedOnTime / total) * 100;
+
+    let stars = 0;
+    if (completionRate >= 95) stars = 5;
+    else if (completionRate >= 85) stars = 4;
+    else if (completionRate >= 70) stars = 3;
+    else if (completionRate >= 50) stars = 2;
+    else if (completionRate > 0) stars = 1;
+
+    return res.json({ staffId, total, completedOnTime, completionRate, stars });
+  } catch (err) {
+    console.error("❌ Error getting star rating:", err);
+    return res.status(500).json({ error: "Failed to get rating" });
+  }
+};
+
 
 module.exports = {
   getAdmins,
   getStaffs,
   updateUser,
   getAllUsers,
+  getStaffStarRating
 };

@@ -78,6 +78,8 @@ const matchedPatientIds = useMemo(() => {
 
   const handleComplete = async (taskId: number, courtTask: boolean) => {
       let courtDate: string | undefined = undefined;
+      let reason: string | undefined = undefined;
+  let missedReason: string | undefined = undefined; 
     try {
      
   
@@ -89,45 +91,44 @@ const matchedPatientIds = useMemo(() => {
         }
       }
   
-      await dispatch(
-        completeTask({ taskId, court_date: courtDate})
-      ).unwrap();
-      toast.success("✅ Task completed");
-        refreshTasks();
-    } catch (err: any) {
-      if (err?.toString().includes("Please provide a reason")) {
-        const reason = prompt("📝 This task was missed earlier. Please enter a missed reason to proceed:");
-  
-        if (!reason || reason.trim() === "") {
-          toast.error("❌ Reason is required to complete this task.");
-          return;
-        }
-  
-        try {
-          await dispatch(markTaskAsMissed({ taskId, reason })).unwrap();
-          toast.success("✅ Missed reason recorded");
-  
-          await dispatch(
-            completeTask({ taskId, court_date: courtDate })
-          ).unwrap();
-          toast.success("✅ Task completed after reason provided");
-  
-         refreshTasks();
-        } catch {
-          toast.error("❌ Failed to complete task even after reason");
-        }
-      } else {
-         const message =
-          typeof err === "string"
-            ? err
-            : err?.message ||
-              err?.response?.data?.error ||
-              "❌ Failed to complete task";
-
-        toast.error(message);
-      }
+        reason = prompt("📝 Please enter a reason to complete this task:")?.trim();
+    if (!reason) {
+      toast.error("❌ Completion reason is required.");
+      return;
     }
-  };
+
+    await dispatch(completeTask({ taskId, reason, court_date: courtDate })).unwrap();
+    toast.success("✅ Task completed");
+    refreshTasks();
+    }catch (err: any) {
+    const msg = err?.response?.data?.error || err?.message || err?.toString();
+
+    if (msg.toLowerCase().includes("missed") || msg.includes("provide a reason")) {
+      missedReason = prompt("📝 This task was missed earlier. Please enter a missed reason:")?.trim();
+      if (!missedReason) {
+        toast.error("❌ Missed reason is required.");
+        return;
+      }
+
+      try {
+        await dispatch(
+          completeTask({
+            taskId,
+            reason,
+            missed_reason: missedReason,
+            court_date: courtDate,
+          })
+        ).unwrap();
+        toast.success("✅ Task completed after missed reason");
+        refreshTasks();
+      } catch {
+        toast.error("❌ Failed to complete after both reasons.");
+      }
+    } else {
+      toast.error("❌ " + msg);
+    }
+  }
+};
   
     
     
@@ -208,7 +209,15 @@ const filteredMissedTasks = useMemo(() => {
     <option value="">-- Select Patient --</option>
     {patients
       .slice()
-      .sort((a, b) => a.last_name.localeCompare(b.last_name))
+     .sort((a, b) => {
+        const lastA = a.last_name?.toLowerCase() || '';
+        const lastB = b.last_name?.toLowerCase() || '';
+        if (lastA !== lastB) return lastA.localeCompare(lastB);
+
+        const firstA = a.first_name?.toLowerCase() || '';
+        const firstB = b.first_name?.toLowerCase() || '';
+        return firstA.localeCompare(firstB);
+      })
       .map((patient) => (
         <option key={patient.id} value={patient.id}>
           {patient.last_name}, {patient.first_name} – MRN {patient.mrn || "N/A"}

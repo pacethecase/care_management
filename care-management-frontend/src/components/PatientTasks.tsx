@@ -311,6 +311,30 @@ const tasksByStatus = useMemo(() => {
     }
   }
 
+    statusMap["Pending/In Progress"].sort((a, b) => {
+    const aDate = new Date(a.due_date || "").getTime();
+    const bDate = new Date(b.due_date || "").getTime();
+    return aDate - bDate;
+  });
+
+  statusMap["Missed"].sort((a, b) => {
+    const aDate = new Date(a.due_date || "").getTime();
+    const bDate = new Date(b.due_date || "").getTime();
+    return aDate - bDate;
+  });
+
+  statusMap["Completed"].sort((a, b) => {
+    const aDate = new Date(a.completed_at || "").getTime();
+    const bDate = new Date(b.completed_at || "").getTime();
+    return bDate - aDate; // Descending
+  });
+
+  statusMap["Non-Blocking"].sort((a, b) => {
+    if (a.status === "Pending" && b.status === "Acknowledged") return -1;
+    if (a.status === "Acknowledged" && b.status === "Pending") return 1;
+    return 0;
+  });
+
   return statusMap;
 }, [patientTasks, selectedAlgorithm]);
 

@@ -68,6 +68,7 @@ const LengthOfStayReport = () => {
                 { workflow: "Guardianship", totalDays: data.guardianship.totalDays, totalCost: data.guardianship.cost },
                 { workflow: "LTC", totalDays: data.ltc.totalDays, totalCost: data.ltc.cost },
               ]}
+                nationalAverage={data.nationalAverage}
             />
           </>
         )}

@@ -6,6 +6,7 @@ import Navbar from "../components/Navbar";
 import type { AppDispatch } from '../redux/store';
 import DischargeBarriers from "../components/DischargeBarriers"; 
 import { useNavigate } from 'react-router-dom';
+import { fetchStarRating } from "../redux/slices/userSlice";
 
 import { loadPatientCountsByAlgorithm } from "../redux/slices/algorithmSlice"; 
 const HomePage = () => {
@@ -21,6 +22,13 @@ const HomePage = () => {
   }, [dispatch]); 
 
 
+  useEffect(() => {
+  if (user?.is_staff) dispatch(fetchStarRating(user.id));
+}, [dispatch, user]);
+
+const starRatings = useSelector((state: RootState) => state.user.starRatings);
+const stars = user?.id ? starRatings[user.id]?.stars || 0 : 0;
+
   return (
     <div className="flex flex-col min-h-screen bg-hospital-neutral text-hospital-blue">
       <Navbar />
@@ -31,6 +39,11 @@ const HomePage = () => {
         <div>
                 <h1 className="text-3xl font-bold mb-4">Welcome</h1>
                 {user && <p className="mt-2 text-lg">Hello, {user.name}!</p>}
+                {user && user.is_staff && (
+                <div className="text-lg mt-1">
+                  Your 30-Day Star Rating: <span className="text-yellow-500">{'⭐'.repeat(stars) || "–"}</span>
+                </div>
+              )}
               </div>
               <button
                 onClick={() => navigate("/reports/los")}

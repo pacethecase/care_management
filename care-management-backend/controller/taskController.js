@@ -930,8 +930,6 @@ const addManualTaskForPatient = async (req, res) => {
     recurrence_interval = null,
     is_overridable = false,
     is_non_blocking = false, // ✅ NEW FIELD
-    condition_required = null,
-    category = null,
     algorithm = null,
   } = req.body;
 
@@ -944,9 +942,8 @@ const addManualTaskForPatient = async (req, res) => {
     const taskInsertRes = await pool.query(
       `INSERT INTO tasks (
         name, description, is_repeating, recurrence_interval, 
-        is_overridable, is_non_blocking, condition_required, 
-        category, algorithm
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        is_overridable, is_non_blocking, algorithm
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7)
       RETURNING id`,
       [
         name,
@@ -955,8 +952,6 @@ const addManualTaskForPatient = async (req, res) => {
         recurrence_interval,
         is_overridable,
         is_non_blocking,
-        condition_required,
-        category,
         algorithm,
       ]
     );

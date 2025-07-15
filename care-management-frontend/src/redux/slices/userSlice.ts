@@ -17,6 +17,7 @@ interface UserState {
   hospital_id?: number; 
   has_global_access?:boolean;
   is_super_admin?:boolean;
+    starRatings: Record<number, { stars: number; completionRate: number }>; 
   
 }
 
@@ -29,6 +30,7 @@ const initialState: UserState = {
   adminLoading: false,      // ✅ new field
   error: null,
   authLoaded: false,
+   starRatings: {},
 };
 
 
@@ -177,6 +179,19 @@ export const fetchAllUsers = createAsyncThunk(
   }
 );
 
+export const fetchStarRating = createAsyncThunk(
+  "user/fetchStarRating",
+  async (staffId: number, { rejectWithValue }) => {
+    try {
+      const res = await axios.get(`${BASE_URL}/users/${staffId}/star-rating`, {
+        withCredentials: true,
+      });
+      return { staffId, ...res.data };
+    } catch (err: any) {
+      return rejectWithValue(err.response?.data?.error || "Failed to fetch star rating");
+    }
+  }
+);
 
 const userSlice = createSlice({
   name: "user",
@@ -304,6 +319,10 @@ const userSlice = createSlice({
 
 .addCase(fetchAllUsers.rejected, (state, action) => {
   state.error = action.payload as string;
+})
+.addCase(fetchStarRating.fulfilled, (state, action) => {
+  const { staffId, stars, completionRate } = action.payload;
+  state.starRatings[staffId] = { stars, completionRate };
 });
 
   },

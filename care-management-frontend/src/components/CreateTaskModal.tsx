@@ -22,12 +22,10 @@ const CreateTaskModal: React.FC<Props> = ({ onClose, patientId }) => {
     recurrence_interval: "",
     is_overridable: false,
     is_non_blocking: false,
-    condition_required: "",
-    category: "",
     selected_algorithms: [] as string[],
   });
 
-  /* ───────────── handlers ───────────── */
+
   const handleChange = (
     e: React.ChangeEvent<
       HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
@@ -205,27 +203,7 @@ const CreateTaskModal: React.FC<Props> = ({ onClose, patientId }) => {
 
 
 
-          {/* Condition Required */}
-          <div className="mb-3">
-            <label className="block font-medium mb-1">Condition Required</label>
-            <input
-              name="condition_required"
-              value={formData.condition_required}
-              onChange={handleChange}
-              className="w-full border rounded py-2 px-3 bg-white text-black"
-            />
-          </div>
-
-          {/* Category */}
-          <div className="mb-4">
-            <label className="block font-medium mb-1">Category</label>
-            <input
-              name="category"
-              value={formData.category}
-              onChange={handleChange}
-              className="w-full border rounded py-2 px-3 bg-white text-black"
-            />
-          </div>
+        
 
           {/* Algorithms */}
           {algorithmOptions.length > 0 && (

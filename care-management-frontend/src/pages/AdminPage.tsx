@@ -16,6 +16,7 @@ import { toast } from "react-toastify";
 import type { Hospital } from "../redux/types";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
+import { fetchStarRating } from "../redux/slices/userSlice";
 
 const AdminPage: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
@@ -53,6 +54,15 @@ const AdminPage: React.FC = () => {
       dispatch(clearHospitalMessage());
     }
   }, [hospitalMessage, dispatch]);
+
+  useEffect(() => {
+  if (viewAllUsers && allUsers.length > 0) {
+    allUsers
+      .filter((u) => u.is_staff)
+      .forEach((u) => dispatch(fetchStarRating(u.id)));
+  }
+}, [dispatch, viewAllUsers, allUsers]);
+const starRatings = useSelector((state: RootState) => state.user.starRatings);
 
   const handleApprove = async (id: number) => {
     await dispatch(approveUser(id));
@@ -231,6 +241,7 @@ const handleDeleteHospital = async (id: number) => {
                   {hasGlobalAccess && <th className="px-4 py-2 text-left">Hospital</th>}
                   <th className="px-4 py-2 text-left">Status</th>
                   <th className="px-4 py-2 text-left">Actions</th>
+                     {hasGlobalAccess && <th className="px-4 py-2 text-left">Ratings</th>}
                 </tr>
               </thead>
               <tbody>
@@ -265,7 +276,12 @@ const handleDeleteHospital = async (id: number) => {
                           </button>
                         )}
                       </td>
-                    </tr>
+                      <td className="px-4 py-2">
+                      {user.is_staff
+                        ? "⭐".repeat(starRatings[user.id]?.stars || 0) || "–"
+                        : "–"}
+                    </td>
+                                </tr>
                   ))
                 )}
               </tbody>
