@@ -332,7 +332,9 @@ const tasksByStatus = useMemo(() => {
   statusMap["Non-Blocking"].sort((a, b) => {
     if (a.status === "Pending" && b.status === "Acknowledged") return -1;
     if (a.status === "Acknowledged" && b.status === "Pending") return 1;
-    return 0;
+    const timeA = new Date(a.completed_at || "").getTime();
+    const timeB = new Date(b.completed_at || "").getTime();
+      return timeB - timeA;
   });
 
   return statusMap;

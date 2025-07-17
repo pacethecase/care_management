@@ -174,6 +174,7 @@ const handleDeleteHospital = async (id: number) => {
                         <input
                           type="number"
                           step="0.01"
+                          min="0"
                           value={rates[h.id] ?? h.daily_bed_cost}
                           onChange={(e) =>
                             setRates((prev) => ({ ...prev, [h.id]: Number(e.target.value) }))

@@ -193,7 +193,12 @@ const CreateTaskModal: React.FC<Props> = ({ onClose, patientId }) => {
         type="number"
         placeholder="e.g. 7"
         value={formData.recurrence_interval}
-        onChange={handleChange}
+        onChange={(e) => {
+              const value = e.target.value;
+              if (value === "" || Number(value) >= 0) {
+                handleChange(e);
+              }
+            }}
         className="w-40 border rounded py-1.5 px-3 bg-white text-black"
       />
     </div>

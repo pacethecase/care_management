@@ -96,6 +96,7 @@ const getStaffStarRating = async (req, res) => {
 
   const now = DateTime.local().setZone("America/New_York");
   const past30Days = now.minus({ days: 30 }).toUTC().toISO();
+  const today = now.endOf("day").toUTC().toISO();
 
   try {
     let query = `
@@ -105,12 +106,13 @@ const getStaffStarRating = async (req, res) => {
       JOIN patients p ON pt.patient_id = p.id
       WHERE ps.staff_id = $1
         AND pt.due_date >= $2
+         AND pt.due_date <= $3
     `;
 
-    const params = [staffId, past30Days];
+    const params = [staffId, past30Days,today];
 
     if (!hasGlobalAccess) {
-      query += ` AND p.hospital_id = $3`;
+      query += ` AND p.hospital_id = $4`;
       params.push(hospitalId);
     }
 

@@ -895,7 +895,8 @@ const acknowledgeTask = async (req, res) => {
     // ✅ Update task status
     await client.query(`
       UPDATE patient_tasks
-      SET status = 'Acknowledged'
+      SET status = 'Acknowledged',
+       completed_at = NOW()
       WHERE id = $1
     `, [taskId]);
 

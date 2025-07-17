@@ -224,11 +224,12 @@ if (!req.user?.is_approved) {
         SELECT 
           t.name AS task_name,
           pt.completed_at,
+            pt.status,
           t.algorithm,
           pt.contact_info
         FROM patient_tasks pt
         JOIN tasks t ON pt.task_id = t.id
-        WHERE pt.patient_id = $1 AND pt.status IN ('Completed', 'Delayed Completed')
+        WHERE pt.patient_id = $1 AND pt.status IN ('Completed', 'Delayed Completed','Acknowledged')
       `;
 
       const params = [patientId];
@@ -329,7 +330,7 @@ if (!req.user?.is_approved) {
           pt.status_history
         FROM patient_tasks pt
         JOIN tasks t ON pt.task_id = t.id
-        WHERE pt.patient_id = $1 AND pt.status IN ('Completed','Delayed Completed')
+        WHERE pt.patient_id = $1 AND pt.status IN ('Completed','Delayed Completed','Acknowledged')
       `;
 
       const params = [patientId];
