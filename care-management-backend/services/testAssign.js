@@ -17,7 +17,7 @@ const run = async () => {
         '2025-04-01', false, true,
         true, true,
         false, true, true, true,
-        1, ARRAY['Guardianship', 'LTC'], 1
+        4, ARRAY['Guardianship', 'LTC'], 6
       ) RETURNING id
     `);
 

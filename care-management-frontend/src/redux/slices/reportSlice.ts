@@ -4,6 +4,13 @@ import axios from "axios";
 
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL;
+interface OpportunityLOSData {
+  behavioral: any;
+  guardianship: any;
+  ltc: any;
+  nationalAverage: number;
+}
+
 interface ReportState { 
   dailyReport: any[];
   priorityReport: any[];
@@ -15,6 +22,11 @@ interface ReportState {
    los: {
     data: any | null;
     loading: boolean;
+    error: string | null;
+  };
+   opportunityLOS: {
+    loading: boolean;
+    data: OpportunityLOSData | null;
     error: string | null;
   };
 }
@@ -33,6 +45,11 @@ const initialState: ReportState = {
   los: {
     data: null,
     loading: false,
+    error: null,
+  },
+   opportunityLOS: {
+    loading: false,
+    data: null,
     error: null,
   },
 };
@@ -159,6 +176,29 @@ export const fetchLengthOfStayReport = createAsyncThunk(
     }
   }
 );
+export const fetchOpportunityDaysReport = createAsyncThunk(
+  "reports/fetchOpportunityDaysReport",
+  async (
+    { includeDischarged = false }: { includeDischarged?: boolean } = {},
+    { rejectWithValue }
+  ) => {
+    try {
+      const query = new URLSearchParams();
+      if (includeDischarged) query.append("includeDischarged", "true");
+
+      const res = await axios.get(`${BASE_URL}/reports/opportunity-days?${query.toString()}`, {
+        withCredentials: true,
+      });
+
+      return res.data;
+    } catch (err: any) {
+      return rejectWithValue(
+        err.response?.data?.error || "Failed to load Opportunity Days report"
+      );
+    }
+  }
+);
+
 
 
 const reportSlice = createSlice({
@@ -249,7 +289,19 @@ const reportSlice = createSlice({
       .addCase(fetchLengthOfStayReport.rejected, (state, action) => {
         state.los.loading = false;
         state.los.error = action.payload as string;
-      });
+      })
+.addCase(fetchOpportunityDaysReport.pending, (state) => {
+  state.opportunityLOS.loading = true;
+  state.opportunityLOS.error = null;
+})
+.addCase(fetchOpportunityDaysReport.fulfilled, (state, action) => {
+  state.opportunityLOS.loading = false;
+  state.opportunityLOS.data = action.payload;
+})
+.addCase(fetchOpportunityDaysReport.rejected, (state, action) => {
+  state.opportunityLOS.loading = false;
+  state.opportunityLOS.error = action.payload as string;
+});
 
   },
 });

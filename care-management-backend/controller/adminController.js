@@ -132,9 +132,14 @@ const revokeUserAccess = async (req, res) => {
     // ⛔ Step 3: Prevent revoking staff with assigned patients
     if (user.is_staff) {
       const { rowCount } = await pool.query(
-        "SELECT 1 FROM patient_staff WHERE staff_id = $1 LIMIT 1",
-        [userId]
-      );
+          `SELECT 1
+          FROM patient_staff ps
+          JOIN patients p ON ps.patient_id = p.id
+          WHERE ps.staff_id = $1 AND p.status != 'Discharged'
+          LIMIT 1`,
+          [userId]
+        );
+    
 
       if (rowCount > 0) {
         return res.status(400).json({

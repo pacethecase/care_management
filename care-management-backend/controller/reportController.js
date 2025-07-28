@@ -462,7 +462,7 @@ if (!req.user?.is_approved) {
       const grouped = { Guardianship: [], LTC: [] };
 
       tasks.forEach(task => {
-        if (task.is_non_blocking || task.is_repeating) return;
+        if (task.is_non_blocking) return;
 
         const reason = parseStatusHistory(task.status, task.status_history);
 
@@ -634,6 +634,144 @@ const getLengthOfStaySummary = async (req, res) => {
     res.status(500).json({ error: "Failed to calculate LOS summary" });
   }
 };
+const getOpportunityDaysSummary = async (req, res) => {
+  const user = req.user;
+  const hospitalId = user.hospital_id;
+  const isStaff = user.is_staff;
+  const staffId = user.id;
+
+  const includeDischarged = req.query.includeDischarged === 'true';
+
+  const computeTaskDelay = (algoTasks) => {
+    if (algoTasks.length === 0) return 0;
+
+    const maxIdealDue = algoTasks
+      .filter(t => t.ideal_due_date)
+      .map(t => new Date(t.ideal_due_date))
+      .sort((a, b) => b - a)[0];
+
+    const now = new Date();
+
+    const maxCompletedAt = algoTasks
+      .map(t => {
+        if (t.completed_at) return new Date(t.completed_at);
+        if (
+          (!t.completed_at || t.status === 'Missed' || t.status === 'Pending') &&
+          new Date(t.ideal_due_date) < now
+        ) {
+          return now;
+        }
+        return null;
+      })
+      .filter(Boolean)
+      .sort((a, b) => b - a)[0];
+
+    if (!maxIdealDue || !maxCompletedAt) return 0;
+
+    const delay = Math.max(
+      Math.ceil((maxCompletedAt - maxIdealDue) / (1000 * 60 * 60 * 24)),
+      0
+    );
+
+    return delay;
+  };
+
+  try {
+    const { rows: hospitalRows } = await pool.query(
+      `SELECT daily_bed_cost FROM hospitals WHERE id = $1`,
+      [hospitalId]
+    );
+    const nationalAvg = hospitalRows[0]?.daily_bed_cost || 2883;
+
+    let patientQuery = `
+      SELECT
+        p.id,
+        p.admitted_date,
+        p.created_at,
+        p.discharge_date,
+        p.is_behavioral,
+        p.is_guardianship,
+        p.is_ltc,
+        p.status
+      FROM patients p
+      ${isStaff ? 'JOIN patient_staff ps ON ps.patient_id = p.id' : ''}
+      WHERE p.hospital_id = $1
+      ${isStaff ? 'AND ps.staff_id = $2' : ''}
+      ${includeDischarged ? '' : "AND p.status = 'Admitted'"}
+    `;
+
+    const patientParams = isStaff ? [hospitalId, staffId] : [hospitalId];
+    const { rows: patients } = await pool.query(patientQuery, patientParams);
+
+    const summary = {
+      behavioral: { admissionDelay: 0, taskDelay: 0, totalDelay: 0, cost: 0, count: 0 },
+      guardianship: { admissionDelay: 0, taskDelay: 0, totalDelay: 0, cost: 0, count: 0 },
+      ltc: { admissionDelay: 0, taskDelay: 0, totalDelay: 0, cost: 0, count: 0 },
+    };
+
+    for (const patient of patients) {
+      const { id, admitted_date, created_at, is_behavioral, is_guardianship, is_ltc } = patient;
+
+      const admissionDelay = Math.max(
+        Math.ceil((new Date(created_at) - new Date(admitted_date)) / (1000 * 60 * 60 * 24)),
+        0
+      );
+
+      const { rows: tasks } = await pool.query(
+        `SELECT pt.ideal_due_date, pt.completed_at, pt.status, t.algorithm
+         FROM patient_tasks pt
+         JOIN tasks t ON pt.task_id = t.id
+         WHERE pt.patient_id = $1 AND pt.is_visible = true`,
+        [id]
+      );
+
+      const behavioralTasks = tasks.filter(t => t.algorithm === 'Behavioral');
+      const guardianshipTasks = tasks.filter(t => t.algorithm === 'Guardianship');
+      const ltcTasks = tasks.filter(t => t.algorithm === 'LTC');
+
+      const delays = {
+        Behavioral: computeTaskDelay(behavioralTasks),
+        Guardianship: computeTaskDelay(guardianshipTasks),
+        LTC: computeTaskDelay(ltcTasks),
+      };
+
+      if (is_behavioral) {
+        summary.behavioral.admissionDelay += admissionDelay;
+        summary.behavioral.taskDelay += delays.Behavioral;
+        summary.behavioral.totalDelay += admissionDelay + delays.Behavioral;
+        summary.behavioral.cost += (admissionDelay + delays.Behavioral) * nationalAvg;
+        summary.behavioral.count++;
+      }
+
+      if (is_guardianship) {
+        summary.guardianship.admissionDelay += admissionDelay;
+        summary.guardianship.taskDelay += delays.Guardianship;
+        summary.guardianship.totalDelay += admissionDelay + delays.Guardianship;
+        summary.guardianship.cost += (admissionDelay + delays.Guardianship) * nationalAvg;
+        summary.guardianship.count++;
+      }
+
+      if (is_ltc) {
+        summary.ltc.admissionDelay += admissionDelay;
+        summary.ltc.taskDelay += delays.LTC;
+        summary.ltc.totalDelay += admissionDelay + delays.LTC;
+        summary.ltc.cost += (admissionDelay + delays.LTC) * nationalAvg;
+        summary.ltc.count++;
+      }
+    }
+
+    res.json({
+      behavioral: summary.behavioral,
+      guardianship: summary.guardianship,
+      ltc: summary.ltc,
+      nationalAverage: Number(nationalAvg),
+    });
+  } catch (error) {
+    console.error("❌ Opportunity Days Summary Error:", error);
+    res.status(500).json({ error: "Failed to calculate Opportunity Days Summary" });
+  }
+};
 
 
-  module.exports = { getDailyReport, getPriorityReport,getTransitionalCareReport ,getHistoricalTimelineReport,getProjectedTimelineReport,getLengthOfStaySummary};
+
+  module.exports = { getDailyReport, getPriorityReport,getTransitionalCareReport ,getHistoricalTimelineReport,getProjectedTimelineReport,getLengthOfStaySummary,getOpportunityDaysSummary};

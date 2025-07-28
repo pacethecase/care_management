@@ -45,7 +45,7 @@ const createTables = async () => {
         CREATE TABLE hospitals (
         id SERIAL PRIMARY KEY,
         name TEXT NOT NULL,
-         daily_bed_cost NUMERIC DEFAULT 2883.00
+         daily_bed_cost NUMERIC DEFAULT 2883.00,
         created_at TIMESTAMP DEFAULT NOW()
       );
 
@@ -65,7 +65,7 @@ const createTables = async () => {
         reset_token_expires TIMESTAMP  WITH TIME ZONE,
         created_at TIMESTAMP  WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
         hospital_id INTEGER NOT NULL REFERENCES hospitals(id),
-        has_global_access BOOLEAN DEFAULT FALSE;
+        has_global_access BOOLEAN DEFAULT FALSE
       );
 
   CREATE TABLE IF NOT EXISTS patients (
@@ -102,7 +102,7 @@ const createTables = async () => {
           added_by_user_id INTEGER REFERENCES users(id),
           selected_algorithms TEXT[] DEFAULT '{}',
           hospital_id INTEGER NOT NULL REFERENCES hospitals(id),
-         updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+         updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
 
 
@@ -115,7 +115,7 @@ const createTables = async () => {
 
       CREATE TABLE IF NOT EXISTS tasks (
           id SERIAL PRIMARY KEY,
-     name VARCHAR(200) NOT NULL
+     name VARCHAR(200) NOT NULL,
           description TEXT,
           is_repeating BOOLEAN DEFAULT FALSE,  -- Determines if the task should repeat
           recurrence_interval INTEGER,  -- Number of days before it repeats (e.g., 7 for weekly)
@@ -146,7 +146,7 @@ const createTables = async () => {
           include_note_in_report BOOLEAN DEFAULT false,
           contact_info TEXT,
           override_due_date TIMESTAMP WITH TIME ZONE DEFAULT NULL,
-          is_visible BOOLEAN DEFAULT TRUE,
+          is_visible BOOLEAN DEFAULT TRUE
           );
 
         CREATE TABLE IF NOT EXISTS notes (

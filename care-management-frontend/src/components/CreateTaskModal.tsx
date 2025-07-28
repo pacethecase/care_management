@@ -52,7 +52,16 @@ const CreateTaskModal: React.FC<Props> = ({ onClose, patientId }) => {
           is_repeating: checkbox.checked,
           is_non_blocking: checkbox.checked ? false : prev.is_non_blocking,
         }));
-      } else {
+      } else if (name === "is_non_blocking") {
+      // turning on non-blocking disables repeating
+      setFormData((prev) => ({
+        ...prev,
+        is_non_blocking: checkbox.checked,
+        is_repeating: checkbox.checked ? false : prev.is_repeating,
+        recurrence_interval: checkbox.checked ? "" : prev.recurrence_interval,
+      }));
+    } 
+    else {
         setFormData((prev) => ({
           ...prev,
           [name]: checkbox.checked,
@@ -88,6 +97,11 @@ const CreateTaskModal: React.FC<Props> = ({ onClose, patientId }) => {
   };
 
   const algorithmOptions = patient?.selected_algorithms || [];
+
+    const hasBehavioral = algorithmOptions.includes("Behavioral");
+    const hasLTC = algorithmOptions.includes("LTC");
+    const hasGuardianship = algorithmOptions.includes("Guardianship");
+    const hasNonBlockingEligible = hasLTC || hasGuardianship;
   return (
     <>
       {/* overlay */}
@@ -161,25 +175,38 @@ const CreateTaskModal: React.FC<Props> = ({ onClose, patientId }) => {
     </label>
 
     {/* Non-Blocking */}
-    <label className="flex items-center gap-2">
-      <input
-        type="checkbox"
-        name="is_non_blocking"
-        checked={formData.is_non_blocking}
-        onChange={handleChange}
-        disabled={formData.is_repeating}
-        className={
-          formData.is_repeating ? "cursor-not-allowed opacity-50" : ""
-        }
-      />
-      <span
-        className={`text-sm ${
-          formData.is_repeating ? "opacity-50" : ""
-        }`}
-      >
-        Non-Blocking
-      </span>
-    </label>
+   {/* Non-Blocking - only show if patient has LTC or Guardianship */}
+{hasNonBlockingEligible && (
+  <label className="flex items-center gap-2">
+    <input
+      type="checkbox"
+      name="is_non_blocking"
+      checked={formData.is_non_blocking}
+      onChange={handleChange}
+      disabled={
+        formData.selected_algorithms.includes("Behavioral") &&
+        !formData.is_non_blocking
+      }
+      className={
+        formData.selected_algorithms.includes("Behavioral") &&
+        !formData.is_non_blocking
+          ? "cursor-not-allowed opacity-50"
+          : ""
+      }
+    />
+    <span
+      className={`text-sm ${
+        formData.selected_algorithms.includes("Behavioral") &&
+        !formData.is_non_blocking
+          ? "opacity-50"
+          : ""
+      }`}
+    >
+      Non-Blocking
+    </span>
+  </label>
+)}
+
   </div>
 
   {/* ── Recurrence Interval (appears underneath the row) ─ */}
@@ -215,17 +242,29 @@ const CreateTaskModal: React.FC<Props> = ({ onClose, patientId }) => {
             <div className="mb-4">
               <label className="block font-medium mb-1">Algorithms</label>
               <div className="flex flex-wrap gap-4">
-                {algorithmOptions.map((algo) => (
-                  <label key={algo} className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      name={`algo_${algo}`}
-                      checked={formData.selected_algorithms.includes(algo)}
-                      onChange={handleChange}
-                    />
-                    {algo}
-                  </label>
-                ))}
+              {algorithmOptions.map((algo) => {
+  const isBehavioral = algo === "Behavioral";
+  const disableBehavioral = isBehavioral && formData.is_non_blocking;
+
+  return (
+    <label
+      key={algo}
+      className={`flex items-center gap-2 text-sm ${
+        disableBehavioral ? "opacity-50 cursor-not-allowed" : ""
+      }`}
+    >
+      <input
+        type="checkbox"
+        name={`algo_${algo}`}
+        checked={formData.selected_algorithms.includes(algo)}
+        onChange={handleChange}
+        disabled={disableBehavioral}
+      />
+      {algo}
+    </label>
+  );
+})}
+
               </div>
             </div>
           )}

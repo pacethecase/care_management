@@ -4,6 +4,7 @@ type Task = {
   task_name: string;
   status: string;
   due_date: string;
+  ideal_due_date:string;
   completed_at?: string;
   missed_reason?: string;
 };
@@ -64,7 +65,9 @@ const ProjectedTimelineReport: React.FC<{ data: ReportData }> = ({ data }) => {
                   >
                     <div className="font-bold mb-1">{task.task_name}</div>
                     <div className="font-semibold mb-1">Status: {task.status}</div>
+                     <div className="font-semibold mb-1">Ideal Due Date: {new Date(task.ideal_due_date).toLocaleDateString()}</div>
                     <div className="font-semibold mb-1">Due: {new Date(task.due_date).toLocaleDateString()}</div>
+                    
                     {task.completed_at && (
                       <div className="font-semibold mb-1">Completed: {new Date(task.completed_at).toLocaleDateString()}</div>
                     )}

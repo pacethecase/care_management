@@ -341,9 +341,9 @@ if (
   }
 
   await client.query(
-    `INSERT INTO patient_tasks (patient_id, task_id, status, due_date, ideal_due_date)
-     VALUES ($1, $2, 'Pending', $3, $4)`,
-    [task.patient_id, taskDetails.id, nextDue, ideal_due_date]
+    `INSERT INTO patient_tasks (patient_id, task_id, status, due_date)
+     VALUES ($1, $2, 'Pending', $3)`,
+    [task.patient_id, taskDetails.id, nextDue]
   );
 
   console.log(
@@ -736,7 +736,7 @@ console.log(isNonBlocking);
 if (isNonBlocking) {
   const newStatusHistory = [
     {
-      status: "Pending",
+      status: "Follow Up",
       timestamp: new Date().toISOString(),
       reason: followUpReason,
       staff_id: staffId

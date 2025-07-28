@@ -44,7 +44,7 @@ const LOSDashboardChart: React.FC<Props> = ({ data ,nationalAverage}) => {
             <Bar dataKey="totalDays" name="Days">
               <LabelList dataKey="totalDays" position="top" />
               {data.map((entry, index) => (
-                <Cell key={`cell-days-${index}`} fill={COLORS[entry.workflow] || "#8884d8"} />
+                <Cell key={`cell-days-${index}`} fill={COLORS[entry.workflow]} />
               ))}
             </Bar>
           </BarChart>
@@ -71,7 +71,7 @@ const LOSDashboardChart: React.FC<Props> = ({ data ,nationalAverage}) => {
                         }
               />
               {data.map((entry, index) => (
-                <Cell key={`cell-cost-${index}`} fill={COLORS[entry.workflow] || "#8884d8"} />
+                <Cell key={`cell-cost-${index}`} fill={COLORS[entry.workflow]} />
               ))}
             </Bar>
           </BarChart>

@@ -32,7 +32,7 @@ const stars = user?.id ? starRatings[user.id]?.stars || 0 : 0;
   return (
     <div className="flex flex-col min-h-screen bg-hospital-neutral text-hospital-blue">
       <Navbar />
-      <div className="container p-4">
+      <div className="container p-6 mx-auto">
         <div className="row">
           <div className="col-md-12">
            <div className="flex justify-between items-center">
@@ -45,12 +45,20 @@ const stars = user?.id ? starRatings[user.id]?.stars || 0 : 0;
                 </div>
               )}
               </div>
-              <button
-                onClick={() => navigate("/reports/los")}
-                className="px-4 py-2 bg-[var(--prussian-blue)] text-white rounded shadow hover:opacity-90 transition"
-              >
-                View Length of Stay Dashboard
-              </button>
+              <div className="flex flex-col items-end gap-2">
+            <button
+              onClick={() => navigate("/reports/los")}
+              className="px-4 py-2 bg-[var(--prussian-blue)] text-white rounded shadow hover:opacity-90 transition w-fit"
+            >
+              View Length of Stay Dashboard
+            </button>
+            <button
+              onClick={() => navigate("/reports/opportunitysummary")}
+              className="px-4 py-2 bg-[var(--prussian-blue)] text-white rounded shadow hover:opacity-90 transition w-fit"
+            >
+              View Opportunity Days Summary
+            </button>
+          </div>
             </div>
                   <div className="mt-4">
                   
