@@ -208,11 +208,11 @@ const AddPatientPage = () => {
             <div>
               <label htmlFor="admitted_date" className="block font-medium">Admitted Hospital Date</label>
               <input
-                type="date"
+                type="datetime-local"
                 id="admitted_date"
                 className="bg-white text-black placeholder-gray-400 border rounded py-2 px-3"
                 name="admitted_date"
-                value={formData.admitted_date}
+                  value={dayjs(formData.admitted_date).format("YYYY-MM-DDTHH:mm")}
                 onChange={handleChange}
                 required
               />

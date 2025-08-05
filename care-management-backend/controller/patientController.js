@@ -120,6 +120,11 @@ const addPatient = async (req, res) => {
     if (is_behavioral) selectedAlgorithms.push("Behavioral");
     if (is_guardianship) selectedAlgorithms.push("Guardianship");
     if (is_ltc) selectedAlgorithms.push("LTC");
+
+    const admittedDateUTC = admitted_date
+  ? DateTime.fromISO(admitted_date, { zone: timezone }).toUTC().toISO()
+  : null;
+
     // Convert created_at to UTC
     const createdAtUTC = created_at
       ? DateTime.fromISO(created_at, { zone: timezone }).toUTC().toISO()
@@ -146,7 +151,7 @@ const addPatient = async (req, res) => {
         is_behavioral, is_restrained, is_geriatric_psych_available, is_behavioral_team,
         is_ltc, is_ltc_medical, is_ltc_financial,
         is_guardianship, is_guardianship_financial, is_guardianship_person, is_guardianship_emergency,
-        admitted_date, added_by_user_id, hospital_id, createdAtUTC,
+        admittedDateUTC, added_by_user_id, hospital_id, createdAtUTC,
         selectedAlgorithms
       ]
     );

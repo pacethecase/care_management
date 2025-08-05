@@ -10,6 +10,33 @@ interface OpportunityLOSData {
   ltc: any;
   nationalAverage: number;
 }
+export interface StaffPerformanceSummary {
+  patient_name?: string;
+  staff_name?: string;
+  task_name?: string;
+  total_tasks: number;
+  missed_count: number;
+  delayed_count: number;
+  pending_count?: number;
+  completed_on_time_count?: number;
+  average_delay_days?: number;
+}
+interface StaffPerformanceData {
+   type: string | null;
+  data:StaffPerformanceSummary[];
+  
+  topLaggingStaff?: {
+    staff_name: string;
+    missed_count: string;
+    delayed_count: string;
+  }[];
+  topMissedTasks?: {
+    task_name: string;
+    missed_count: string;
+    responsible_staff: string[];
+  }[];
+  drilldown?: any[];
+}
 
 interface ReportState { 
   dailyReport: any[];
@@ -28,6 +55,16 @@ interface ReportState {
     loading: boolean;
     data: OpportunityLOSData | null;
     error: string | null;
+    
+  };
+   staffPerformanceReport: {
+    data:StaffPerformanceSummary[];
+    loading: boolean;
+    error: string | null;
+    type: string | null;
+     drilldown?: any[];
+     topLaggingStaff?: any[];
+  topMissedTasks?: any[];
   };
 }
 
@@ -51,6 +88,13 @@ const initialState: ReportState = {
     loading: false,
     data: null,
     error: null,
+  },
+   staffPerformanceReport: {
+    data: [],
+    loading: false,
+    error: null,
+    type: null,
+      drilldown: []
   },
 };
 export interface ReportParams {
@@ -199,6 +243,35 @@ export const fetchOpportunityDaysReport = createAsyncThunk(
   }
 );
 
+export const fetchStaffPerformanceReport = createAsyncThunk<
+  StaffPerformanceData,
+  {
+    start: string;
+    end: string;
+    workflow?: string;
+    staffId?: number;
+    taskName?: string;
+  },
+  { rejectValue: string }
+>(
+  "reports/fetchStaffPerformanceReport",
+  async ({ start, end, workflow, staffId, taskName }, { rejectWithValue }) => {
+    try {
+      const query = new URLSearchParams({ start, end });
+      if (workflow) query.append("workflow", workflow);
+      if (staffId !== undefined) query.append("staffId", staffId.toString());
+      if (taskName) query.append("taskName", taskName);
+
+      const response = await axios.get(`${BASE_URL}/reports/staff-performance?${query.toString()}`, {
+        withCredentials: true,
+      });
+
+      return response.data; // Must return { data, type }
+    } catch (error: any) {
+      return rejectWithValue(error.response?.data || "Failed to fetch staff performance report");
+    }
+  }
+);
 
 
 const reportSlice = createSlice({
@@ -301,7 +374,23 @@ const reportSlice = createSlice({
 .addCase(fetchOpportunityDaysReport.rejected, (state, action) => {
   state.opportunityLOS.loading = false;
   state.opportunityLOS.error = action.payload as string;
-});
+})
+ .addCase(fetchStaffPerformanceReport.pending, (state) => {
+        state.staffPerformanceReport.loading = true;
+        state.staffPerformanceReport.error = null;
+      })
+      .addCase(fetchStaffPerformanceReport.fulfilled, (state, action: PayloadAction<StaffPerformanceData>) => {
+        state.staffPerformanceReport.loading = false;
+      state.staffPerformanceReport.data = action.payload.data;
+      state.staffPerformanceReport.type = action.payload.type;
+      state.staffPerformanceReport.drilldown = action.payload.drilldown || [];
+      state.staffPerformanceReport.topLaggingStaff = action.payload.topLaggingStaff || [];
+      state.staffPerformanceReport.topMissedTasks = action.payload.topMissedTasks || [];
+      })
+      .addCase(fetchStaffPerformanceReport.rejected, (state, action) => {
+        state.staffPerformanceReport.loading = false;
+        state.staffPerformanceReport.error = action.payload as string;
+      });
 
   },
 });

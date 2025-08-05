@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { getDailyReport, getPriorityReport,getTransitionalCareReport,getHistoricalTimelineReport,getProjectedTimelineReport,getLengthOfStaySummary,getOpportunityDaysSummary } = require("../controller/reportController");
+const { getDailyReport, getPriorityReport,getTransitionalCareReport,getHistoricalTimelineReport,getProjectedTimelineReport,getLengthOfStaySummary,getOpportunityDaysSummary,getStaffPerformanceReport } = require("../controller/reportController");
 const { verifyToken } = require("../middleware/authMiddleware");
 
 // Ensure you have both routes defined properly
@@ -11,4 +11,5 @@ router.get('/patients/:id/historical-timeline-report',verifyToken,  getHistorica
 router.get("/patients/:id/projected-timeline-report", verifyToken, getProjectedTimelineReport);
 router.get("/length-of-stay", verifyToken, getLengthOfStaySummary);
 router.get("/opportunity-days", verifyToken, getOpportunityDaysSummary);
+router.get("/staff-performance", verifyToken, getStaffPerformanceReport);
 module.exports = router;

@@ -8,6 +8,7 @@ import { Routes, Route } from 'react-router-dom';
   import Patients from "./pages/Patients";
   import AlgorithmPatients from './pages/AlgorithmPatientsPage';
   import ReportPage from './pages/ReportPage';
+  import StaffPerformanceReportPage from './pages/StaffPerformanceReportPage';
   import { ToastContainer } from 'react-toastify';
   import 'react-toastify/dist/ReactToastify.css';
   import './index.css'; 
@@ -166,6 +167,14 @@ import OpportunityLOSPage from './pages/OpportunityLOSPage';
           element={
             <PrivateRoute>
               <OpportunityLOSPage />
+              </PrivateRoute>
+          }
+        />
+         <Route
+          path="/reports/staffPerformance"
+          element={
+            <PrivateRoute>
+              <StaffPerformanceReportPage />
               </PrivateRoute>
           }
         />

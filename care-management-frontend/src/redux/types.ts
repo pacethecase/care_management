@@ -1,7 +1,7 @@
 // redux/types.ts
 
 export interface Patient {
-    created_at_local: any;
+    created_at_local: string;
     id: number;
     first_name: string;
     last_name: string;
@@ -46,7 +46,7 @@ export interface Patient {
     is_admin: boolean;
     is_staff: boolean;
     is_super_admin:boolean;
-    has_global_access:Boolean;
+    has_global_access:boolean;
     hospital_id:number;
     is_approved:boolean;
     token?: string;

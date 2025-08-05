@@ -772,6 +772,284 @@ const getOpportunityDaysSummary = async (req, res) => {
   }
 };
 
+const getStaffPerformanceReport = async (req, res) => {
+  const { start, end, staffId, taskName } = req.query;
+  const hospitalId = req.user.hospital_id;
+  const startDate = DateTime.fromISO(start).toUTC().toISO();
+  const endDate = DateTime.fromISO(end).endOf("day").toUTC().toISO();
+
+  try {
+    if (staffId && taskName) {
+  const summaryQuery = `
+    SELECT
+      COUNT(*) AS total_tasks,
+      COUNT(*) FILTER (WHERE pt.status = 'Missed') AS missed_count,
+      COUNT(*) FILTER (
+        WHERE pt.status IN ('Completed', 'Delayed Completed') AND pt.completed_at > pt.ideal_due_date
+      ) AS delayed_count
+    FROM patient_tasks pt
+    JOIN tasks t ON pt.task_id = t.id
+    JOIN patients p ON pt.patient_id = p.id
+    JOIN patient_staff ps ON p.id = ps.patient_id
+    WHERE ps.staff_id = $1
+      AND t.name = $2
+      AND p.hospital_id = $3
+      AND pt.due_date BETWEEN $4 AND $5
+      AND pt.is_visible = TRUE
+      AND p.status != 'Discharged'
+  `;
+
+  const drilldownQuery = `
+    SELECT
+      t.name AS task_name,
+      p.last_name || ', ' || p.first_name AS patient_name,
+      pt.status,
+      (
+        SELECT sh.reason
+        FROM jsonb_to_recordset(pt.status_history) AS sh(status TEXT, changed_at TIMESTAMPTZ, reason TEXT)
+        WHERE sh.status = 'Missed'
+        ORDER BY changed_at DESC
+        LIMIT 1
+      ) AS reason
+    FROM patient_tasks pt
+    JOIN tasks t ON pt.task_id = t.id
+    JOIN patients p ON pt.patient_id = p.id
+    JOIN patient_staff ps ON p.id = ps.patient_id
+    WHERE ps.staff_id = $1
+      AND t.name = $2
+      AND p.hospital_id = $3
+      AND pt.due_date BETWEEN $4 AND $5
+      AND pt.is_visible = TRUE
+      AND p.status != 'Discharged'
+      AND (pt.status = 'Missed' OR pt.status = 'Delayed Completed')
+    ORDER BY patient_name
+  `;
+
+  const summaryResult = await pool.query(summaryQuery, [
+    staffId,
+    taskName,
+    hospitalId,
+    startDate,
+    endDate,
+  ]);
+
+  const drilldownResult = await pool.query(drilldownQuery, [
+    staffId,
+    taskName,
+    hospitalId,
+    startDate,
+    endDate,
+  ]);
+
+  return res.json({
+    type: 'staff-task',
+    data: summaryResult.rows[0],
+    drilldown: drilldownResult.rows,
+  });
+}
+
+  else if (taskName) {
+  // 🔹 Task-specific view
+  const taskQuery = `
+  SELECT
+    t.name AS task_name,
+    COUNT(*) AS total_tasks,
+    COUNT(*) FILTER (WHERE pt.status = 'Missed') AS missed_count,
+    COUNT(*) FILTER (
+      WHERE pt.status IN ('Completed', 'Delayed Completed') AND pt.completed_at > pt.ideal_due_date
+    ) AS delayed_count,
+    JSON_AGG(DISTINCT u.name) FILTER (
+      WHERE pt.status = 'Missed'
+    ) AS responsible_staff
+  FROM patient_tasks pt
+  JOIN tasks t ON pt.task_id = t.id
+  JOIN patients p ON pt.patient_id = p.id
+  JOIN patient_staff ps ON p.id = ps.patient_id
+  JOIN users u ON ps.staff_id = u.id
+  WHERE p.hospital_id = $1
+    AND pt.due_date BETWEEN $2 AND $3
+    AND p.status != 'Discharged'
+    AND pt.is_visible = TRUE
+    AND t.name = $4
+  GROUP BY t.name
+`;
+
+  const taskResult = await pool.query(taskQuery, [hospitalId, startDate, endDate, taskName]);
+const detailQuery = `
+  SELECT
+    t.name AS task_name,
+    p.last_name || ', ' || p.first_name AS patient_name,
+    ARRAY_AGG(DISTINCT u.name) AS staff_names,
+    pt.ideal_due_date,
+    pt.status,
+    sh.reason
+  FROM patient_tasks pt
+  JOIN tasks t ON pt.task_id = t.id
+  JOIN patients p ON pt.patient_id = p.id
+  LEFT JOIN patient_staff ps ON p.id = ps.patient_id
+  LEFT JOIN users u ON ps.staff_id = u.id
+  LEFT JOIN LATERAL (
+    SELECT reason
+    FROM jsonb_to_recordset(pt.status_history) AS sh(status TEXT, changed_at TIMESTAMPTZ, reason TEXT)
+    WHERE status = 'Missed'
+    ORDER BY changed_at DESC
+    LIMIT 1
+  ) sh ON TRUE
+  WHERE pt.is_visible = TRUE
+    AND (pt.status = 'Missed' OR pt.status = 'Delayed Completed')
+    AND t.name = $1
+    AND pt.due_date BETWEEN $2 AND $3
+    AND p.hospital_id = $4
+    AND p.status != 'Discharged'
+  GROUP BY p.id, t.name, pt.ideal_due_date, pt.status, sh.reason
+  ORDER BY pt.ideal_due_date ASC
+`;
 
 
-  module.exports = { getDailyReport, getPriorityReport,getTransitionalCareReport ,getHistoricalTimelineReport,getProjectedTimelineReport,getLengthOfStaySummary,getOpportunityDaysSummary};
+const detailResult = await pool.query(detailQuery, [taskName, startDate, endDate, hospitalId]);
+
+return res.json({
+  type: 'task',
+  data: taskResult.rows,
+  drilldown: detailResult.rows,
+});
+
+   }
+  else if (staffId) {
+  // 🔹 Summary for staff
+  const summaryQuery = `
+    SELECT
+      COUNT(*) AS total_tasks,
+      COUNT(*) FILTER (WHERE pt.status = 'Missed') AS missed_count,
+      COUNT(*) FILTER (
+        WHERE pt.status IN ('Completed', 'Delayed Completed') AND pt.completed_at > pt.ideal_due_date
+      ) AS delayed_count
+    FROM patient_tasks pt
+    JOIN patients p ON pt.patient_id = p.id
+    JOIN patient_staff ps ON p.id = ps.patient_id
+    WHERE ps.staff_id = $1
+      AND p.hospital_id = $2
+      AND pt.due_date BETWEEN $3 AND $4
+      AND pt.is_visible = TRUE
+      AND p.status != 'Discharged'
+  `;
+
+  const drilldownQuery = `
+    SELECT
+      t.name AS task_name,
+      p.last_name || ', ' || p.first_name AS patient_name,
+      pt.status,
+      (
+        SELECT sh.reason
+        FROM jsonb_to_recordset(pt.status_history) AS sh(status TEXT, changed_at TIMESTAMPTZ, reason TEXT)
+        WHERE sh.status = 'Missed'
+        ORDER BY changed_at DESC
+        LIMIT 1
+      ) AS reason
+    FROM patient_tasks pt
+    JOIN tasks t ON pt.task_id = t.id
+    JOIN patients p ON pt.patient_id = p.id
+    JOIN patient_staff ps ON p.id = ps.patient_id
+    WHERE ps.staff_id = $1
+      AND p.hospital_id = $2
+      AND pt.due_date BETWEEN $3 AND $4
+      AND pt.is_visible = TRUE
+      AND p.status != 'Discharged'
+      AND (pt.status = 'Missed' OR pt.status = 'Delayed Completed')
+    ORDER BY t.name, patient_name
+  `;
+
+  const summaryResult = await pool.query(summaryQuery, [staffId, hospitalId, startDate, endDate]);
+  const drilldownResult = await pool.query(drilldownQuery, [staffId, hospitalId, startDate, endDate]);
+
+  return res.json({
+    type: 'staff',
+    data: summaryResult.rows[0], // just one row for this staff
+    drilldown: drilldownResult.rows,
+  });
+}
+else {
+const topMissedTasksQuery = `
+  SELECT
+    t.name AS task_name,
+    COUNT(*) AS total_issues,
+    SUM(CASE WHEN pt.status = 'Missed' THEN 1 ELSE 0 END) AS missed_count,
+    SUM(CASE WHEN pt.status = 'Delayed Completed' THEN 1 ELSE 0 END) AS delayed_completed_count,
+    JSON_AGG(DISTINCT u.name) AS responsible_staff
+  FROM patient_tasks pt
+  JOIN tasks t ON pt.task_id = t.id
+  JOIN patients p ON pt.patient_id = p.id
+  JOIN patient_staff ps ON p.id = ps.patient_id
+  JOIN users u ON ps.staff_id = u.id
+  WHERE pt.status IN ('Missed', 'Delayed Completed')
+    AND p.hospital_id = $1
+    AND pt.due_date BETWEEN $2 AND $3
+    AND pt.is_visible = TRUE
+    AND p.status != 'Discharged'
+  GROUP BY t.name
+  ORDER BY total_issues DESC
+  LIMIT 3;
+`;
+
+const topLaggingStaffQuery = `
+  SELECT
+    u.name AS staff_name,
+    COUNT(*) FILTER (WHERE pt.status = 'Missed') AS missed_count,
+    COUNT(*) FILTER (
+      WHERE pt.status IN ('Completed', 'Delayed Completed') AND pt.completed_at > pt.ideal_due_date
+    ) AS delayed_count
+  FROM users u
+  JOIN patient_staff ps ON u.id = ps.staff_id
+  JOIN patients p ON ps.patient_id = p.id
+  JOIN patient_tasks pt ON pt.patient_id = p.id
+  WHERE p.hospital_id = $1
+    AND pt.due_date BETWEEN $2 AND $3
+    AND pt.is_visible = TRUE
+    AND p.status != 'Discharged'
+  GROUP BY u.name
+  ORDER BY missed_count DESC
+  LIMIT 3
+`;
+
+
+    // 🔹 Default: Patient-level summary
+    const patientQuery = `
+      SELECT
+        p.id AS patient_id,
+          p.last_name || ', ' || p.first_name AS patient_name,
+        p.admitted_date,
+        p.created_at,
+        ARRAY_AGG(DISTINCT u.name) AS staff,
+        COUNT(*) AS total_tasks,
+        COUNT(*) FILTER (WHERE pt.status = 'Missed') AS missed,
+        COUNT(*) FILTER (WHERE pt.status = 'Pending') AS pending,
+        COUNT(*) FILTER (WHERE pt.status = 'Completed' AND pt.completed_at <= pt.ideal_due_date) AS completed_on_time,
+        COUNT(*) FILTER (WHERE pt.status IN ('Completed', 'Delayed Completed') AND pt.completed_at > pt.ideal_due_date) AS delayed_completed
+      FROM patient_tasks pt
+      JOIN patients p ON pt.patient_id = p.id
+      JOIN tasks t ON pt.task_id = t.id
+      LEFT JOIN patient_staff ps ON p.id = ps.patient_id
+      LEFT JOIN users u ON ps.staff_id = u.id
+      WHERE p.hospital_id = $1
+        AND pt.due_date BETWEEN $2 AND $3
+        AND pt.is_visible = TRUE
+        AND p.status != 'Discharged'
+    GROUP BY p.id, p.first_name, p.last_name, p.admitted_date, p.created_at
+      ORDER BY missed DESC NULLS LAST
+    `;
+
+    const result = await pool.query(patientQuery, [hospitalId, startDate, endDate]);
+const topTasksResult = await pool.query(topMissedTasksQuery, [hospitalId, startDate, endDate]);
+const topStaffResult = await pool.query(topLaggingStaffQuery, [hospitalId, startDate, endDate]);
+
+    return res.json({ type: 'summary', data: result.rows, topMissedTasks: topTasksResult.rows,
+  topLaggingStaff: topStaffResult.rows, });
+}
+
+  } catch (err) {
+    console.error("30-Day Delay Report Error:", err);
+    res.status(500).json({ error: "Failed to generate 30-Day Delay Report." });
+  }
+};
+
+  module.exports = { getDailyReport, getPriorityReport,getTransitionalCareReport ,getHistoricalTimelineReport,getProjectedTimelineReport,getLengthOfStaySummary,getOpportunityDaysSummary, getStaffPerformanceReport};

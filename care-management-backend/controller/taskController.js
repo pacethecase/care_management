@@ -984,6 +984,22 @@ const addManualTaskForPatient = async (req, res) => {
   }
 };
 
+const getTaskNames = async (req, res) => {
+
+  try {
+    const result = await pool.query(
+      `SELECT DISTINCT t.name AS task_name
+       FROM tasks t
+       ORDER BY t.name`,
+    );
+
+    const taskNames = result.rows.map(row => row.task_name);
+    res.json(taskNames);
+  } catch (err) {
+    console.error("❌ Error fetching task names:", err);
+    res.status(500).json({ error: "Failed to fetch task names" });
+  }
+};
 
 module.exports = {
   startTask,
@@ -994,6 +1010,7 @@ module.exports = {
   followUpCourtTask,
   updateTaskNote,
   acknowledgeTask,
-  addManualTaskForPatient
+  addManualTaskForPatient,
+  getTaskNames
 
 };

@@ -11,6 +11,10 @@ interface TaskState {
   loading: boolean;
   error: string | null;
   taskError: string | null;
+
+  taskNames: string[];          
+  taskNamesLoading: boolean;       
+  taskNamesError: string | null;
 }
 
 const initialState: TaskState = {
@@ -20,7 +24,12 @@ const initialState: TaskState = {
   loading: false,
   error: null,
   taskError: null,
+
+  taskNames: [],               
+  taskNamesLoading: false,
+  taskNamesError: null,
 };
+
 
 export const loadPatientTasks = createAsyncThunk(
   "tasks/loadPatientTasks",
@@ -251,6 +260,24 @@ export const createManualTask = createAsyncThunk(
 );
 
 
+export const fetchAllTaskNames = createAsyncThunk<
+  string[], // list of task names
+  void,
+  { rejectValue: string }
+>(
+  "reports/fetchAllTaskNames",
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await axios.get(`${BASE_URL}/tasks/task-names`, {
+        withCredentials: true,
+      });
+      return response.data;
+    } catch (err: any) {
+      return rejectWithValue(err.response?.data?.error || "Failed to fetch task names");
+    }
+  }
+);
+
 const taskSlice = createSlice({
   name: "tasks",
   initialState,
@@ -414,7 +441,19 @@ const index = state.patientTasks.findIndex(
   state.taskError = typeof action.payload === "string"
     ? action.payload
     : "Failed to acknowledge task";
-});
+})
+.addCase(fetchAllTaskNames.pending, (state) => {
+    state.taskNamesLoading = true;
+    state.taskNamesError = null;
+  })
+  .addCase(fetchAllTaskNames.fulfilled, (state, action) => {
+    state.taskNamesLoading = false;
+    state.taskNames = action.payload;
+  })
+  .addCase(fetchAllTaskNames.rejected, (state, action) => {
+    state.taskNamesLoading = false;
+    state.taskNamesError = action.payload || "Unknown error";
+  });
 
   },
 });
