@@ -27,7 +27,7 @@ const COLORS: Record<string, string> = {
   LTC: "var(--algo-ltc)",
 };
 
-const LOSDashboardChart: React.FC<Props> = ({ data ,nationalAverage}) => {
+const LOSDashboardChart: React.FC<Props> = ({ data }) => {
   return (
     <div className="grid gap-10 md:grid-cols-2 mt-10">
       {/* Total Length of Stay (Days) */}
