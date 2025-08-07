@@ -31,7 +31,12 @@ const COLORS: Record<string, string> = {
   LTC: "var(--algo-ltc)",
 };
 
-const OpportunityLOSChart: React.FC<Props> = ({ data, nationalAverage }) => (
+const COLORS1: Record<string, string> = {
+  task_delay: "var(--primary-red)",
+  admission_delay: "var(--primary-yellow)",
+  total_delay: "var(--primary-blue)",
+};
+const OpportunityLOSChart: React.FC<Props> = ({ data }) => (
   <div className="grid gap-10 md:grid-cols-2 mt-10">
     <div className="p-4 bg-white rounded-xl shadow-md">
       <h2 className="text-xl font-semibold mb-2">Opportunity Delays by Type (Days)</h2>
@@ -42,17 +47,20 @@ const OpportunityLOSChart: React.FC<Props> = ({ data, nationalAverage }) => (
           <YAxis />
           <Tooltip />
           <Legend />
-          <Bar dataKey="admissionDelay" name="Admission Delay" fill="#c623bbff">
+          <Bar dataKey="admissionDelay" name="Admission Delay" fill={COLORS1.admission_delay}>
             <LabelList dataKey="admissionDelay" position="top" />
           </Bar>
-          <Bar dataKey="taskDelay" name="Task Delay" fill="#f34b2aff">
+          <Bar dataKey="taskDelay" name="Task Delay" fill={COLORS1.task_delay}>
             <LabelList dataKey="taskDelay" position="top" />
           </Bar>
-          <Bar dataKey="totalDelay" name="Total Delay" fill="#184683ff">
+          <Bar dataKey="totalDelay" name="Total Delay" fill={COLORS1.total_delay}>
             <LabelList dataKey="totalDelay" position="top" />
           </Bar>
         </BarChart>
       </ResponsiveContainer>
+      <p className="text-sm text-gray-500 italic mt-2">
+      “Admission Delay” refers to the number of days between a patient's admission to the hospital and their entry into the system.
+    </p>
     </div>
 
     <div className="p-4 bg-white rounded-xl shadow-md">
@@ -73,7 +81,7 @@ const OpportunityLOSChart: React.FC<Props> = ({ data, nationalAverage }) => (
         </BarChart>
       </ResponsiveContainer>
       <p className="text-sm text-gray-500 italic mt-2">
-        *Based on national average: ${nationalAverage.toLocaleString(undefined, { maximumFractionDigits: 2 })}/day.
+            Total cost is calculated using Individual Hospital Daily Rates and/or National Hospitalization Average of $2883 if not available
       </p>
     </div>
   </div>

@@ -106,7 +106,7 @@ switch (patient.task_status) {
       onClick={onClick}
     >
       {/* Admin Controls */}
-      {user?.is_admin && !showDischargeInfo && (
+      {user?.is_super_admin && !showDischargeInfo && (
         <div className="absolute top-2 right-2 flex gap-3 text-lg">
           <FaEdit
             className="text-blue-600 cursor-pointer"
@@ -127,7 +127,7 @@ switch (patient.task_status) {
         </div>
       )}
 
-      {user?.is_admin && showDischargeInfo && (
+      {user?.is_super_admin && showDischargeInfo && (
         <div className="absolute top-2 right-2 flex gap-3 text-sm">
           <button className="btn mt-4" onClick={() => handleReactivate(patient.id)}>
             Reactivate Patient

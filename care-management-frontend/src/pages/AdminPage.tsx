@@ -331,21 +331,55 @@ const handleDeleteHospital = async (id: number) => {
           <div className="bg-white p-6 rounded-xl max-w-lg w-full max-h-[70vh] overflow-auto">
             <h2 className="text-lg font-bold mb-4">Hospitals</h2>
             <ul className="divide-y">
-              {[...hospitals].sort((a, b) => a.name.localeCompare(b.name)).map(h => (
-                <li key={h.id} className="py-2 flex justify-between items-center">
-                          <div>{h.name}</div>
-                <div className="text-sm text-gray-600">
-                  ${h.daily_bed_cost.toLocaleString(undefined, {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })}
-                  /day
-                </div>
-                  <button onClick={() => handleDeleteHospital(h.id)} className="text-red-600 text-sm">
-                    Delete
-                  </button>
-                </li>
-              ))}
+             {[...hospitals].sort((a, b) => a.name.localeCompare(b.name)).map(h => (
+  <li key={h.id} className="py-2 flex justify-between items-center">
+    <div>{h.name}</div>
+
+    {/* Editable rate input */}
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        const newRate = rates[h.id] ?? h.daily_bed_cost;
+        dispatch(updateDailyBedCost({ hospitalId: h.id, daily_bed_cost: newRate }))
+          .unwrap()
+          .then(() => toast.success(`Updated rate for ${h.name}`))
+          .catch(() => toast.error("Failed to update"));
+      }}
+      className="text-sm text-gray-600 flex items-center gap-2"
+    >
+      <input
+        type="number"
+        step="0.01"
+        className="border px-2 py-1 rounded w-24"
+        value={rates[h.id] ?? h.daily_bed_cost}
+        onChange={(e) =>
+          setRates((prev) => ({
+            ...prev,
+            [h.id]: parseFloat(e.target.value),
+          }))
+        }
+        onBlur={() => {
+          const newRate = rates[h.id];
+          if (newRate !== undefined && newRate !== h.daily_bed_cost) {
+            dispatch(updateDailyBedCost({ hospitalId: h.id, daily_bed_cost: newRate }))
+              .unwrap()
+              .then(() => toast.success(`Updated rate for ${h.name}`))
+              .catch(() => toast.error("Failed to update"));
+          }
+        }}
+      />
+      /day
+    </form>
+
+    <button
+      onClick={() => handleDeleteHospital(h.id)}
+      className="text-red-600 text-sm"
+    >
+      Delete
+    </button>
+  </li>
+))}
+
             </ul>
             <div className="flex justify-end mt-4">
               <button onClick={() => setShowViewModal(false)} className="btn">Close</button>

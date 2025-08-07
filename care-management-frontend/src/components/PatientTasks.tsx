@@ -425,39 +425,43 @@ const renderTaskCard = (task: Task) => {
             Completed: {new Date(task.completed_at).toLocaleString()} by <b>{task.completed_by}</b>
           </div>
         )}
-   <div style={{ backgroundColor: 'var(--prussian-blue)', color: 'white' }}>
+ {(completedEntry || delayedcompletedEntry || followUpEntry || missedEntry || acknowledgeEntry) && (
+  <div
+    style={{
+      backgroundColor: 'var(--prussian-blue)',
+      color: 'white',
+      borderRadius: '8px',
+      padding: '6px 12px',
+    }}
+  >
+    {completedEntry && (
+      <div className="text-xs">
+        <b>Completed Note:</b> {completedEntry.reason || "None"}
+      </div>
+    )}
+    {delayedcompletedEntry && (
+      <div className="text-xs">
+        <b>Completed Note:</b> {delayedcompletedEntry.reason || "None"}
+      </div>
+    )}
+    {followUpEntry && (
+      <div className="text-xs">
+        <b>Follow-Up Note:</b> {followUpEntry.reason || "None"}
+      </div>
+    )}
+    {missedEntry && (
+      <div className="text-xs">
+        <b>Missed Reason:</b> {missedEntry.reason || "None"}
+      </div>
+    )}
+    {acknowledgeEntry && (
+      <div className="text-xs">
+        <b>Acknowledged Note:</b> {acknowledgeEntry.reason || "None"}
+      </div>
+    )}
+  </div>
+)}
 
-        {completedEntry && (
-          <div className="text-xs ">
-             <b>Completed Note:</b> {completedEntry.reason || "None"}
-          </div>
-        )}
-         {delayedcompletedEntry && (
-          <div className="text-xs ">
-             <b>Completed Note:</b> {delayedcompletedEntry.reason || "None"}
-          </div>
-        )}
-
-        {followUpEntry && (
-          <div className="text-xs ">
-             <b>Follow-Up Note:</b> {followUpEntry.reason || "None"}
-          </div>
-        )}
-
-        {missedEntry && (
-          <div className="text-xs ">
-             <b>Missed Reason:</b> {missedEntry.reason || "None"}
-
-          </div>
-        )}
-         {acknowledgeEntry && (
-          <div className="text-xs ">
-            <b>Acknowledged Note:</b> {acknowledgeEntry.reason || "None"}
-
-          </div>
-        )}
-
-</div>
    {task.is_non_blocking &&
   task.status === "Acknowledged" &&
   task.acknowledged_at && (

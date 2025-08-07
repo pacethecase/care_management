@@ -77,7 +77,7 @@ const LOSDashboardChart: React.FC<Props> = ({ data ,nationalAverage}) => {
           </BarChart>
         </ResponsiveContainer>
                     <p className="text-sm text-gray-500 italic mt-2">
-                *Total cost is calculated using a National Hospitalization Average of ${nationalAverage.toLocaleString(undefined, { maximumFractionDigits: 2 })}/day.
+               Total cost is calculated using Individual Hospital Daily Rates and/or National Hospitalization Average of $2883 if not available.
             </p>
                 </div>
     </div>

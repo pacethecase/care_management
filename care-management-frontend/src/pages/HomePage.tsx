@@ -58,7 +58,7 @@ const stars = user?.id ? starRatings[user.id]?.stars || 0 : 0;
             >
               View Opportunity Days Summary
             </button>
-            {user?.is_admin && (
+            {user?.is_super_admin && (
             <button
               onClick={() => navigate("/reports/staffPerformance")}
               className="px-4 py-2 bg-[var(--prussian-blue)] text-white rounded shadow hover:opacity-90 transition w-fit"
