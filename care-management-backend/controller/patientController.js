@@ -561,6 +561,7 @@ const updatePatient = async (req, res) => {
   if (!req.user?.is_approved) {
   return res.status(403).json({ error: "Access denied: User not approved." });
 }
+  const timezone = req.headers['x-timezone'] || 'America/New_York';
 
   const patientId = req.params.patientId;
   const {
@@ -569,6 +570,7 @@ const updatePatient = async (req, res) => {
     birth_date,
     age,
     bedId,
+    admitted_date,
     mrn,
     medical_info,
     assignedStaffIds = [],
@@ -600,8 +602,6 @@ const updatePatient = async (req, res) => {
 
       const dbUpdatedAt = existing.updated_at?.toISOString();
       const clientTime = new Date(clientUpdatedAt).toISOString();
-console.log(dbUpdatedAt);
-console.log(clientTime);
       if (dbUpdatedAt !== clientTime) {
         return res.status(409).json({ error: "This patient was already updated by someone else. Please refresh and try again." });
       }
@@ -617,6 +617,10 @@ console.log(clientTime);
       is_ltc: selected_algorithms.includes("LTC"),
       is_guardianship: selected_algorithms.includes("Guardianship"),
     };
+    const admittedDateUTC = admitted_date
+  ? DateTime.fromISO(admitted_date, { zone: timezone }).toUTC().toISO()
+  : null;
+
 
     // Update patient details
     await pool.query(
@@ -627,6 +631,7 @@ console.log(clientTime);
            age = $4,
            bed_id = $5,
            mrn = $6,
+     
            medical_info = $7,
            selected_algorithms = $8,
            is_behavioral = $9,
@@ -639,8 +644,9 @@ console.log(clientTime);
            is_guardianship = $16,
            is_guardianship_financial = $17,
            is_guardianship_person = $18,
-           is_guardianship_emergency = $19
-       WHERE id = $20`,
+           is_guardianship_emergency = $19,
+            admitted_date = $20
+       WHERE id = $21`,
       [
         first_name,
         last_name,
@@ -648,6 +654,7 @@ console.log(clientTime);
         age,
         bedId,
         mrn,
+       
         medical_info,
         selected_algorithms,
 
@@ -664,7 +671,7 @@ console.log(clientTime);
         req.body.is_guardianship_financial,
         req.body.is_guardianship_person,
         req.body.is_guardianship_emergency,
-
+        admittedDateUTC,
         patientId
       ]
     );
@@ -679,7 +686,7 @@ console.log(clientTime);
     }
 
     // Assign or update tasks
-    const timezone = req.headers['x-timezone'] || 'America/New_York';
+  
     await assignTasksToPatient(patientId, timezone, selected_algorithms, addedAlgorithms, removedAlgorithms);
 
     // Return updated patient data

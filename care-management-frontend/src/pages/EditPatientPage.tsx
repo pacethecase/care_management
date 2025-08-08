@@ -176,18 +176,20 @@ const EditPatientPage = () => {
               <label className="block font-medium">Age</label>
               <input type="number" name="age" value={formData.age} readOnly className="bg-white text-black placeholder-gray-400 border rounded py-2 px-3" />
             </div>
-            
+             <div>
+                          <label  className="block font-medium">Admitted Hospital Date</label>
+                          <input
+                            type="datetime-local"
+                            id="admitted_date"
+                            className="bg-white text-black placeholder-gray-400 border rounded py-2 px-3"
+                            name="admitted_date"
+                              value={dayjs(formData.admitted_date).format("YYYY-MM-DDTHH:mm")}
+                            onChange={handleChange}
+                            required
+                          />
+                        </div>
            
-            <div>
-            <label className="block font-medium">Admitted Hospital Date</label>
-            <input
-              type="date"
-              name="admitted_date"
-              value={formData.admitted_date?.split("T")[0] || ""}
-              readOnly
-              className="input text-black bg-gray-100 cursor-not-allowed"
-            />
-          </div>
+          
 
           <div>
             <label className="block font-medium">System Date of Entry</label>

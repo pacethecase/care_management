@@ -718,9 +718,10 @@ const renderTaskColumns = () => {
                           year: 'numeric',
                           month: 'short',
                           day: 'numeric',
-              
-
-                        })
+                           hour: '2-digit',
+                            minute: '2-digit',
+                            hour12: true,
+ })
                       : 'N/A'}
              • System date of Entry{" "}
                 {patient.created_at ? new Date(patient.created_at).toLocaleString(undefined, {

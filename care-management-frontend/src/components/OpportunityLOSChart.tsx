@@ -32,9 +32,9 @@ const COLORS: Record<string, string> = {
 };
 
 const COLORS1: Record<string, string> = {
-  task_delay: "var(--primary-red)",
-  admission_delay: "var(--primary-yellow)",
-  total_delay: "var(--primary-blue)",
+   task_delay: "#EF4444",   
+  admission_delay: "#94A3B8",
+  total_delay: "#2563EB"
 };
 const OpportunityLOSChart: React.FC<Props> = ({ data }) => (
   <div className="grid gap-10 md:grid-cols-2 mt-10">
