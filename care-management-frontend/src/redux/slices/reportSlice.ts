@@ -68,9 +68,6 @@ interface ReportState {
   };
 }
 
-interface LOSReportParams {
-  includeDischarged?: boolean;
-}
 const initialState: ReportState = {
   dailyReport: [],
   priorityReport: [],

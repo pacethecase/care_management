@@ -86,7 +86,7 @@ const OpportunityLOSPage = () => {
     content.querySelectorAll(".p-4.bg-white.rounded-xl.shadow-md")
   )
     .map(
-      (chart, i) =>
+      (chart, _i) =>
         `<div class="page-break"></div>
          <div class="chart-container">${chart.outerHTML}</div>`
     )
