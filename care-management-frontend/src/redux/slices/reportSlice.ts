@@ -197,48 +197,54 @@ export const fetchProjectedTimelineReport = createAsyncThunk<any, number, { reje
     }
   }
 );
-
 export const fetchLengthOfStayReport = createAsyncThunk(
   "reports/fetchLengthOfStayReport",
   async (
-    { includeDischarged = false }: LOSReportParams = {},
+    { includeDischarged = false, startDate, endDate, algorithm }: 
+    { includeDischarged?: boolean; startDate?: string; endDate?: string; algorithm?: string } = {},
     { rejectWithValue }
   ) => {
     try {
       const query = new URLSearchParams();
       if (includeDischarged) query.append("includeDischarged", "true");
+      if (startDate) query.append("startDate", startDate);
+      if (endDate) query.append("endDate", endDate);
+      if (algorithm) query.append("algorithm", algorithm);
 
-      const res = await axios.get(`${BASE_URL}/reports/length-of-stay?${query.toString()}`, {
-        withCredentials: true,
-      });
+      const res = await axios.get(
+        `${BASE_URL}/reports/length-of-stay?${query.toString()}`,
+        { withCredentials: true }
+      );
 
       return res.data;
     } catch (err: any) {
-      return rejectWithValue(
-        err.response?.data?.error || "Failed to load LOS report"
-      );
+      return rejectWithValue(err.response?.data?.error || "Failed to load LOS report");
     }
   }
 );
+
 export const fetchOpportunityDaysReport = createAsyncThunk(
   "reports/fetchOpportunityDaysReport",
   async (
-    { includeDischarged = false }: { includeDischarged?: boolean } = {},
+    { includeDischarged = false, startDate, endDate, algorithm }: 
+    { includeDischarged?: boolean; startDate?: string; endDate?: string; algorithm?: string } = {},
     { rejectWithValue }
   ) => {
     try {
       const query = new URLSearchParams();
       if (includeDischarged) query.append("includeDischarged", "true");
+      if (startDate) query.append("startDate", startDate);
+      if (endDate) query.append("endDate", endDate);
+      if (algorithm) query.append("algorithm", algorithm);
 
-      const res = await axios.get(`${BASE_URL}/reports/opportunity-days?${query.toString()}`, {
-        withCredentials: true,
-      });
+      const res = await axios.get(
+        `${BASE_URL}/reports/opportunity-days?${query.toString()}`,
+        { withCredentials: true }
+      );
 
       return res.data;
     } catch (err: any) {
-      return rejectWithValue(
-        err.response?.data?.error || "Failed to load Opportunity Days report"
-      );
+      return rejectWithValue(err.response?.data?.error || "Failed to load Opportunity Days report");
     }
   }
 );

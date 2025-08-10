@@ -3,7 +3,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { fetchPriorityReport } from '../redux/slices/reportSlice'; // import the action
 import type { AppDispatch } from '../redux/store';
 import { RootState } from "../redux/store";
-
+import BlueLoader from '../components/BlueLoader'; 
 interface PriorityReportProps {
   date: string;
   adminId?:number;
@@ -25,7 +25,7 @@ const PriorityReport: React.FC<PriorityReportProps> = ({ date, adminId }) => {
       <h2 className="text-2xl font-semibold mb-4 text-center text-orange  no-print">Priority Report - Tasks Due Today</h2>
 
       {/* Loading or Error */}
-      {loading && <p className="text-center text-gray-600">Loading...</p>}
+       {loading && <BlueLoader />}
       {error && <p className="text-center text-red-500">{error}</p>}
 
       {/* Display the priority tasks */}

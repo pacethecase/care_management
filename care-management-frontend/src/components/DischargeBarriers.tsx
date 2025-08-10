@@ -3,7 +3,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { loadPatientCountsByAlgorithm } from "../redux/slices/algorithmSlice";
 import { RootState, AppDispatch } from "../redux/store";
 import { useNavigate } from "react-router-dom";
-
+import BlueLoader from "./BlueLoader";
 interface AlgorithmCount {
   algorithm: "Behavioral" | "Guardianship" | "LTC";
   count: number;
@@ -18,7 +18,7 @@ const DischargeBarriers = () => {
     dispatch(loadPatientCountsByAlgorithm());
   }, [dispatch]);
 
-  if (loading) return <div>Loading...</div>;
+  {loading && <BlueLoader />}
   if (error) return <div className="text-red-600">{String(error)}</div>;
 
   const cssVarMap: Record<AlgorithmCount["algorithm"], string> = {

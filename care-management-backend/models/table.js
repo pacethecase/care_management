@@ -127,7 +127,8 @@ const createTables = async () => {
           created_at TIMESTAMP  WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
           algorithm VARCHAR(50),
           is_overridable BOOLEAN DEFAULT FALSE,
-          is_court_date BOOLEAN DEFAULT FALSE
+          is_court_date BOOLEAN DEFAULT FALSE,
+            is_manual BOOLEAN DEFAULT FALSE
       );
 
      

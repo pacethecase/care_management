@@ -943,8 +943,8 @@ const addManualTaskForPatient = async (req, res) => {
     const taskInsertRes = await pool.query(
       `INSERT INTO tasks (
         name, description, is_repeating, recurrence_interval, 
-        is_overridable, is_non_blocking, algorithm
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+        is_overridable, is_non_blocking, algorithm, is_manual
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, TRUE)
       RETURNING id`,
       [
         name,
@@ -985,11 +985,11 @@ const addManualTaskForPatient = async (req, res) => {
 };
 
 const getTaskNames = async (req, res) => {
-
   try {
     const result = await pool.query(
       `SELECT DISTINCT t.name AS task_name
        FROM tasks t
+       WHERE t.is_manual IS NOT TRUE
        ORDER BY t.name`,
     );
 

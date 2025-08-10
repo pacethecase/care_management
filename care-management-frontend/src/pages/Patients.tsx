@@ -12,7 +12,7 @@ import {
 import { fetchAdmins } from '../redux/slices/userSlice';
 import { RootState } from '../redux/store';
 import type { AppDispatch } from '../redux/store';
-
+import BlueLoader from '../components/BlueLoader';
 const Patients = () => {
   const dispatch = useDispatch<AppDispatch>();
   const navigate = useNavigate();
@@ -120,7 +120,7 @@ const Patients = () => {
 
         {/* Status Messages */}
         {(patientLoading || adminLoading) && (
-          <p className="mt-6 text-[var(--text-muted)] text-center">Loading patients...</p>
+          <BlueLoader />
         )}
         {error && (
           <p className="mt-6 text-red-600 text-center">

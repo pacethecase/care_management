@@ -11,7 +11,7 @@ import {
   acknowledgeTask
 } from "../redux/slices/taskSlice";
 import CreateTaskModal from "../components/CreateTaskModal";
-
+import BlueLoader from "./BlueLoader";
 import { fetchPatientById,updateCourtDate } from "../redux/slices/patientSlice";
 import { fetchPatientNotes, addPatientNote } from "../redux/slices/noteSlice";
 import { updateTaskNoteMeta } from "../redux/slices/taskSlice";
@@ -687,8 +687,9 @@ const renderTaskColumns = () => {
     </div>
   );
 
-  if (patientLoading || taskLoading || !patient)
-    return <p className="text-center mt-10 text-gray-500">Loading patient data...</p>;
+if (patientLoading || taskLoading || !patient) {
+  return <BlueLoader />;
+}
 
   return (
     <div className="flex flex-col min-h-screen text-white">

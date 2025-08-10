@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import type { AppDispatch, RootState } from '../redux/store';
 import { fetchDailyReport } from '../redux/slices/reportSlice';
+import BlueLoader from './BlueLoader';
 
 interface Props {
   date: string;
@@ -29,7 +30,7 @@ const DailyReport: React.FC<Props> = ({ date,adminId }) => {
   return (
     <div>
       <h2 className="text-2xl font-semibold mb-4 text-center no-print">Daily Report - Overdue Tasks</h2>
-      {loading && <p className="text-center text-gray-600">Loading...</p>}
+      {loading && < BlueLoader/>}
       {error && <p className="text-center text-red-500">{error}</p>}
 
       {Array.isArray(dailyReport) && dailyReport.length > 0 ? (

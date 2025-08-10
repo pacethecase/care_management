@@ -557,6 +557,10 @@ const getLengthOfStaySummary = async (req, res) => {
   const hospitalId = user.hospital_id;
   const isStaff = user.is_staff;
   const staffId = user.id;
+  const startDate = req.query.startDate ? new Date(req.query.startDate) : null;
+const endDate = req.query.endDate ? new Date(req.query.endDate) : null;
+const algorithmFilter = req.query.algorithm || null; 
+
 
   const includeDischarged = req.query.includeDischarged === 'true';
 
@@ -585,8 +589,23 @@ const getLengthOfStaySummary = async (req, res) => {
       ${isStaff ? 'AND ps.staff_id = $2' : ''}
       ${includeDischarged ? '' : 'AND p.status = \'Admitted\''}
     `;
+     const queryParams = isStaff ? [hospitalId, staffId] : [hospitalId];
+    if (startDate) {
+      query += ` AND p.admitted_date >= $${queryParams.length + 1}`;
+      queryParams.push(startDate);
+    }
+    if (endDate) {
+      query += ` AND p.admitted_date <= $${queryParams.length + 1}`;
+      queryParams.push(endDate);
+    }
 
-    const queryParams = isStaff ? [hospitalId, staffId] : [hospitalId];
+    // Apply algorithm filter
+    if (algorithmFilter) {
+      if (algorithmFilter === 'Behavioral') query += ' AND p.is_behavioral = true';
+      if (algorithmFilter === 'Guardianship') query += ' AND p.is_guardianship = true';
+      if (algorithmFilter === 'LTC') query += ' AND p.is_ltc = true';
+    }
+   
 
     const { rows } = await pool.query(query, queryParams);
     const today = new Date();
@@ -639,6 +658,9 @@ const getOpportunityDaysSummary = async (req, res) => {
   const hospitalId = user.hospital_id;
   const isStaff = user.is_staff;
   const staffId = user.id;
+  const startDate = req.query.startDate ? new Date(req.query.startDate) : null;
+  const endDate = req.query.endDate ? new Date(req.query.endDate) : null;
+  const algorithmFilter = req.query.algorithm || null; 
 
   const includeDischarged = req.query.includeDischarged === 'true';
 
@@ -700,7 +722,24 @@ const getOpportunityDaysSummary = async (req, res) => {
       ${includeDischarged ? '' : "AND p.status = 'Admitted'"}
     `;
 
-    const patientParams = isStaff ? [hospitalId, staffId] : [hospitalId];
+       const patientParams = isStaff ? [hospitalId, staffId] : [hospitalId];
+    if (startDate) {
+  patientQuery += ` AND p.admitted_date >= $${patientParams.length + 1}`;
+  patientParams.push(startDate);
+}
+if (endDate) {
+  patientQuery += ` AND p.admitted_date <= $${patientParams.length + 1}`;
+  patientParams.push(endDate);
+}
+
+  // Apply algorithm filter
+  if (algorithmFilter) {
+    if (algorithmFilter === 'Behavioral') patientQuery += ' AND p.is_behavioral = true';
+    if (algorithmFilter === 'Guardianship') patientQuery += ' AND p.is_guardianship = true';
+    if (algorithmFilter === 'LTC') patientQuery += ' AND p.is_ltc = true';
+  }
+
+ 
     const { rows: patients } = await pool.query(patientQuery, patientParams);
 
     const summary = {
