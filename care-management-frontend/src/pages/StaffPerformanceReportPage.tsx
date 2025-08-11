@@ -8,6 +8,7 @@
   import { AppDispatch, RootState } from "../redux/store";
   import { Link } from "react-router-dom";
   import type { StaffPerformanceSummary } from "../redux/slices/reportSlice";
+import BlueLoader from "../components/BlueLoader";
 
   const formatDate = (date: Date) => date.toISOString().slice(0, 10);
 
@@ -20,6 +21,8 @@
     const [start, setStart] = useState(formatDate(new Date(Date.now() - 30 * 86400000)));
     const [end, setEnd] = useState(formatDate(new Date()));
     const [selectedTask, setSelectedTask] = useState("");
+    const [includeDischarged, setIncludeDischarged] = useState(false);
+
   const staffList = useSelector((state: RootState) => state.user.staffs);
   const [selectedStaffId, setSelectedStaffId] = useState("");
     useEffect(() => {
@@ -34,9 +37,10 @@
           end,
           staffId: selectedStaffId ? Number(selectedStaffId) : undefined,
           taskName: selectedTask || undefined,
+          includeDischarged,
         })
       );
-    }, [start, end, selectedStaffId, selectedTask, dispatch]);
+    }, [start, end, selectedStaffId, selectedTask,includeDischarged, dispatch]);
 
     const renderTable = () => {
      if (type === "summary") {
@@ -232,60 +236,84 @@ if (Array.isArray(data)) {
               ← Back
             </Link>
           </div>
-
-          <div className="flex flex-wrap gap-4 mb-6">
-            <div>
-              <label className="block text-sm font-medium">Start Date</label>
-              <input
-                type="date"
-                value={start}
-                onChange={(e) => setStart(e.target.value)}
-                className="border px-2 py-1 rounded"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium">End Date</label>
-              <input
-                type="date"
-                value={end}
-                onChange={(e) => setEnd(e.target.value)}
-                className="border px-2 py-1 rounded"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Staff</label>
-              <select
-                value={selectedStaffId}
-                onChange={(e) => setSelectedStaffId(e.target.value)}
-                className="border px-2 py-1 rounded w-full"
-              >
-                <option value="">All Staff</option>
-                {staffList.map((staff) => (
-                  <option key={staff.id} value={staff.id}>
-                    {staff.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium">Task</label>
-              <select
-                value={selectedTask}
-                onChange={(e) => setSelectedTask(e.target.value)}
-                className="border px-2 py-1 rounded"
-              >
-                <option value="">All</option>
-                {taskNames.map((task: string) => (
-                  <option key={task} value={task}>
-                    {task}
-                  </option>
-                ))}
-              </select>
-            </div>
+          {/* Filter Bar */}
+        <div className="flex items-center gap-3 mb-4 flex-wrap">
+          {/* From Date */}
+          <div>
+            <label className="block text-sm font-medium mb-1">From</label>
+            <input
+              type="date"
+              value={start}
+              onChange={(e) => setStart(e.target.value)}
+              className="border rounded px-1 py-1 text-sm"
+            />
           </div>
 
-          {loading && <p>Loading...</p>}
+          {/* To Date */}
+          <div>
+            <label className="block text-sm font-medium mb-1">To</label>
+            <input
+              type="date"
+              value={end}
+              onChange={(e) => setEnd(e.target.value)}
+              className="border rounded px-2 py-1 text-sm"
+            />
+          </div>
+
+          {/* Staff */}
+          <div>
+            <label className="block text-sm font-medium mb-1">Staff</label>
+            <select
+              value={selectedStaffId}
+              onChange={(e) => setSelectedStaffId(e.target.value)}
+              className="border rounded px-2 py-1 text-sm w-44"
+            >
+              <option value="">All Staff</option>
+              {staffList.map((staff) => (
+                <option key={staff.id} value={staff.id}>
+                  {staff.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Task */}
+          <div>
+            <label className="block text-sm font-medium mb-1">Task</label>
+            <select
+              value={selectedTask}
+              onChange={(e) => setSelectedTask(e.target.value)}
+              className="border rounded px-2 py-1 text-sm  min-w-[200px] max-w-[280px] truncate"
+              title={selectedTask || "All"}
+            >
+              <option value="">All</option>
+              {taskNames.map((task) => (
+                <option key={task} value={task} title={task}>
+                  {task}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Include Discharged */}
+          <div className="flex items-center gap-2 mt-5">
+            <input
+              type="checkbox"
+              id="includeDischarged"
+              checked={includeDischarged}
+              onChange={(e) => setIncludeDischarged(e.target.checked)}
+            />
+            <label htmlFor="includeDischarged" className="text-sm whitespace-nowrap">
+              Include Discharged
+            </label>
+          </div>
+        </div>
+
+
+
+
+
+          {loading && <BlueLoader />}
           {error && <p className="text-red-500">{error}</p>}
           {!loading && !error && <div className="overflow-x-auto rounded">{renderTable()}</div>}
         </div>

@@ -812,11 +812,11 @@ if (endDate) {
 };
 
 const getStaffPerformanceReport = async (req, res) => {
-  const { start, end, staffId, taskName } = req.query;
+  const { start, end, staffId, taskName, includeDischarged } = req.query;
   const hospitalId = req.user.hospital_id;
   const startDate = DateTime.fromISO(start).toUTC().toISO();
   const endDate = DateTime.fromISO(end).endOf("day").toUTC().toISO();
-
+  const dischargeFilter = includeDischarged === 'true' ? '' : "AND p.status != 'Discharged'";
   try {
     if (staffId && taskName) {
   const summaryQuery = `
@@ -835,7 +835,7 @@ const getStaffPerformanceReport = async (req, res) => {
       AND p.hospital_id = $3
       AND pt.due_date BETWEEN $4 AND $5
       AND pt.is_visible = TRUE
-      AND p.status != 'Discharged'
+      ${dischargeFilter}
   `;
 
   const drilldownQuery = `
@@ -859,7 +859,7 @@ const getStaffPerformanceReport = async (req, res) => {
       AND p.hospital_id = $3
       AND pt.due_date BETWEEN $4 AND $5
       AND pt.is_visible = TRUE
-      AND p.status != 'Discharged'
+      ${dischargeFilter}
       AND (pt.status = 'Missed' OR pt.status = 'Delayed Completed')
     ORDER BY patient_name
   `;
@@ -907,7 +907,7 @@ const getStaffPerformanceReport = async (req, res) => {
   JOIN users u ON ps.staff_id = u.id
   WHERE p.hospital_id = $1
     AND pt.due_date BETWEEN $2 AND $3
-    AND p.status != 'Discharged'
+    ${dischargeFilter}
     AND pt.is_visible = TRUE
     AND t.name = $4
   GROUP BY t.name
@@ -939,7 +939,7 @@ const detailQuery = `
     AND t.name = $1
     AND pt.due_date BETWEEN $2 AND $3
     AND p.hospital_id = $4
-    AND p.status != 'Discharged'
+    ${dischargeFilter}
   GROUP BY p.id, t.name, pt.ideal_due_date, pt.status, sh.reason
   ORDER BY pt.ideal_due_date ASC
 `;
@@ -970,7 +970,7 @@ return res.json({
       AND p.hospital_id = $2
       AND pt.due_date BETWEEN $3 AND $4
       AND pt.is_visible = TRUE
-      AND p.status != 'Discharged'
+      ${dischargeFilter}
   `;
 
   const drilldownQuery = `
@@ -993,7 +993,7 @@ return res.json({
       AND p.hospital_id = $2
       AND pt.due_date BETWEEN $3 AND $4
       AND pt.is_visible = TRUE
-      AND p.status != 'Discharged'
+      ${dischargeFilter}
       AND (pt.status = 'Missed' OR pt.status = 'Delayed Completed')
     ORDER BY t.name, patient_name
   `;
@@ -1024,7 +1024,7 @@ const topMissedTasksQuery = `
     AND p.hospital_id = $1
     AND pt.due_date BETWEEN $2 AND $3
     AND pt.is_visible = TRUE
-    AND p.status != 'Discharged'
+    ${dischargeFilter}
   GROUP BY t.name
   ORDER BY total_issues DESC
   LIMIT 3;
@@ -1044,14 +1044,14 @@ const topLaggingStaffQuery = `
   WHERE p.hospital_id = $1
     AND pt.due_date BETWEEN $2 AND $3
     AND pt.is_visible = TRUE
-    AND p.status != 'Discharged'
+    ${dischargeFilter}
   GROUP BY u.name
   ORDER BY missed_count DESC
   LIMIT 3
 `;
 
 
-    // 🔹 Default: Patient-level summary
+    // Default: Patient-level summary
     const patientQuery = `
       SELECT
         p.id AS patient_id,
@@ -1072,7 +1072,7 @@ const topLaggingStaffQuery = `
       WHERE p.hospital_id = $1
         AND pt.due_date BETWEEN $2 AND $3
         AND pt.is_visible = TRUE
-        AND p.status != 'Discharged'
+        ${dischargeFilter}
     GROUP BY p.id, p.first_name, p.last_name, p.admitted_date, p.created_at
       ORDER BY missed DESC NULLS LAST
     `;

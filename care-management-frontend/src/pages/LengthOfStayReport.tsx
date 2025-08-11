@@ -146,40 +146,53 @@ const [algorithm, setAlgorithm] = useState("");
   </div>
 </div>
 
+<div className="flex items-center gap-3 mb-4 flex-wrap">
+  {/* From Date */}
+  <div className="flex items-center gap-2">
+    <label className="text-sm whitespace-nowrap">From:</label>
+    <input
+      type="date"
+      value={startDate}
+      onChange={(e) => setStartDate(e.target.value)}
+      className="border rounded px-1 py-1 text-sm"
+    />
+  </div>
 
- <div className="flex items-center gap-3 mb-4 flex-nowrap">
-          <input
-            type="date"
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-            className="border rounded px-1 py-1 text-sm"
-          />
-          <input
-            type="date"
-            value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
-            className="border rounded px-1 py-1 text-sm"
-          />
-          <select
-            value={algorithm}
-            onChange={(e) => setAlgorithm(e.target.value)}
-            className="border rounded px-2 py-1 text-sm w-40"
-          >
-            <option value="">All Workflows</option>
-            <option value="Behavioral">Behavioral</option>
-            <option value="Guardianship">Guardianship</option>
-            <option value="LTC">LTC</option>
-          </select>
-          <label className="flex items-center gap-1 text-sm whitespace-nowrap">
-            <input
-              type="checkbox"
-              checked={includeDischarged}
-              onChange={() => setIncludeDischarged((v) => !v)}
-            />
-            Include Discharged
-          </label>
-        </div>
+  {/* To Date */}
+  <div className="flex items-center gap-2">
+    <label className="text-sm whitespace-nowrap">To:</label>
+    <input
+      type="date"
+      value={endDate}
+      onChange={(e) => setEndDate(e.target.value)}
+      className="border rounded px-1 py-1 text-sm"
+    />
+  </div>
 
+  {/* Workflow */}
+  <select
+    value={algorithm}
+    onChange={(e) => setAlgorithm(e.target.value)}
+    className="border rounded px-2 py-1 text-sm w-44"
+  >
+    <option value="">All Workflows</option>
+    <option value="Behavioral">Behavioral</option>
+    <option value="Guardianship">Guardianship</option>
+    <option value="LTC">LTC</option>
+  </select>
+
+  {/* Include Discharged */}
+  <label className="flex items-center gap-1 text-sm whitespace-nowrap">
+    <input
+      type="checkbox"
+      checked={includeDischarged}
+      onChange={() => setIncludeDischarged((v) => !v)}
+    />
+    Include Discharged
+  </label>
+</div>
+
+{/* Print Button */}
 <div className="mb-6 flex justify-end">
   <button onClick={handlePrint} className="btn btn-secondary">
     <FaPrint className="inline mr-2" />

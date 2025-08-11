@@ -254,17 +254,20 @@ export const fetchStaffPerformanceReport = createAsyncThunk<
     workflow?: string;
     staffId?: number;
     taskName?: string;
+    includeDischarged?: boolean;
   },
   { rejectValue: string }
 >(
   "reports/fetchStaffPerformanceReport",
-  async ({ start, end, workflow, staffId, taskName }, { rejectWithValue }) => {
+  async ({ start, end, workflow, staffId, taskName, includeDischarged }, { rejectWithValue }) => {
     try {
       const query = new URLSearchParams({ start, end });
       if (workflow) query.append("workflow", workflow);
       if (staffId !== undefined) query.append("staffId", staffId.toString());
       if (taskName) query.append("taskName", taskName);
-
+      if (includeDischarged !== undefined) {
+              query.append("includeDischarged", includeDischarged.toString());
+            }
       const response = await axios.get(`${BASE_URL}/reports/staff-performance?${query.toString()}`, {
         withCredentials: true,
       });
