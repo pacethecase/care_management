@@ -33,7 +33,7 @@ const COLORS: Record<string, string> = {
 };
 
 const COLORS1: Record<string, string> = {
-   task_delay: "#7F5864",   
+   task_delay: "#c5aa50",   
   admission_delay: "#38464F",
   total_delay: "#AFC6CF"
 };

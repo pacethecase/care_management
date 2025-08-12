@@ -187,9 +187,9 @@ const getDailyReport = async (req, res) => {
     const { hospital_id } = req.user;
     const { start_date, end_date } = req.query;
     const timezone = req.headers['x-timezone'] || 'America/New_York';
-if (!req.user?.is_approved) {
-  return res.status(403).json({ error: "Access denied: user not approved" });
-}
+    if (!req.user?.is_approved) {
+      return res.status(403).json({ error: "Access denied: user not approved" });
+    }
 
     try {
       // Get patient info

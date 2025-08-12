@@ -261,14 +261,13 @@ const overrideDate = override_date
   : null;
 
 if (task.due_date) {
-  const cutoff = new Date(
-    new Date(task.due_date).getFullYear(),
-    new Date(task.due_date).getMonth(),
-    new Date(task.due_date).getDate(),
-    23, 59, 0
-  );
+  const dueCutoffUTC = DateTime.fromJSDate(task.ideal_due_date)
+  .setZone(timezone)
+  .set({ hour: 23, minute: 59, second: 0, millisecond: 0 })
+  .toUTC()
+  .toJSDate();
 
-  if (completedAt > cutoff) {
+  if (completedAt > dueCutoffUTC) {
     finalStatus = "Delayed Completed";
   }
 }

@@ -410,8 +410,14 @@ const renderTaskCard = (task: Task) => {
 
       <div className="text-sm mb-2 font-bold">
         {!task.is_non_blocking && task.due_date && (
-          <div>Due: {new Date(task.due_date).toLocaleDateString()}</div>
-        )}
+         <div>
+        Due: {new Date(task.due_date).toLocaleString("en-US", { 
+ 
+          dateStyle: "short",
+          timeStyle: "short"
+        })}
+      </div>
+              )}
 
         {!task.is_non_blocking && task.started_at && (
           <div>
