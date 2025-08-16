@@ -15,6 +15,7 @@ import BlueLoader from "./BlueLoader";
 import { fetchPatientById,updateCourtDate } from "../redux/slices/patientSlice";
 import { fetchPatientNotes, addPatientNote } from "../redux/slices/noteSlice";
 import { updateTaskNoteMeta } from "../redux/slices/taskSlice";
+import { overrideTask } from "../redux/slices/taskSlice";
 import { RootState } from "../redux/store";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
@@ -149,6 +150,38 @@ const handleEditCourtDate = async (type: "guardianship" | "ltc") => {
 };
 
 
+const handleOverride = async (taskId: number) => {
+  const reason = prompt("📝 Please enter a reason to override this task:");
+  if (!reason?.trim()) {
+    toast.error("❌ Override reason is required.");
+    return;
+  }
+
+  try {
+    await dispatch(
+      overrideTask({
+        taskId,
+        override_date: overrideDates[taskId],
+        reason,
+      })
+    ).unwrap();
+
+    toast.success("✅ Task overridden");
+      setOverrideDates(prev => {
+      const copy = { ...prev };
+      delete copy[taskId];
+      return copy;
+    });
+    dispatch(loadPatientTasks(Number(patientId)));
+  } catch (err: any) {
+    const message =
+      typeof err === "string"
+        ? err
+        : err?.response?.data?.error || "❌ Failed to override task";
+    toast.error(message);
+  }
+};
+
 const handleComplete = async (
   taskId: number,
   courtTask: boolean
@@ -177,7 +210,6 @@ const handleComplete = async (
         taskId,
         reason,
         court_date: courtDate,
-        override_date: overrideDates[taskId] || undefined,
       })
     ).unwrap();
 
@@ -203,7 +235,7 @@ const handleComplete = async (
             reason, // ✅ still using original reason
             missed_reason: missedReason,
             court_date: courtDate,
-            override_date: overrideDates[taskId] || undefined,
+
           })
         ).unwrap();
 
@@ -483,6 +515,34 @@ const renderTaskCard = (task: Task) => {
     </div>
 )}
 
+
+{task.override_count > 0 && (
+    <div
+    style={{
+      backgroundColor: 'var(--prussian-blue)',
+      color: 'white',
+      borderRadius: '8px',
+      padding: '6px 12px',
+    }}
+  >
+  <div className="text-xs mt-1">
+    Overridden {task.override_count} time{task.override_count > 1 ? "s" : ""}  
+    <br />
+    Last Override Reason: {task.status_history?.filter(h => h.status === "Overridden").slice(-1)[0]?.reason || "N/A"}
+    <br />
+    Last override At:{" "}
+    {task.status_history?.filter(h => h.status === "Overridden").slice(-1)[0]?.timestamp
+      ? DateTime.fromSQL(
+          task.status_history?.filter(h => h.status === "Overridden").slice(-1)[0].timestamp
+        ).toFormat("MMM d, yyyy, h:mm a")
+      : "N/A"}
+  </div>
+  </div>
+
+)}
+
+
+
        
 {!task.is_non_blocking &&
           task.is_overridable &&
@@ -513,13 +573,14 @@ const renderTaskCard = (task: Task) => {
     task.status !== "Delayed Completed" && (
       <div className="flex gap-2 flex-wrap mb-2">
         {overrideDates[task.patient_task_id] ? (
-          // 👇 Only show Complete button if override date exists
           <button
-            className="btn btn-xs btn-outline"
-            onClick={() => handleComplete(task.patient_task_id, task.is_court_date ?? false)}
+            className="btn btn-xs btn-outline bg-yellow-500 text-white"
+            onClick={() => handleOverride(task.patient_task_id)}
+            disabled={task.override_count >= 2} 
           >
-            Complete
+            {task.override_count >= 2 ? "Max Overrides Reached" : "Override Task"}
           </button>
+
         ) : (
           <>
             {task.status !== "In Progress" && task.status !== "Missed" && (

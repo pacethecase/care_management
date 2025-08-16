@@ -95,6 +95,7 @@ export interface Note {
     contact_info?: string;
     include_note_in_report?: boolean;
     is_court_date?:boolean;
+    override_count: number; 
    status_history?: {
   status: string;
   timestamp: string;

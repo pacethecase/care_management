@@ -106,13 +106,11 @@ export const completeTask = createAsyncThunk(
     {
       taskId,
       court_date,
-      override_date,
       reason,
       missed_reason, 
     }: {
       taskId: number;
       court_date?: string;
-      override_date?: string | null;
       reason?: string;
       missed_reason?: string; 
     },
@@ -121,7 +119,6 @@ export const completeTask = createAsyncThunk(
     try {
       const payload: any = {};
       if (court_date) payload.court_date = court_date;
-      if (override_date) payload.override_date = override_date;
       if (reason) payload.reason = reason;
       if (missed_reason) payload.missed_reason = missed_reason; // ✅ SEND IT
 
@@ -277,6 +274,26 @@ export const fetchAllTaskNames = createAsyncThunk<
     }
   }
 );
+
+export const overrideTask = createAsyncThunk<
+  any,
+  { taskId: number; override_date: string; reason: string }
+>(
+  "tasks/overrideTask",
+  async ({ taskId, override_date, reason }, { rejectWithValue }) => {
+    try {
+      const res = await axios.post(
+        `${BASE_URL}/tasks/${taskId}/override`,   // ✅ use BASE_URL
+        { override_date, reason },
+        { withCredentials: true }
+      );
+      return res.data;
+    } catch (err: any) {
+      return rejectWithValue(err.response?.data || "Failed to override task");
+    }
+  }
+);
+
 
 const taskSlice = createSlice({
   name: "tasks",
@@ -453,7 +470,30 @@ const index = state.patientTasks.findIndex(
   .addCase(fetchAllTaskNames.rejected, (state, action) => {
     state.taskNamesLoading = false;
     state.taskNamesError = action.payload || "Unknown error";
-  });
+  })
+   .addCase(overrideTask.pending, (state) => {
+        state.loading = true;
+        state.taskError = null;
+      })
+     .addCase(overrideTask.fulfilled, (state, action) => {
+  state.loading = false;
+
+  const updatedTask = action.payload.task || action.payload;
+  const idx = state.patientTasks.findIndex(
+    (t) => t.patient_task_id === updatedTask.id
+  );
+
+  if (idx !== -1) {
+    state.patientTasks[idx] = {
+      ...state.patientTasks[idx],
+      ...updatedTask,
+    };
+  }
+})
+      .addCase(overrideTask.rejected, (state, action) => {
+        state.loading = false;
+        state.taskError = action.payload as string;
+      });
 
   },
 });

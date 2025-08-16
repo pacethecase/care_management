@@ -23,6 +23,7 @@ const CreateTaskModal: React.FC<Props> = ({ onClose, patientId }) => {
     is_overridable: false,
     is_non_blocking: false,
     selected_algorithms: [] as string[],
+    due_date: "" 
   });
 
 
@@ -135,34 +136,30 @@ const CreateTaskModal: React.FC<Props> = ({ onClose, patientId }) => {
             />
           </div>
 
-   {/* Checkboxes */}
-{/* Check-boxes */}
-<div className="mb-4">
+    <div className="mb-4">
+      <div className="flex flex-row items-center gap-8">
+        {/* Repeating Task */}
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            name="is_repeating"
+            checked={formData.is_repeating}
+            onChange={handleChange}
+            disabled={formData.is_non_blocking}
+            className={
+              formData.is_non_blocking ? "cursor-not-allowed opacity-50" : ""
+            }
+          />
+          <span
+            className={`text-sm ${
+              formData.is_non_blocking ? "opacity-50" : ""
+            }`}
+          >
+            Repeating&nbsp;Task
+          </span>
+        </label>
 
-  {/* ── Row of check-boxes ─────────────────────────────── */}
-  <div className="flex flex-row items-center gap-8">
-    {/* Repeating Task */}
-    <label className="flex items-center gap-2">
-      <input
-        type="checkbox"
-        name="is_repeating"
-        checked={formData.is_repeating}
-        onChange={handleChange}
-        disabled={formData.is_non_blocking}
-        className={
-          formData.is_non_blocking ? "cursor-not-allowed opacity-50" : ""
-        }
-      />
-      <span
-        className={`text-sm ${
-          formData.is_non_blocking ? "opacity-50" : ""
-        }`}
-      >
-        Repeating&nbsp;Task
-      </span>
-    </label>
 
-    {/* Overridable */}
     <label className="flex items-center gap-2">
       <input
         type="checkbox"
@@ -173,8 +170,7 @@ const CreateTaskModal: React.FC<Props> = ({ onClose, patientId }) => {
       <span className="text-sm">Overridable</span>
     </label>
 
-    {/* Non-Blocking */}
-   {/* Non-Blocking - only show if patient has LTC or Guardianship */}
+
 {hasNonBlockingEligible && (
   <label className="flex items-center gap-2">
     <input
@@ -229,6 +225,16 @@ const CreateTaskModal: React.FC<Props> = ({ onClose, patientId }) => {
       />
     </div>
   )}
+</div>
+<div className="mb-3">
+  <label className="block  text-sm  font-medium mb-1">Due Date</label>
+  <input
+    type="date"
+    name="due_date"
+    value={formData.due_date || ""}
+    onChange={handleChange}
+    className="w-full border rounded py-2 px-3 bg-white text-black"
+  />
 </div>
 
 

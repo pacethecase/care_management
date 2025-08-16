@@ -323,6 +323,7 @@ const getPatientTasks = async (req, res) => {
         pt.due_date,
         pt.completed_at,
         pt.started_at,
+        pt.override_count,
 
         t.condition_required,
         t.is_repeating,

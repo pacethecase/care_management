@@ -106,7 +106,7 @@ const completeTask = async (req, res) => {
   try {
     await client.query("BEGIN");
     const { taskId } = req.params;
-    const { court_date, override_date,reason,missed_reason } = req.body;
+    const { court_date,reason,missed_reason } = req.body;
     
   
     if (!req.user?.is_approved) {
@@ -253,12 +253,6 @@ if (taskDetails.is_court_date) {
           // Step 2: Mark as completed in DB and update local object
   // ✅ Determine final status
 let finalStatus = "Completed";
-const overrideDate = override_date
-  ? DateTime.fromISO(override_date, { zone: timezone })
-      .set({ hour: 23, minute: 59, second: 0, millisecond: 0 })
-      .toUTC()
-      .toJSDate()
-  : null;
 
 if (task.due_date) {
   const dueCutoffUTC = DateTime.fromJSDate(task.ideal_due_date)
@@ -275,13 +269,12 @@ if (task.due_date) {
 // ✅ Update task in DB
 await client.query(`
   UPDATE patient_tasks 
-  SET status = $1, completed_at = $2, override_due_date = $3
-  WHERE id = $4
-`, [finalStatus, completedAt, overrideDate, taskId]);
+  SET status = $1, completed_at = $2
+  WHERE id = $3 
+`, [finalStatus, completedAt, taskId]);
 
 
     task.completed_at = completedAt;
-    task.override_due_date = overrideDate; 
 
       await appendStatusHistory(taskId, {
         status: finalStatus,
@@ -307,21 +300,6 @@ if (
   !isManualFollowUpTask
 ) {
   let nextDue, ideal_due_date;
-
-  if (task.override_due_date) {
-    // ✅ Use override date directly as next due and ideal
-    const override = new Date(task.override_due_date);
-    const overrideAt1159 = DateTime.fromJSDate(override)
-      .setZone(timezone)
-      .set({ hour: 23, minute: 59, second: 0, millisecond: 0 })
-      .toUTC()
-      .toJSDate();
-
-    nextDue = overrideAt1159;
-    ideal_due_date = overrideAt1159;
-
-    console.log(`⏱ Using override date directly for next recurrence: ${overrideAt1159.toISOString()}`);
-  } else {
     const completedAt = task.completed_at ? new Date(task.completed_at) : new Date();
     const previousIdealDue = task.ideal_due_date ? new Date(task.ideal_due_date) : new Date();
 
@@ -337,8 +315,7 @@ if (
 
     nextDue = dueLocal.toUTC().toJSDate();
     ideal_due_date = idealLocal.toUTC().toJSDate();
-  }
-
+  
   await client.query(
     `INSERT INTO patient_tasks (patient_id, task_id, status, due_date)
      VALUES ($1, $2, 'Pending', $3)`,
@@ -465,7 +442,7 @@ console.log(`📌 Dependent task '${dep.name}' scheduled for ${due.toDateString(
 
 
 
-// 🟥 Mark a Task as Missed
+
 const markTaskAsMissed = async (req, res) => {
   const client = await pool.connect();
   try {
@@ -929,8 +906,9 @@ const addManualTaskForPatient = async (req, res) => {
     is_repeating = false,
     recurrence_interval = null,
     is_overridable = false,
-    is_non_blocking = false, // ✅ NEW FIELD
+    is_non_blocking = false,
     algorithm = null,
+      due_date = null 
   } = req.body;
 
   if (!name || !description) {
@@ -958,18 +936,27 @@ const addManualTaskForPatient = async (req, res) => {
 
     const taskId = taskInsertRes.rows[0].id;
 
-    
-    const dueLocal = DateTime.now().setZone(timezone).set({
-      hour: 23,
-      minute: 59,
-      second: 0,
-      millisecond: 0,
-    });
+      if (due_date) {
+      // Parse selected date in hospital timezone
+      let dueLocal = DateTime.fromISO(due_date, { zone: timezone }).set({
+        hour: 23,
+        minute: 59,
+        second: 0,
+        millisecond: 0,
+      });
+      dueDateUTC = dueLocal.toUTC().toJSDate();
+    } else {
+      // Default: today at 11:59 PM
+      const dueLocal = DateTime.now().setZone(timezone).set({
+        hour: 23,
+        minute: 59,
+        second: 0,
+        millisecond: 0,
+      });
+      dueDateUTC = dueLocal.toUTC().toJSDate();
+    }
 
-    const dueDateUTC = dueLocal.toUTC().toJSDate();
-
-
-    await pool.query(
+        await pool.query(
       `INSERT INTO patient_tasks (
         patient_id, task_id, status, due_date, ideal_due_date, is_visible
       ) VALUES ($1, $2, 'Pending', $3, $3, TRUE)`,
@@ -1000,6 +987,79 @@ const getTaskNames = async (req, res) => {
   }
 };
 
+
+const overrideTask = async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const { taskId } = req.params;
+    const { override_date, reason } = req.body;
+
+    if (!req.user?.is_approved) {
+      return res.status(403).json({ error: "Access denied: user not approved" });
+    }
+    if (!reason?.trim()) {
+      return res.status(400).json({ error: "Override reason is required." });
+    }
+
+    const taskRes = await client.query(
+      `SELECT pt.*, p.hospital_id
+       FROM patient_tasks pt
+       JOIN patients p ON pt.patient_id = p.id
+       WHERE pt.id = $1
+       FOR UPDATE`,
+      [taskId]
+    );
+    if (taskRes.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ error: "Task not found" });
+    }
+    const task = taskRes.rows[0];
+
+    if (task.hospital_id !== req.user.hospital_id) {
+      await client.query("ROLLBACK");
+      return res.status(403).json({ error: "Unauthorized" });
+    }
+
+    if (task.override_count >= 2) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ error: "Override limit reached (max 2 allowed)." });
+    }
+
+    const timezone = req.headers["x-timezone"] || "America/New_York";
+    const overrideDue = DateTime.fromISO(override_date, { zone: timezone })
+      .set({ hour: 23, minute: 59, second: 0, millisecond: 0 })
+      .toUTC()
+      .toJSDate();
+
+    // Update override fields
+    await client.query(
+    `UPDATE patient_tasks
+    SET override_count = COALESCE(override_count, 0) + 1,
+        override_due_date = $1,
+        due_date = $1 
+    WHERE id = $2`,
+    [overrideDue, taskId]
+  );
+
+    // Append status history with helper
+    await appendStatusHistory(taskId, {
+      status: "Overridden",
+      reason,
+      staff_id: req.user.id,
+    }, client);
+
+    await client.query("COMMIT");
+    res.json({ message: "✅ Task overridden successfully" });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("❌ Error overriding task:", err);
+    res.status(500).json({ error: "Internal Server Error" });
+  } finally {
+    client.release();
+  }
+};
+
 module.exports = {
   startTask,
   completeTask,
@@ -1010,6 +1070,7 @@ module.exports = {
   updateTaskNote,
   acknowledgeTask,
   addManualTaskForPatient,
-  getTaskNames
+  getTaskNames,
+  overrideTask
 
 };
