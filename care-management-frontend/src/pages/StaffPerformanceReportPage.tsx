@@ -127,8 +127,7 @@ import BlueLoader from "../components/BlueLoader";
               <td className="px-3 py-2">{task.task_name}</td>
               <td className="px-3 py-2 text-center">{task.missed_count}</td>
               <td className="px-3 py-2 text-center">{task.delayed_count || 0}</td>
-              <td className="px-3 py-2">{(task.responsible_staff || []).join(", ")}</td>
-              <td colSpan={3}></td>
+              <td colSpan={4}></td>
             </tr>
 
             {/* Drilldown rows */}

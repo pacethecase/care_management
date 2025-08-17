@@ -892,9 +892,9 @@ const getStaffPerformanceReport = async (req, res) => {
   const taskQuery = `
   SELECT
     t.name AS task_name,
-    COUNT(*) AS total_tasks,
-    COUNT(*) FILTER (WHERE pt.status = 'Missed') AS missed_count,
-    COUNT(*) FILTER (
+    COUNT(DISTINCT pt.id)  AS total_tasks,
+    COUNT(DISTINCT pt.id)  FILTER (WHERE pt.status = 'Missed') AS missed_count,
+    COUNT(DISTINCT pt.id)   FILTER (
       WHERE pt.status IN ('Completed', 'Delayed Completed') AND pt.completed_at > pt.ideal_due_date
     ) AS delayed_count,
     JSON_AGG(DISTINCT u.name) FILTER (
