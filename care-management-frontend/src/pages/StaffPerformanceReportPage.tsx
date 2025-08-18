@@ -83,6 +83,8 @@ import BlueLoader from "../components/BlueLoader";
         <th className="px-3 py-2">Delayed</th>
         <th className="px-3 py-2">Pending</th>
         <th className="px-3 py-2">On Time</th>
+        <th className="px-3 py-2">Overridden</th>
+        <th  className="px-3 py-2">Manual Task Count</th>
         <th className="px-3 py-2">Staff</th>
       </tr>
     </thead>
@@ -95,6 +97,8 @@ import BlueLoader from "../components/BlueLoader";
           <td className="px-3 py-2 text-center">{patient.delayed_completed}</td>
           <td className="px-3 py-2 text-center">{patient.pending}</td>
           <td className="px-3 py-2 text-center">{patient.completed_on_time}</td>
+          <td className="px-3 py-2 text-center">{patient.overridden}</td>
+          <td className="px-3 py-2 text-center">{patient.manual}</td>
           <td className="px-3 py-2 text-center">
             {(patient.staff || []).join(", ")}
           </td>
@@ -105,7 +109,7 @@ import BlueLoader from "../components/BlueLoader";
 </>
   );
 }
- else if (type === "task") {
+else if (type === "task") {
   return (
     <table className="min-w-full table-auto border border-gray-300">
       <thead className="bg-[var(--prussian-blue)] text-white">
@@ -113,35 +117,46 @@ import BlueLoader from "../components/BlueLoader";
           <th className="px-3 py-2">Task Name</th>
           <th className="px-3 py-2">Missed</th>
           <th className="px-3 py-2">Delayed</th>
+          <th className="px-3 py-2">Overridden</th> 
           <th className="px-3 py-2">Staff</th>
           <th className="px-3 py-2">Patient</th>
           <th className="px-3 py-2">Status</th>
-          <th className="px-3 py-2">Reason</th>
+          <th className="px-3 py-2">Missed Reason</th>
+          <th className="px-3 py-2">Override Reason</th>
+          <th className="px-3 py-2">Last Override At</th>
         </tr>
       </thead>
       <tbody>
         {data.map((task: any) => (
           <React.Fragment key={task.task_name}>
             {/* Task summary row */}
-            <tr className="border-t">
-              <td className="px-3 py-2">{task.task_name}</td>
+            <tr className="border-t bg-gray-50">
+              <td className="px-3 py-2 font-semibold">{task.task_name}</td>
               <td className="px-3 py-2 text-center">{task.missed_count}</td>
               <td className="px-3 py-2 text-center">{task.delayed_count || 0}</td>
-              <td colSpan={4}></td>
+              <td className="px-3 py-2 text-center">{task.overridden_count || 0}</td> 
+              <td colSpan={6}></td>
             </tr>
 
             {/* Drilldown rows */}
             {(drilldown || [])
-              .filter((row: any) => row.task_name === task.task_name) // ← filter by task
+              .filter((row: any) => row.task_name === task.task_name)
               .map((row: any, i: number) => (
                 <tr key={`${task.task_name}-${i}`} className="border-t">
                   <td className="px-3 py-2"></td>
                   <td className="px-3 py-2"></td>
                   <td className="px-3 py-2"></td>
+                  <td className="px-3 py-2 text-center">{row.override_count || 0}</td> 
                   <td className="px-3 py-2">{(row.staff_names || []).join(", ")}</td>
                   <td className="px-3 py-2">{row.patient_name}</td>
                   <td className="px-3 py-2">{row.status}</td>
-                  <td className="px-3 py-2">{row.reason || "—"}</td>
+                  <td className="px-3 py-2">{row.missed_reason || "—"}</td>
+                  <td className="px-3 py-2">{row.override_reason || "—"}</td> 
+                  <td className="px-3 py-2">
+                    {row.last_override_at
+                      ? new Date(row.last_override_at).toLocaleString()
+                      : "—"}
+                  </td> 
                 </tr>
               ))}
           </React.Fragment>
@@ -150,21 +165,24 @@ import BlueLoader from "../components/BlueLoader";
     </table>
   );
 }
+
 else if (type === "staff" || type === "staff-task") {
   let totalTasks = 0;
 let missed = 0;
 let delayed = 0;
-
+let overridden = 0;
 if (Array.isArray(data)) {
   const typedData = data as StaffPerformanceSummary[];
   totalTasks = typedData.reduce((sum, item) => sum + item.total_tasks, 0);
   missed = typedData.reduce((sum, item) => sum + item.missed_count, 0);
   delayed = typedData.reduce((sum, item) => sum + item.delayed_count, 0);
+    overridden = typedData.reduce((sum, item) => sum + (item.overridden_count ?? 0), 0);
 } else if (data && typeof data === "object") {
   const summary = data as StaffPerformanceSummary;
   totalTasks = summary.total_tasks ?? 0;
   missed = summary.missed_count ?? 0;
   delayed = summary.delayed_count ?? 0;
+   overridden = summary.overridden_count ?? 0;
 }
 
 
@@ -184,6 +202,10 @@ if (Array.isArray(data)) {
           <div className="text-xl font-bold text-orange-600">{delayed}</div>
           <div className="text-sm text-gray-600">Delayed Completed</div>
         </div>
+        <div className="text-center">
+          <div className="text-xl font-bold text-blue-600">{overridden}</div>
+          <div className="text-sm text-gray-600">Overridden</div>
+        </div>
       </div>
 
       {/* Drilldown Table */}
@@ -194,6 +216,10 @@ if (Array.isArray(data)) {
             <th className="px-3 py-2">Patient</th>
             <th className="px-3 py-2">Status</th>
             <th className="px-3 py-2">Reason</th>
+            <th className="px-3 py-2">Override Count</th>
+            <th className="px-3 py-2">Override At</th>
+            <th className="px-3 py-2">Override Reason</th>
+    
           </tr>
         </thead>
         <tbody>
@@ -204,11 +230,21 @@ if (Array.isArray(data)) {
                 <td className="px-3 py-2">{item.patient_name}</td>
                 <td className="px-3 py-2 text-center">{item.status}</td>
                 <td className="px-3 py-2">{item.reason || "—"}</td>
+                 <td className="px-3 py-2 text-center">
+                  {item.override_count ?? 0}
+                </td>
+             
+                <td className="px-3 py-2">
+                  {item.last_override_at
+                    ? new Date(item.last_override_at).toLocaleString()
+                    : "—"}
+                </td>
+                  <td className="px-3 py-2">{item.override_reason || "—"}</td>
               </tr>
             ))
           ) : (
             <tr>
-              <td colSpan={4} className="text-center py-4 text-gray-500">
+              <td colSpan={7} className="text-center py-4 text-gray-500">
                 No missed or delayed tasks.
               </td>
             </tr>

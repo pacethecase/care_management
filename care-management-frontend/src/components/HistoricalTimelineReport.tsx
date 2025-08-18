@@ -8,7 +8,11 @@ interface TaskEntry {
   contact_info:string;
     delayed?: boolean;
   delayed_reason?: string;
-
+   overrides?: {
+    staff_id?: number | null;
+    reason?: string | null;
+    timestamp: string;
+   }[];
 }
 
 interface WeeklyTimeline {
@@ -69,6 +73,20 @@ const HistoricalTimelineReport: React.FC<HistoricalTimelineReportProps> = ({ rep
                     <strong>Contact:</strong> {task.contact_info}
                   </p>
                 )}
+                {task.overrides && task.overrides.length > 0 && (
+                  <div className="ml-4 mt-2">
+                    <p className="text-sm font-semibold text-[var(--prussian-blue)]">Overrides:</p>
+                    <ul className="list-disc list-inside text-xs space-y-1">
+                      {task.overrides.map((ov, idx) => (
+                        <li key={idx} className="text-[var(--prussian-blue)]">
+                          {ov.timestamp} 
+                          {ov.reason && <span> – {ov.reason}</span>}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
               </li>
             ))}
           </ul>

@@ -376,6 +376,26 @@ if (!req.user?.is_approved) {
           );
           delayed_reason = lastMissed?.reason || null;
         }
+      const overrides = (
+  Array.isArray(row.status_history)
+    ? row.status_history
+    : row.status_history
+    ? JSON.parse(row.status_history)
+    : []
+)
+  .filter((h) => h.status === "Overridden")
+  .map((h) => ({
+    staff_id: h.staff_id || null,
+    reason: h.reason || null,
+    timestamp: h.timestamp
+      ? DateTime.fromJSDate(new Date(h.timestamp)) 
+          .setZone(timezone)                     
+          .toFormat("MM.dd.yy HH:mm a")
+      : null,
+  }));
+
+
+
 
         weeksMap[weekKey].push({
           task_name: row.task_name,
@@ -384,7 +404,8 @@ if (!req.user?.is_approved) {
           contact_info: row.contact_info,
           include_note_in_report: row.include_note_in_report,
           delayed: isDelayed,
-          delayed_reason
+          delayed_reason,
+          overrides
         });
       });
 
@@ -821,11 +842,12 @@ const getStaffPerformanceReport = async (req, res) => {
     if (staffId && taskName) {
   const summaryQuery = `
     SELECT
-      COUNT(*) AS total_tasks,
-      COUNT(*) FILTER (WHERE pt.status = 'Missed') AS missed_count,
-      COUNT(*) FILTER (
-        WHERE pt.status IN ('Completed', 'Delayed Completed') AND pt.completed_at > pt.ideal_due_date
-      ) AS delayed_count
+      COUNT(DISTINCT pt.id) AS total_tasks,
+      COUNT(DISTINCT pt.id) FILTER (WHERE pt.status = 'Missed') AS missed_count,
+      COUNT(DISTINCT pt.id) FILTER (
+        WHERE pt.status = 'Delayed Completed')
+      AS delayed_count,
+   COUNT(DISTINCT pt.id) FILTER (WHERE COALESCE(pt.override_count, 0) > 0) AS overridden_count
     FROM patient_tasks pt
     JOIN tasks t ON pt.task_id = t.id
     JOIN patients p ON pt.patient_id = p.id
@@ -843,24 +865,53 @@ const getStaffPerformanceReport = async (req, res) => {
       t.name AS task_name,
       p.last_name || ', ' || p.first_name AS patient_name,
       pt.status,
+      COALESCE(pt.override_count,0) AS override_count,
+
       (
         SELECT sh.reason
-        FROM jsonb_to_recordset(pt.status_history) AS sh(status TEXT, changed_at TIMESTAMPTZ, reason TEXT)
+        FROM jsonb_to_recordset(pt.status_history)
+             AS sh(status TEXT, "timestamp" TIMESTAMPTZ, reason TEXT)
         WHERE sh.status = 'Missed'
-        ORDER BY changed_at DESC
+        ORDER BY sh."timestamp" DESC
         LIMIT 1
-      ) AS reason
+      ) AS reason,
+
+      (
+        SELECT sh.reason
+        FROM jsonb_to_recordset(pt.status_history)
+             AS sh(status TEXT, "timestamp" TIMESTAMPTZ, reason TEXT)
+        WHERE sh.status IN ('Override','Overridden','Override Applied')
+              AND NULLIF(TRIM(sh.reason),'') IS NOT NULL
+        ORDER BY sh."timestamp" DESC
+        LIMIT 1
+      ) AS override_reason,
+
+      (
+        SELECT sh."timestamp"
+        FROM jsonb_to_recordset(pt.status_history)
+             AS sh(status TEXT, "timestamp" TIMESTAMPTZ, reason TEXT)
+        WHERE sh.status IN ('Override','Overridden','Override Applied')
+        ORDER BY sh."timestamp" DESC
+        LIMIT 1
+      ) AS last_override_at
+
     FROM patient_tasks pt
     JOIN tasks t ON pt.task_id = t.id
     JOIN patients p ON pt.patient_id = p.id
     JOIN patient_staff ps ON p.id = ps.patient_id
-    WHERE ps.staff_id = $1
-      AND t.name = $2
-      AND p.hospital_id = $3
-      AND pt.due_date BETWEEN $4 AND $5
-      AND pt.is_visible = TRUE
-      ${dischargeFilter}
-      AND (pt.status = 'Missed' OR pt.status = 'Delayed Completed')
+   WHERE ps.staff_id = $1
+  AND t.name = $2
+  AND p.hospital_id = $3
+  AND pt.due_date BETWEEN $4 AND $5
+  AND pt.is_visible = TRUE
+  ${dischargeFilter}
+  AND (
+    pt.status IN ('Missed','Delayed Completed')
+    OR (pt.status = 'Pending' AND COALESCE(pt.override_count,0) > 0)
+    OR (pt.status = 'Completed' AND COALESCE(pt.override_count,0) > 0)
+  )
+
+    
     ORDER BY patient_name
   `;
 
@@ -887,73 +938,106 @@ const getStaffPerformanceReport = async (req, res) => {
   });
 }
 
-  else if (taskName) {
+else if (taskName) {
   // 🔹 Task-specific view
   const taskQuery = `
-  SELECT
-    t.name AS task_name,
-    COUNT(DISTINCT pt.id)  AS total_tasks,
-    COUNT(DISTINCT pt.id)  FILTER (WHERE pt.status = 'Missed') AS missed_count,
-    COUNT(DISTINCT pt.id)   FILTER (
-      WHERE pt.status IN ('Completed', 'Delayed Completed') AND pt.completed_at > pt.ideal_due_date
-    ) AS delayed_count,
-    JSON_AGG(DISTINCT u.name) FILTER (
-      WHERE pt.status = 'Missed'
-    ) AS responsible_staff
-  FROM patient_tasks pt
-  JOIN tasks t ON pt.task_id = t.id
-  JOIN patients p ON pt.patient_id = p.id
-  JOIN patient_staff ps ON p.id = ps.patient_id
-  JOIN users u ON ps.staff_id = u.id
-  WHERE p.hospital_id = $1
-    AND pt.due_date BETWEEN $2 AND $3
-    ${dischargeFilter}
-    AND pt.is_visible = TRUE
-    AND t.name = $4
-  GROUP BY t.name
-`;
+    SELECT
+      t.name AS task_name,
+      COUNT(DISTINCT pt.id) AS total_tasks,
+      COUNT(DISTINCT pt.id) FILTER (WHERE pt.status = 'Missed') AS missed_count,
+      COUNT(DISTINCT pt.id) FILTER (WHERE pt.status = 'Delayed Completed') AS delayed_count,
+      COUNT(DISTINCT pt.id) FILTER (WHERE COALESCE(pt.override_count, 0) > 0) AS overridden_count,
+      JSON_AGG(DISTINCT u.name) FILTER (WHERE pt.status = 'Missed') AS responsible_staff
+    FROM patient_tasks pt
+    JOIN tasks t ON pt.task_id = t.id
+    JOIN patients p ON pt.patient_id = p.id
+    JOIN patient_staff ps ON p.id = ps.patient_id
+    JOIN users u ON ps.staff_id = u.id
+    WHERE p.hospital_id = $1
+      AND pt.due_date BETWEEN $2 AND $3
+      ${dischargeFilter}
+      AND pt.is_visible = TRUE
+      AND t.name = $4
+    GROUP BY t.name
+  `;
 
-  const taskResult = await pool.query(taskQuery, [hospitalId, startDate, endDate, taskName]);
-const detailQuery = `
-  SELECT
-    t.name AS task_name,
-    p.last_name || ', ' || p.first_name AS patient_name,
-    ARRAY_AGG(DISTINCT u.name) AS staff_names,
-    pt.ideal_due_date,
-    pt.status,
-    sh.reason
-  FROM patient_tasks pt
-  JOIN tasks t ON pt.task_id = t.id
-  JOIN patients p ON pt.patient_id = p.id
-  LEFT JOIN patient_staff ps ON p.id = ps.patient_id
-  LEFT JOIN users u ON ps.staff_id = u.id
-  LEFT JOIN LATERAL (
-    SELECT reason
-    FROM jsonb_to_recordset(pt.status_history) AS sh(status TEXT, changed_at TIMESTAMPTZ, reason TEXT)
-    WHERE status = 'Missed'
-    ORDER BY changed_at DESC
-    LIMIT 1
-  ) sh ON TRUE
-  WHERE pt.is_visible = TRUE
-    AND (pt.status = 'Missed' OR pt.status = 'Delayed Completed')
-    AND t.name = $1
-    AND pt.due_date BETWEEN $2 AND $3
-    AND p.hospital_id = $4
-    ${dischargeFilter}
-  GROUP BY p.id, t.name, pt.ideal_due_date, pt.status, sh.reason
-  ORDER BY pt.ideal_due_date ASC
-`;
+  const taskResult = await pool.query(taskQuery, [
+    hospitalId,
+    startDate,
+    endDate,
+    taskName,
+  ]);
+
+  const detailQuery = `
+    SELECT
+      t.name AS task_name,
+      p.last_name || ', ' || p.first_name AS patient_name,
+      ARRAY_AGG(DISTINCT u.name) AS staff_names,
+      pt.ideal_due_date,
+      pt.status,
+      COALESCE(pt.override_count, 0) AS override_count,
+      mr.reason AS missed_reason,
+      orr.reason AS override_reason,
+      orr.last_override_at
+    FROM patient_tasks pt
+    JOIN tasks t ON pt.task_id = t.id
+    JOIN patients p ON pt.patient_id = p.id
+    LEFT JOIN patient_staff ps ON p.id = ps.patient_id
+    LEFT JOIN users u ON ps.staff_id = u.id
+
+    -- Last missed reason
+    LEFT JOIN LATERAL (
+      SELECT sh.reason
+      FROM jsonb_to_recordset(pt.status_history)
+           AS sh(status TEXT, changed_at TIMESTAMPTZ, reason TEXT)
+      WHERE sh.status = 'Missed'
+      ORDER BY changed_at DESC
+      LIMIT 1
+    ) mr ON TRUE
 
 
-const detailResult = await pool.query(detailQuery, [taskName, startDate, endDate, hospitalId]);
+    LEFT JOIN LATERAL (
+      SELECT sh.reason, sh."timestamp" AS last_override_at
+      FROM jsonb_to_recordset(pt.status_history)
+       AS sh(status TEXT, "timestamp" TIMESTAMPTZ, reason TEXT)
 
-return res.json({
-  type: 'task',
-  data: taskResult.rows,
-  drilldown: detailResult.rows,
-});
+      WHERE sh.status IN ('Override','Overridden','Override Applied')
+            AND NULLIF(TRIM(sh.reason), '') IS NOT NULL
+      ORDER BY sh."timestamp" DESC
+      LIMIT 1
+    ) orr ON TRUE
 
-   }
+    WHERE pt.is_visible = TRUE
+      AND (
+        pt.status IN ('Missed','Delayed Completed')
+        OR (pt.status = 'Pending' AND COALESCE(pt.override_count,0) > 0)
+        OR (pt.status = 'Completed' AND COALESCE(pt.override_count,0) > 0)
+      )
+      AND t.name = $1
+      AND pt.due_date BETWEEN $2 AND $3
+      AND p.hospital_id = $4
+      ${dischargeFilter}
+
+    GROUP BY
+      p.id, t.name, pt.ideal_due_date, pt.status,
+      pt.override_count, mr.reason, orr.reason, orr.last_override_at
+    ORDER BY p.last_name ASC, p.first_name ASC
+  `;
+
+  const detailResult = await pool.query(detailQuery, [
+    taskName,
+    startDate,
+    endDate,
+    hospitalId,
+  ]);
+
+  return res.json({
+    type: 'task',
+    data: taskResult.rows,       
+    drilldown: detailResult.rows 
+  });
+}
+
   else if (staffId) {
   // 🔹 Summary for staff
   const summaryQuery = `
@@ -961,8 +1045,9 @@ return res.json({
       COUNT(*) AS total_tasks,
       COUNT(*) FILTER (WHERE pt.status = 'Missed') AS missed_count,
       COUNT(*) FILTER (
-        WHERE pt.status IN ('Completed', 'Delayed Completed') AND pt.completed_at > pt.ideal_due_date
-      ) AS delayed_count
+        WHERE pt.status = 'Delayed Completed'
+      ) AS delayed_count,
+    COUNT(*) FILTER (WHERE COALESCE(pt.override_count, 0) > 0) AS overridden_count
     FROM patient_tasks pt
     JOIN patients p ON pt.patient_id = p.id
     JOIN patient_staff ps ON p.id = ps.patient_id
@@ -977,14 +1062,38 @@ return res.json({
     SELECT
       t.name AS task_name,
       p.last_name || ', ' || p.first_name AS patient_name,
-      pt.status,
-      (
-        SELECT sh.reason
-        FROM jsonb_to_recordset(pt.status_history) AS sh(status TEXT, changed_at TIMESTAMPTZ, reason TEXT)
-        WHERE sh.status = 'Missed'
-        ORDER BY changed_at DESC
-        LIMIT 1
-      ) AS reason
+          pt.status,
+    COALESCE(pt.override_count, 0) AS override_count,
+
+
+    (
+      SELECT sh.reason
+      FROM jsonb_to_recordset(pt.status_history)
+          AS sh(status TEXT, "timestamp" TIMESTAMPTZ, reason TEXT)
+      WHERE sh.status = 'Missed'
+      ORDER BY sh."timestamp" DESC
+      LIMIT 1
+    ) AS reason,
+
+
+    (
+      SELECT sh.reason
+      FROM jsonb_to_recordset(pt.status_history)
+          AS sh(status TEXT, "timestamp" TIMESTAMPTZ, reason TEXT)
+      WHERE sh.status IN ('Override','Overridden','Override Applied')
+            AND NULLIF(TRIM(sh.reason), '') IS NOT NULL
+      ORDER BY sh."timestamp" DESC
+      LIMIT 1
+    ) AS override_reason,
+
+    (
+      SELECT sh."timestamp"
+      FROM jsonb_to_recordset(pt.status_history)
+          AS sh(status TEXT, "timestamp" TIMESTAMPTZ, reason TEXT)
+      WHERE sh.status IN ('Override','Overridden','Override Applied')
+      ORDER BY sh."timestamp" DESC
+      LIMIT 1
+    ) AS last_override_at
     FROM patient_tasks pt
     JOIN tasks t ON pt.task_id = t.id
     JOIN patients p ON pt.patient_id = p.id
@@ -994,7 +1103,11 @@ return res.json({
       AND pt.due_date BETWEEN $3 AND $4
       AND pt.is_visible = TRUE
       ${dischargeFilter}
-      AND (pt.status = 'Missed' OR pt.status = 'Delayed Completed')
+    AND (pt.status IN ('Missed','Delayed Completed')
+    OR (pt.status = 'Pending' AND COALESCE(pt.override_count,0) > 0)
+    OR (pt.status = 'Completed' AND COALESCE(pt.override_count,0) > 0)
+)
+
     ORDER BY t.name, patient_name
   `;
 
@@ -1059,11 +1172,27 @@ const topLaggingStaffQuery = `
         p.admitted_date,
         p.created_at,
         ARRAY_AGG(DISTINCT u.name) AS staff,
-        COUNT(*) AS total_tasks,
-        COUNT(*) FILTER (WHERE pt.status = 'Missed') AS missed,
-        COUNT(*) FILTER (WHERE pt.status = 'Pending') AS pending,
-        COUNT(*) FILTER (WHERE pt.status = 'Completed' AND pt.completed_at <= pt.ideal_due_date) AS completed_on_time,
-        COUNT(*) FILTER (WHERE pt.status IN ('Completed', 'Delayed Completed') AND pt.completed_at > pt.ideal_due_date) AS delayed_completed
+   COUNT(DISTINCT pt.id) AS total_tasks,
+
+      COUNT(DISTINCT pt.id) FILTER (
+        WHERE pt.status = 'Missed'
+      ) AS missed,
+
+      COUNT(DISTINCT pt.id) FILTER (
+        WHERE pt.status = 'Pending'
+      ) AS pending,
+
+      COUNT(DISTINCT pt.id) FILTER (
+        WHERE pt.status = 'Completed' 
+      ) AS completed_on_time,
+
+      COUNT(DISTINCT pt.id) FILTER (
+        WHERE (pt.status = 'Delayed Completed')
+      ) AS delayed_completed,
+
+     COUNT(DISTINCT pt.id) FILTER (WHERE COALESCE(pt.override_count, 0) > 0) AS overridden,
+
+   COUNT(DISTINCT pt.id) FILTER (WHERE t.is_manual = TRUE) AS manual
       FROM patient_tasks pt
       JOIN patients p ON pt.patient_id = p.id
       JOIN tasks t ON pt.task_id = t.id
@@ -1074,7 +1203,7 @@ const topLaggingStaffQuery = `
         AND pt.is_visible = TRUE
         ${dischargeFilter}
     GROUP BY p.id, p.first_name, p.last_name, p.admitted_date, p.created_at
-      ORDER BY missed DESC NULLS LAST
+     ORDER BY p.last_name ASC, p.first_name ASC;
     `;
 
     const result = await pool.query(patientQuery, [hospitalId, startDate, endDate]);

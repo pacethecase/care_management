@@ -18,7 +18,8 @@ export interface StaffPerformanceSummary {
   missed_count: number;
   delayed_count: number;
   pending_count?: number;
-  completed_on_time_count?: number;
+  overridden_count?: number;
+  completed_on_time_count?:   number;
   average_delay_days?: number;
 }
 interface StaffPerformanceData {
