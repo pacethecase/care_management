@@ -30,14 +30,7 @@ const getDailyReport = async (req, res) => {
         pt.status,
         pt.due_date,
         json_agg(u.name) FILTER (WHERE u.id IS NOT NULL) AS staff_names,
-        u_added.name AS added_by,
-        (
-          SELECT sh.value ->> 'reason' 
-          FROM jsonb_array_elements(pt.status_history) AS sh
-          WHERE sh.value ->> 'status' = 'Missed'
-          ORDER BY (sh.value ->> 'timestamp')::timestamp DESC
-          LIMIT 1
-        ) AS missed_reason
+        u_added.name AS added_by
       FROM patient_tasks pt
       JOIN patients p ON pt.patient_id = p.id
       JOIN tasks t ON pt.task_id = t.id

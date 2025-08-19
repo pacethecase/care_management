@@ -7,7 +7,7 @@ import Footer from "../components/Footer";
 import { Link } from "react-router-dom";
 import LOSDashboardChart from "../components/LOSDashboardChart";
 import { FaPrint } from "react-icons/fa";
-import logo from "../assets/logo.png";
+
 import BlueLoader from "../components/BlueLoader";
 const LengthOfStayReport = () => {
   const dispatch = useDispatch<AppDispatch>();
@@ -99,7 +99,7 @@ const [algorithm, setAlgorithm] = useState("");
             ${printStyles}
           </head>
           <body>
-            <img src="${logo}" alt="Logo" class="logo"/>
+             <img src="/logo.png" alt="Logo" class="logo"/>
             <h1>Length of Stay Dashboard</h1>
             <div style="text-align:right; font-size: 0.9rem; color: #555;">
               ${new Date().toLocaleDateString()}

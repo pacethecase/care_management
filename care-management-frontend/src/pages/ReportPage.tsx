@@ -10,7 +10,6 @@ import { fetchAdmins } from "../redux/slices/userSlice";
 
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
-import logo from "../assets/logo.png";
 import { RootState } from "../redux/store";
 import {
   fetchDailyReport,
@@ -245,7 +244,8 @@ const [selectedAdminId, setSelectedAdminId] = useState<number | ''>('');
           </head>
           <body>
             <div id="report-header" class="only-print">
-              <img src="${logo}" alt="Pace The Case Logo" class="logo"/>
+              <img src="/logo.png" alt="Pace The Case Logo" class="logo" />
+
               <h1>${reportTitle}</h1>
               <div class="date">${selectedDate}</div>
             </div>

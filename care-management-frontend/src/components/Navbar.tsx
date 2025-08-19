@@ -3,7 +3,6 @@ import { FiUser, FiBell } from 'react-icons/fi';
 import { Link, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { logoutAndClearAll } from '../redux/actions/logoutAndClearAll';
-import logo from '../assets/logo.png';
 import NotificationPanel from './NotificationPanel';
 import type { AppDispatch } from '../redux/store';
 import { RootState } from "../redux/store";
@@ -34,7 +33,7 @@ console.log(user);
     <header className="shadow-sm">
       {/* Top Logo Strip */}
       <div className="bg-white py-3 px-6 flex items-center justify-between">
-        <img src={logo} alt="Pace The Case Logo" loading="lazy" className="h-30 w-auto" />
+        <img src="/logo.png" alt="Pace The Case Logo" loading="lazy" className="h-30 w-auto" />
       </div>
 
       {/* Navbar */}

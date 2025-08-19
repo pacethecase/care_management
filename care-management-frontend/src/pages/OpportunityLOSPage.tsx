@@ -7,7 +7,7 @@ import { AppDispatch, RootState } from "../redux/store";
 import { fetchOpportunityDaysReport } from "../redux/slices/reportSlice";
 import { Link } from "react-router-dom";
 import { FaPrint } from "react-icons/fa";
-import logo from "../assets/logo.png";
+
 import BlueLoader from "../components/BlueLoader";
 const OpportunityLOSPage = () => {
   const dispatch = useDispatch<AppDispatch>();
@@ -108,7 +108,7 @@ const OpportunityLOSPage = () => {
         ${printStyles}
       </head>
       <body>
-        <img src="${logo}" alt="Logo" class="logo"/>
+         <img src="/logo.png" alt="Logo" class="logo"/>
         <h1>Opportunity Length of Stay Summary</h1>
         <div style="text-align:right; font-size: 0.9rem; color: #555;">
           ${new Date().toLocaleDateString()}

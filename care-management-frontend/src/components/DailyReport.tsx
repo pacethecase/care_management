@@ -40,7 +40,6 @@ const DailyReport: React.FC<Props> = ({ date,adminId }) => {
               <tr className="bg-prussian-blue text-white">
                 <th className="p-3 text-left">Patient Name</th>
                 <th className="p-3 text-left">Task Name</th>
-                <th className="p-3 text-left">Missed Reason</th>
                 <th className="p-3 text-left">Due Date</th>
                 <th className="p-3 text-left">Staff</th>
                   <th className="p-3 text-left">Leader</th>
@@ -51,7 +50,6 @@ const DailyReport: React.FC<Props> = ({ date,adminId }) => {
                 <tr key={`${task.patient_id}-${task.task_name}`} className="border-b">
                   <td className="p-3">{task.patient_name}</td>
                   <td className="p-3">{task.task_name}</td>
-                  <td className="p-3">{task.missed_reason || 'N/A'}</td>
                   <td className="p-3">
                       {task.due_date
                         ? new Date(task.due_date).toLocaleString(undefined, {
