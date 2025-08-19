@@ -13,7 +13,7 @@ import {
 import CreateTaskModal from "../components/CreateTaskModal";
 import BlueLoader from "./BlueLoader";
 import { fetchPatientById,updateCourtDate } from "../redux/slices/patientSlice";
-import { fetchPatientNotes, addPatientNote } from "../redux/slices/noteSlice";
+import { fetchPatientNotes, addPatientNote ,updatePatientNote,deletePatientNote} from "../redux/slices/noteSlice";
 import { updateTaskNoteMeta } from "../redux/slices/taskSlice";
 import { overrideTask } from "../redux/slices/taskSlice";
 import { RootState } from "../redux/store";
@@ -23,6 +23,7 @@ import {
   ArrowLeft,
   Plus,
   Pencil,
+  Trash2
 } from "lucide-react";
 import { toast } from "react-toastify";
 import { useNavigate } from 'react-router-dom';
@@ -56,6 +57,8 @@ const [activeTab, setActiveTab] = useState<"Tasks" | "Notes">("Tasks");
 
 
   const { notes } = useSelector((state: RootState) => state.notes);
+  const [editNoteId, setEditNoteId] = useState<number | null>(null);
+const [editText, setEditText] = useState("");
   const { user } = useSelector((state: RootState) => state.user);
   const { taskError } = useSelector((state: RootState) => state.tasks);
 
@@ -101,12 +104,12 @@ const [activeTab, setActiveTab] = useState<"Tasks" | "Notes">("Tasks");
         const handleStart = async (taskId: number) => {
           try {
             await dispatch(startTask(taskId)).unwrap();
-            toast.success("✅ Task started");
+            toast.success("Task started");
           } catch (err: any) {
             const message =
               typeof err === "string"
                 ? err
-                : err?.response?.data?.error || "❌ Failed to start task";
+                : err?.response?.data?.error || "Failed to start task";
             toast.error("❌ " + message);
           } finally {
             dispatch(loadPatientTasks(Number(patientId)));
@@ -729,30 +732,100 @@ const renderTaskColumns = () => {
   );
 };
 
-  const renderNotes = () => (
-    <div className="bg-white p-6 text-black mb-10 rounded-lg shadow  space-y-4">
-      <textarea
-        className="w-full border rounded p-3 text-sm"
-        placeholder="Write a note..."
-        value={newNote}
-        onChange={(e) => setNewNote(e.target.value)}
-      />
-      <button className="btn" onClick={addNote}>
-        <Plus className="inline w-4 h-4 mr-1" /> Add Note
-      </button>
-      <div className="mt-4 space-y-3">
-      {notes.map((note: Note) => (
-          <div key={note.id} className="pb-2">
-            <p>{note.note_text}</p>
-            <span className="text-xs">
-              {new Date(note.created_at).toLocaleString()}
-               {note.nurse_name && ` • by ${note.nurse_name}`}
-            </span>
+
+const renderNotes = () => (
+  <div className="bg-white p-6 text-black mb-10 rounded-lg shadow space-y-4">
+    {/* Add Note */}
+    <textarea
+      className="w-full border rounded p-3 text-sm"
+      placeholder="Write a note..."
+      value={newNote}
+      onChange={(e) => setNewNote(e.target.value)}
+    />
+    <button className="btn" onClick={addNote}>
+      <Plus className="inline w-4 h-4 mr-1" /> Add Note
+    </button>
+
+    {/* List Notes */}
+  <div className="mt-4 space-y-3">
+  {notes.map((note: Note) => (
+    <div
+      key={note.id}
+      className="p-3 border rounded-md bg-gray-50 shadow-sm"
+    >
+      {/* If editing this note */}
+      {editNoteId === note.id ? (
+        <div className="space-y-2">
+          <textarea
+            className="w-full border rounded p-2 text-sm"
+            value={editText}
+            onChange={(e) => setEditText(e.target.value)}
+          />
+          <div className="flex gap-2">
+            <button
+              className="btn"
+              onClick={() =>
+                dispatch(updatePatientNote({ noteId: note.id, note_text: editText }))
+                  .unwrap()
+                  .then(() => {
+                    setEditNoteId(null);
+                    toast.success("✅ Note updated successfully");
+                  })
+                  .catch(() => toast.error("❌ Failed to update note"))
+              }
+            >
+              Save
+            </button>
+            <button
+              className="btn bg-gray-200 text-black"
+              onClick={() => setEditNoteId(null)}
+            >
+              Cancel
+            </button>
           </div>
-        ))}
-      </div>
+        </div>
+      ) : (
+        <>
+          <p className="text-sm">{note.note_text}</p>
+          <div className="flex items-center justify-between text-xs mt-1">
+            <span>
+              {new Date(note.created_at).toLocaleString()}
+              {note.nurse_name && ` • by ${note.nurse_name}`}
+            </span>
+            <div className="flex gap-2">
+              <button
+                className="var(--prussian-blue) hover:text-blue-800"
+                onClick={() => {
+                  setEditNoteId(note.id);
+                  setEditText(note.note_text);
+                }}
+                title="Edit note"
+              >
+                <Pencil size={16} />
+              </button>
+              <button
+                className="var(--prussian-blue) hover:text-blue-800"
+                onClick={() =>
+                  dispatch(deletePatientNote({ noteId: note.id }))
+                    .unwrap()
+                    .then(() => toast.success("Note deleted"))
+                    .catch(() => toast.error("Failed to delete note"))
+                }
+                title="Delete note"
+              >
+                <Trash2 size={16} />
+              </button>
+            </div>
+          </div>
+        </>
+      )}
     </div>
-  );
+  ))}
+</div>
+
+  </div>
+);
+
 
 if (patientLoading || taskLoading || !patient) {
   return <BlueLoader />;

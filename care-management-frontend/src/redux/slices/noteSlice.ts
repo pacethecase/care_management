@@ -60,7 +60,6 @@ export const addPatientNote = createAsyncThunk<
   }
 );
 
-// ✅ Update Existing Note
 export const updatePatientNote = createAsyncThunk<
   Note,
   { noteId: number; note_text: string },
@@ -70,7 +69,7 @@ export const updatePatientNote = createAsyncThunk<
   async ({ noteId, note_text }, { rejectWithValue }) => {
     try {
       const res = await axios.put(
-        `${BASE_URL}/notes/${noteId}`,
+        `${BASE_URL}/notes/update/${noteId}`,
         { note_text },
         { withCredentials: true }
       );
@@ -81,7 +80,17 @@ export const updatePatientNote = createAsyncThunk<
   }
 );
 
-// ✅ Slice
+export const deletePatientNote = createAsyncThunk(
+  "notes/deletePatientNote",
+  async ({ noteId }: { noteId: number }, { rejectWithValue }) => {
+    try {
+      await axios.delete(`${BASE_URL}/notes/${noteId}`, { withCredentials: true });
+      return { noteId };
+    } catch (err: any) {
+      return rejectWithValue(err?.response?.data ?? { error: "Delete failed" });
+    }
+  }
+);
 const noteSlice = createSlice({
   name: "notes",
   initialState,
@@ -131,6 +140,22 @@ const noteSlice = createSlice({
         state.error = typeof action.payload === "string"
           ? action.payload
           : "Failed to update note";
+      })
+       .addCase(deletePatientNote.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(deletePatientNote.fulfilled, (state, action) => {
+        state.loading = false;
+        const { noteId } = action.payload;
+        state.notes = state.notes.filter((n) => n.id !== noteId);
+      })
+      .addCase(deletePatientNote.rejected, (state, action: any) => {
+        state.loading = false;
+        state.error =
+          typeof action.payload === "string"
+            ? action.payload
+            : action.payload?.error || "Failed to delete note";
       });
 
   },

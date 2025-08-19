@@ -1,6 +1,6 @@
 const pool = require("../models/db");
 
-// ✅ Get Notes for a Patient
+
 const getPatientNotes = async (req, res) => {
   try {
     const { patientId } = req.params;
@@ -36,7 +36,7 @@ const getPatientNotes = async (req, res) => {
 };
 
 
-// ✅ Add Note
+
 const addPatientNote = async (req, res) => {
   try {
     const { patientId } = req.params;
@@ -88,21 +88,21 @@ const newNote = newNoteRes.rows[0];
 };
 
 
-// ✅ Edit Note (Optional)
 const updatePatientNote = async (req, res) => {
   try {
     const { noteId } = req.params;
     const { note_text } = req.body;
-    const { hospital_id,is_approved } = req.user;
-      if (!is_approved) {
-            return res.status(403).json({ error: "Access denied. User not approved." });
-          }
+    const { hospital_id, is_approved, id: userId } = req.user;
 
-    if (!note_text.trim()) {
+    if (!is_approved) {
+      return res.status(403).json({ error: "Access denied. User not approved." });
+    }
+
+    if (!note_text?.trim()) {
       return res.status(400).json({ error: "Note cannot be empty" });
     }
 
-    // Ensure note belongs to a patient in the same hospital
+    // Ensure note belongs to the same hospital
     const noteCheck = await pool.query(
       `SELECT 1
        FROM notes n
@@ -115,18 +115,83 @@ const updatePatientNote = async (req, res) => {
       return res.status(403).json({ error: "Unauthorized to edit this note" });
     }
 
-    const updatedNote = await pool.query(
+    const updatedNoteRes = await pool.query(
       `UPDATE notes 
-       SET note_text = $1, created_at = NOW() 
-       WHERE id = $2 RETURNING *`,
-      [note_text, noteId]
+       SET note_text = $1, staff_id = $3
+       WHERE id = $2
+       RETURNING id, patient_id, staff_id, note_text, created_at`,
+      [note_text, noteId, userId]
     );
 
-    res.status(200).json(updatedNote.rows[0]);
+    const updatedNote = updatedNoteRes.rows[0];
+
+    // Fetch staff name for response
+    const nurseRes = await pool.query(`SELECT name FROM users WHERE id = $1`, [
+      updatedNote.staff_id,
+    ]);
+    const nurse_name = nurseRes.rows[0]?.name || null;
+
+    res.status(200).json({
+      ...updatedNote,
+      nurse_name,
+    });
   } catch (err) {
     console.error("❌ Error updating note:", err);
     res.status(500).json({ error: "Internal Server Error" });
   }
 };
 
-module.exports = { getPatientNotes, addPatientNote, updatePatientNote };
+
+
+const deletePatientNote = async (req, res) => {
+  try {
+    const { noteId } = req.params;
+    const {
+      hospital_id,
+      is_approved,
+      id: userId,
+      has_global_access,
+      role,
+    } = req.user;
+
+    if (!is_approved) {
+      return res.status(403).json({ error: "Access denied. User not approved." });
+    }
+
+    const noteRes = await pool.query(
+      `
+      SELECT n.id, n.staff_id, n.patient_id, p.hospital_id AS patient_hospital_id
+      FROM notes n
+      JOIN patients p ON p.id = n.patient_id
+      WHERE n.id = $1
+      `,
+      [noteId]
+    );
+
+    if (noteRes.rowCount === 0) {
+      return res.status(404).json({ error: "Note not found" });
+    }
+
+    const note = noteRes.rows[0];
+
+    if (note.patient_hospital_id !== hospital_id) {
+      return res.status(403).json({ error: "Unauthorized to delete this note" });
+    }
+
+    const isAuthor = note.staff_id === userId;
+    const isAdmin = role === "admin";
+    if (!isAuthor && !has_global_access && !isAdmin) {
+      return res.status(403).json({ error: "Only the author or admin can delete this note" });
+    }
+
+
+    await pool.query(`DELETE FROM notes WHERE id = $1`, [noteId]);
+
+    return res.status(200).json({ success: true, deletedId: Number(noteId) });
+  } catch (err) {
+    console.error("❌ Error deleting note:", err);
+    return res.status(500).json({ error: "Internal Server Error" });
+  }
+};
+
+module.exports = { getPatientNotes, addPatientNote, updatePatientNote ,deletePatientNote};
