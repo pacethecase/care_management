@@ -320,9 +320,9 @@ if (
     ideal_due_date = idealLocal.toUTC().toJSDate();
   
   await client.query(
-    `INSERT INTO patient_tasks (patient_id, task_id, status, due_date)
-     VALUES ($1, $2, 'Pending', $3)`,
-    [task.patient_id, taskDetails.id, nextDue]
+    `INSERT INTO patient_tasks (patient_id, task_id, status, due_date,ideal_due_date)
+     VALUES ($1, $2, 'Pending', $3,$4)`,
+    [task.patient_id, taskDetails.id, nextDue,ideal_due_date]
   );
 
   console.log(

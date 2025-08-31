@@ -13,6 +13,7 @@ type TransitionalCareReportProps = {
         task_name: string;
         completed_at: string;
         contact_info:string;
+        task_note: string | null;  
       }[];
     }[];
   } | null;
@@ -51,6 +52,7 @@ const TransitionalCareReport = ({ report }: TransitionalCareReportProps) => {
             <th className="p-3 text-left">Task Name</th>
             <th className="p-3 text-left">Completed Date</th>
             <th className="p-3 text-left">Contact Info</th>
+            <th className="p-3 text-left">Task Note</th>
           </tr>
         </thead>
         <tbody>
@@ -60,6 +62,7 @@ const TransitionalCareReport = ({ report }: TransitionalCareReportProps) => {
               <td className="p-3">{task.task_name}</td>
               <td className="p-3">{task.completed_at || 'N/A'}</td>
               <td className="p-3">{task.contact_info || '—'}</td>
+              <td className="p-3">{task.task_note || '—'}</td>
             </tr>
           ))}
         </tbody>

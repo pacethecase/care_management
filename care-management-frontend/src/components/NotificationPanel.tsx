@@ -90,36 +90,48 @@ const NotificationPanel = () => {
                   </span>
                 ))}
               </div>
-{n.type === "override_request" && patientTaskId && n.request_status === "Pending" && (
-  <div className="flex gap-2 mt-2">
-    <button
-      className="btn btn-xs bg-green-600 text-white hover:bg-green-700"
-      onClick={async () => {
-        await dispatch(decideOverride({ patientTaskId, decision: "Approved" }));
-        toast.success("✅ Override approved");
-        dispatch(fetchNotifications());
-        if ((n as any).patient_id) {
-          await dispatch(loadPatientTasks(Number((n as any).patient_id)));
-        }
-      }}
-    >
-      Approve
-    </button>
-    <button
-      className="btn btn-xs bg-red-600 text-white hover:bg-red-700"
-      onClick={async () => {
-        await dispatch(decideOverride({ patientTaskId, decision: "Denied" }));
-        toast.info("🛑 Override denied");
-        await dispatch(fetchNotifications());
-        if ((n as any).patient_id) {
-          await dispatch(loadPatientTasks(Number((n as any).patient_id)));
-        }
-      }}
-    >
-      Deny
-    </button>
-  </div>
-)}
+                {n.type === "override_request" && patientTaskId && n.request_status === "Pending" && (
+                <div className="flex gap-2 mt-2">
+                  <button
+                    className="btn btn-xs bg-green-600 text-white hover:bg-green-700"
+                    onClick={async () => {
+                      try {
+                        await dispatch(decideOverride({ patientTaskId, decision: "Approved" })).unwrap();
+                        toast.success("✅ Override approved");
+                      } catch (e: any) {
+                        toast.error(e?.response?.data?.error || e?.message || "Failed to approve");
+                      } finally {
+                        await dispatch(fetchNotifications());
+                        if ((n as any).patient_id) {
+                          await dispatch(loadPatientTasks(Number((n as any).patient_id)));
+                        }
+                      }
+                    }}
+                  >
+                    Approve
+                  </button>
+
+                  <button
+                    className="btn btn-xs bg-red-600 text-white hover:bg-red-700"
+                    onClick={async () => {
+                      try {
+                        await dispatch(decideOverride({ patientTaskId, decision: "Denied" })).unwrap();
+                        toast.info("🛑 Override denied");
+                      } catch (e: any) {
+                        toast.error(e?.response?.data?.error || e?.message || "Failed to deny");
+                      } finally {
+                        await dispatch(fetchNotifications());
+                        if ((n as any).patient_id) {
+                          await dispatch(loadPatientTasks(Number((n as any).patient_id)));
+                        }
+                      }
+                    }}
+                  >
+                    Deny
+                  </button>
+                </div>
+              )}
+
 
     
 

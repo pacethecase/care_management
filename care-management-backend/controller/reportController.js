@@ -176,113 +176,118 @@ const getDailyReport = async (req, res) => {
 
 
   const getTransitionalCareReport = async (req, res) => {
-    const patientId = req.params.id;
-    const { hospital_id } = req.user;
-    const { start_date, end_date } = req.query;
-    const timezone = req.headers['x-timezone'] || 'America/New_York';
-    if (!req.user?.is_approved) {
-      return res.status(403).json({ error: "Access denied: user not approved" });
+  const client = await pool.connect();
+  const patientId = req.params.id;
+  const { hospital_id } = req.user;
+  const { start_date, end_date } = req.query;
+  const timezone = req.headers['x-timezone'] || 'America/New_York';
+
+  if (!req.user?.is_approved) {
+    return res.status(403).json({ error: "Access denied: user not approved" });
+  }
+
+  try {
+    // Get patient info
+    const patientQuery = await pool.query(
+      `
+      SELECT 
+        id, 
+        first_name || ' ' || last_name AS name,
+        mrn, 
+        birth_date,  
+        admitted_date,
+        CASE
+          WHEN is_behavioral THEN 'Behavioral'
+          WHEN is_guardianship THEN 'Guardianship'
+          WHEN is_ltc THEN 'LTC'
+          ELSE 'N/A'
+        END AS algorithm
+      FROM patients
+      WHERE id = $1 AND hospital_id = $2
+      `,
+      [patientId, hospital_id]
+    );
+
+    if (patientQuery.rowCount === 0) {
+      return res.status(404).json({ error: 'Patient not found' });
     }
 
-    try {
-      // Get patient info
-      const patientQuery = await pool.query(
-        `
-        SELECT 
-          id, 
-          first_name || ' ' || last_name AS name,
-          mrn, 
-          birth_date,  
-          admitted_date,
-          CASE
-            WHEN is_behavioral THEN 'Behavioral'
-            WHEN is_guardianship THEN 'Guardianship'
-            WHEN is_ltc THEN 'LTC'
-            ELSE 'N/A'
-          END AS algorithm
-        FROM patients
-        WHERE id = $1 AND hospital_id = $2
-        `,
-        [patientId, hospital_id]
-      );
+    const patient = patientQuery.rows[0];
 
-      if (patientQuery.rowCount === 0) {
-        return res.status(404).json({ error: 'Patient not found' });
-      }
+    // Build task query
+    let taskQueryText = `
+      SELECT 
+        t.name AS task_name,
+        pt.completed_at,
+        pt.status,
+        t.algorithm,
+        pt.contact_info,
+        pt.task_note
+      FROM patient_tasks pt
+      JOIN tasks t ON pt.task_id = t.id
+      WHERE pt.patient_id = $1 AND pt.status IN ('Completed', 'Delayed Completed','Acknowledged')
+    `;
 
-      const patient = patientQuery.rows[0];
+    const params = [patientId];
+    let paramIndex = 2;
 
-      // Build task query
-      let taskQueryText = `
-        SELECT 
-          t.name AS task_name,
-          pt.completed_at,
-            pt.status,
-          t.algorithm,
-          pt.contact_info
-        FROM patient_tasks pt
-        JOIN tasks t ON pt.task_id = t.id
-        WHERE pt.patient_id = $1 AND pt.status IN ('Completed', 'Delayed Completed','Acknowledged')
-      `;
-
-      const params = [patientId];
-      let paramIndex = 2;
-
-      if (start_date) {
-        const startUTC = DateTime.fromISO(start_date, { zone: timezone }).startOf('day').toUTC().toISO();
-        taskQueryText += ` AND pt.completed_at >= $${paramIndex++}`;
-        params.push(startUTC);
-      }
-
-      if (end_date) {
-        const endUTC = DateTime.fromISO(end_date, { zone: timezone }).endOf('day').toUTC().toISO();
-        taskQueryText += ` AND pt.completed_at <= $${paramIndex++}`;
-        params.push(endUTC);
-      }
-
-      taskQueryText += ` ORDER BY pt.completed_at DESC`;
-
-      const taskQuery = await pool.query(taskQueryText, params);
-
-      // Grouping logic
-      const grouped = {};
-
-      for (const row of taskQuery.rows) {
-        const algorithm = row.algorithm || "N/A";
-
-      const key = algorithm;
-
-        if (!grouped[key]) {
-          grouped[key] = {
-            algorithm,
-            tasks_completed: [],
-          };
-        }
-
-        grouped[key].tasks_completed.push({
-          task_name: row.task_name,
-          completed_at: dayjs(row.completed_at).format("MM.DD.YY"),
-          contact_info: row.contact_info || "N/A"
-        });
-      }
-
-      const report = {
-        patient: {
-          name: patient.name,
-          mrn: patient.mrn || "N/A",
-          dob: dayjs(patient.birth_date).format("MM.DD.YYYY"),
-          admitted_date: dayjs(patient.admitted_date).format("MM.DD.YYYY"),
-        },
-        date_of_report: dayjs().format("MM.DD.YY"),
-        sections: Object.values(grouped),
-      };
-
-      res.json(report);
-    } catch (err) {
-      console.error("❌ Error generating transitional report:", err);
-      res.status(500).json({ error: "Failed to generate transitional care report" });
+    if (start_date) {
+      const startUTC = DateTime.fromISO(start_date, { zone: timezone }).startOf('day').toUTC().toISO();
+      taskQueryText += ` AND pt.completed_at >= $${paramIndex++}`;
+      params.push(startUTC);
     }
-  };
+
+    if (end_date) {
+      const endUTC = DateTime.fromISO(end_date, { zone: timezone }).endOf('day').toUTC().toISO();
+      taskQueryText += ` AND pt.completed_at <= $${paramIndex++}`;
+      params.push(endUTC);
+    }
+
+    taskQueryText += ` ORDER BY pt.completed_at DESC`;
+
+    const taskQuery = await client.query(taskQueryText, params);
+
+    // Grouping logic
+    const grouped = {};
+    for (const row of taskQuery.rows) {
+      const algorithm = row.algorithm || "N/A";
+      if (!grouped[algorithm]) {
+        grouped[algorithm] = {
+          algorithm,
+          tasks_completed: [],
+        };
+      }
+
+      grouped[algorithm].tasks_completed.push({
+        task_name: row.task_name,
+        completed_at: row.completed_at
+          ? dayjs(row.completed_at).format("MM.DD.YY")
+          : "N/A",
+        contact_info: row.contact_info || "—",
+        task_note: row.task_note || "—",
+      });
+    }
+
+    const report = {
+      patient: {
+        name: patient.name,
+        mrn: patient.mrn || "N/A",
+        dob: dayjs(patient.birth_date).format("MM.DD.YYYY"),
+        admitted_date: dayjs(patient.admitted_date).format("MM.DD.YYYY"),
+      },
+      date_of_report: dayjs().format("MM.DD.YY"),
+      sections: Object.values(grouped),
+    };
+
+    res.json(report);
+  } catch (err) {
+    console.error("❌ Error generating transitional report:", err);
+    res.status(500).json({ error: "Failed to generate transitional care report" });
+  } finally {
+    client.release();
+  }
+};
+
 
 
   const getHistoricalTimelineReport = async (req, res) => {
