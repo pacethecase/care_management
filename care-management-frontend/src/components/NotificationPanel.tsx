@@ -4,11 +4,14 @@ import {
   fetchNotifications,
   markAllRead,
   clearAllNotificationsThunk,
-  deleteNotificationThunk
+  deleteNotificationThunk,
 } from '../redux/slices/notificationSlice';
 import type { AppDispatch } from '../redux/store';
+import { decideOverride } from "../redux/slices/taskSlice"; 
 import type { Notification } from '../redux/types';
 import { DateTime } from "luxon";
+import { loadPatientTasks } from "../redux/slices/taskSlice";
+import { toast } from "react-toastify";
 const NotificationPanel = () => {
   const dispatch = useDispatch<AppDispatch>();
   const { items: notifications, loading } = useSelector((state: RootState) => state.notifications);
@@ -16,7 +19,7 @@ const NotificationPanel = () => {
   return (
     <div className="w-80 bg-white rounded-lg shadow-lg p-3 z-50 max-h-[60vh] overflow-y-auto">
       <div className="flex justify-between items-center mb-3">
-        <h2 className="text-lg font-semibold">Notifications</h2>
+        <h2 className="text-lg text-black font-semibold">Notifications</h2>
         <div className="flex gap-2">
           <button
             className="text-xs text-blue-600 hover:underline"
@@ -43,33 +46,86 @@ const NotificationPanel = () => {
       ) : notifications.length === 0 ? (
         <p className="text-gray-500 text-sm">No notifications</p>
       ) : (
-        notifications.map((n: Notification) => (
-          <div
-            key={n.id}
-            className={`relative mb-3 p-3 border rounded-md ${
-              n.read ? 'bg-gray-100' : 'bg-yellow-50'
-            }`}
-          >
-            {/* ❌ Dismiss Button */}
-            <div
-              className="absolute top-2 right-2 text-gray-400 hover:text-red-600 cursor-pointer"
-              title="Dismiss"
-              onClick={() => dispatch(deleteNotificationThunk(Number(n.id)))}
-            >
-              x
-            </div>
+        notifications.map((n: Notification) => {
+          // ✅ safely extract patient_task_id or task_id
+          const patientTaskId = Number((n as any).patient_task_id ?? (n as any).task_id);
 
-            <div className="font-medium text-gray-500 text-sm">{n.title}</div>
-            <div className="text-xs text-gray-500">
-           {n.created_at
-          ? DateTime.fromISO(n.created_at, { zone: 'utc' })
-              .setZone('America/New_York')
-              .toFormat("MMM d, yyyy, h:mm a")
-          : "N/A"}
+          return (
+            <div
+              key={n.id}
+              className={`relative mb-3 p-3 border rounded-md ${n.read ? 'bg-gray-100' : 'bg-yellow-50'}`}
+            >
+              <div
+                className="absolute top-2 right-2 text-gray-400 hover:text-red-600 cursor-pointer"
+                title="Dismiss"
+                onClick={() => dispatch(deleteNotificationThunk(Number(n.id)))}
+              >
+                ×
+              </div>
+
+              {/* Title */}
+              <div
+                className={`font-medium text-sm ${
+                  (n.type || "").startsWith("override") ? "text-red-700" : "text-gray-600"
+                }`}
+              >
+                {n.title}
+              </div>
+
+              {/* Timestamp */}
+              <div className="text-xs text-gray-500">
+                {n.created_at
+                  ? DateTime.fromISO(n.created_at, { zone: 'utc' })
+                      .toLocal()
+                      .toFormat("MMM d, yyyy, h:mm a")
+                  : "N/A"}
+              </div>
+
+              {/* Message */}
+              <div className="text-sm text-gray-700 mt-1">
+                {(n.message || "").split("\n").map((line, idx) => (
+                  <span key={idx}>
+                    {line}
+                    <br />
+                  </span>
+                ))}
+              </div>
+{n.type === "override_request" && patientTaskId && n.request_status === "Pending" && (
+  <div className="flex gap-2 mt-2">
+    <button
+      className="btn btn-xs bg-green-600 text-white hover:bg-green-700"
+      onClick={async () => {
+        await dispatch(decideOverride({ patientTaskId, decision: "Approved" }));
+        toast.success("✅ Override approved");
+        dispatch(fetchNotifications());
+        if ((n as any).patient_id) {
+          await dispatch(loadPatientTasks(Number((n as any).patient_id)));
+        }
+      }}
+    >
+      Approve
+    </button>
+    <button
+      className="btn btn-xs bg-red-600 text-white hover:bg-red-700"
+      onClick={async () => {
+        await dispatch(decideOverride({ patientTaskId, decision: "Denied" }));
+        toast.info("🛑 Override denied");
+        await dispatch(fetchNotifications());
+        if ((n as any).patient_id) {
+          await dispatch(loadPatientTasks(Number((n as any).patient_id)));
+        }
+      }}
+    >
+      Deny
+    </button>
+  </div>
+)}
+
+    
+
             </div>
-            <div className="text-sm text-gray-700 mt-1">{n.message}</div>
-          </div>
-        ))
+          );
+        })
       )}
     </div>
   );

@@ -154,36 +154,56 @@ const handleEditCourtDate = async (type: "guardianship" | "ltc") => {
 
 
 const handleOverride = async (taskId: number) => {
-  const reason = prompt("📝 Please enter a reason to override this task:");
-  if (!reason?.trim()) {
+  const selected = overrideDates[taskId];
+  if (!selected) {
+    toast.error("❌ Please choose an override date first.");
+    return;
+  }
+
+  const reason = prompt("📝 Please enter a reason to override this task:")?.trim();
+  if (!reason) {
     toast.error("❌ Override reason is required.");
     return;
   }
 
   try {
-    await dispatch(
-      overrideTask({
-        taskId,
-        override_date: overrideDates[taskId],
-        reason,
-      })
+    const res = await dispatch(
+      overrideTask({   patientTaskId:taskId  , override_date: selected, reason })
     ).unwrap();
 
-    toast.success("✅ Task overridden");
-      setOverrideDates(prev => {
+    // ✅ choose toast style based on message
+    if (res.message?.toLowerCase().includes("admin approval")) {
+      toast.info(`📩 ${res.message} — Reason: "${reason}"`);
+    } else {
+      toast.success(res.message);
+      if (patientId) {
+        await dispatch(loadPatientTasks(Number(patientId)));
+      }
+    }
+
+    // clear selected date for this task card
+    setOverrideDates((prev) => {
       const copy = { ...prev };
       delete copy[taskId];
       return copy;
     });
-    dispatch(loadPatientTasks(Number(patientId)));
+
   } catch (err: any) {
     const message =
-      typeof err === "string"
-        ? err
-        : err?.response?.data?.error || "❌ Failed to override task";
-    toast.error(message);
+      err?.data?.error ||                
+      err?.response?.data?.error ||  
+      (typeof err === "string" ? err : err?.message) ||
+      "Failed to override task";
+
+    toast.error(`❌ ${message}`);
+
+    if (message.toLowerCase().includes("admin notified")) {
+      toast.info(`📩 Sending override request to admin with your reason: "${reason}"`);
+    }
   }
 };
+
+
 
 const handleComplete = async (
   taskId: number,
@@ -535,7 +555,7 @@ const renderTaskCard = (task: Task) => {
     <br />
     Last override At:{" "}
     {task.status_history?.filter(h => h.status === "Overridden").slice(-1)[0]?.timestamp
-      ? DateTime.fromSQL(
+      ? DateTime.fromISO(
           task.status_history?.filter(h => h.status === "Overridden").slice(-1)[0].timestamp
         ).toFormat("MMM d, yyyy, h:mm a")
       : "N/A"}
@@ -549,6 +569,7 @@ const renderTaskCard = (task: Task) => {
        
 {!task.is_non_blocking &&
           task.is_overridable &&
+            task.status !== "Missed" &&
           task.status !== "Completed" &&
           task.status !== "Delayed Completed" && (
             <div className="mb-2">
@@ -571,20 +592,30 @@ const renderTaskCard = (task: Task) => {
       </div>
 
     <div className="flex gap-2 flex-wrap mb-2">
-  {!task.is_non_blocking &&
-    task.status !== "Completed" &&
-    task.status !== "Delayed Completed" && (
-      <div className="flex gap-2 flex-wrap mb-2">
-        {overrideDates[task.patient_task_id] ? (
+      {!task.is_non_blocking &&
+        task.status !== "Completed" &&
+        task.status !== "Delayed Completed" && (
+          <div className="flex gap-2 flex-wrap mb-2">
+            {overrideDates[task.patient_task_id] ? (
+      <>
+        {task.override_count >= task.override_count_max ? (
+          <button
+            className="btn btn-xs btn-outline bg-red-500 text-white"
+            onClick={() => handleOverride(task.patient_task_id)}
+          >
+            Request Admin Approval
+          </button>
+        ) : (
           <button
             className="btn btn-xs btn-outline bg-yellow-500 text-white"
             onClick={() => handleOverride(task.patient_task_id)}
-            disabled={task.override_count >= 2} 
           >
-            {task.override_count >= 2 ? "Max Overrides Reached" : "Override Task"}
+            Override Task
           </button>
+        )}
+      </>
+    ) : (
 
-        ) : (
           <>
             {task.status !== "In Progress" && task.status !== "Missed" && (
               <button
@@ -924,7 +955,7 @@ if (patientLoading || taskLoading || !patient) {
     {patient.ltc_court_datetime ? (
       <>
         {DateTime.fromISO(patient.ltc_court_datetime, { zone: 'utc' })
-          .setZone('America/New_York')
+          .setZone("local") 
           .toFormat('MMM d, yyyy, h:mm a')}
         <button
           onClick={() => handleEditCourtDate("ltc")}

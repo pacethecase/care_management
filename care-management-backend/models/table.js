@@ -146,8 +146,10 @@ const createTables = async () => {
           task_note TEXT,
           include_note_in_report BOOLEAN DEFAULT false,
           contact_info TEXT,
-          override_due_date TIMESTAMP WITH TIME ZONE DEFAULT NULL,
           override_count INT DEFAULT 0;
+          override_count INT DEFAULT 0,               
+          override_count_max INT DEFAULT 2,              
+          admin_override_approval BOOLEAN DEFAULT FALSE,          
           is_visible BOOLEAN DEFAULT TRUE
           );
 
@@ -168,11 +170,26 @@ const createTables = async () => {
           id SERIAL PRIMARY KEY,
           user_id INTEGER REFERENCES users(id),
           patient_id INTEGER REFERENCES patients(id),
+          patient_task_id INTEGER REFERENCES patient_tasks(id) ON DELETE CASCADE,
           title TEXT NOT NULL,
           message TEXT NOT NULL,
           created_at TIMESTAMP  WITH TIME ZONE DEFAULT NOW(),
-          read BOOLEAN DEFAULT FALSE
+          read BOOLEAN DEFAULT FALSE,
+          type TEXT DEFAULT 'general';
         );
+       
+        CREATE TABLE task_override_requests (
+            id SERIAL PRIMARY KEY,
+            task_id INT NOT NULL REFERENCES patient_tasks(id) ON DELETE CASCADE,
+            requested_by INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            requested_date TIMESTAMPTZ NOT NULL,     
+            reason TEXT NOT NULL,
+            status TEXT DEFAULT 'Pending',            
+            approved_by INT REFERENCES users(id),     
+            decided_at TIMESTAMPTZ,
+            created_at TIMESTAMPTZ DEFAULT NOW()
+        );
+
 
     
     `);

@@ -15,6 +15,7 @@ interface TaskState {
   taskNames: string[];          
   taskNamesLoading: boolean;       
   taskNamesError: string | null;
+    successMessage: string | null;
 }
 
 const initialState: TaskState = {
@@ -24,6 +25,7 @@ const initialState: TaskState = {
   loading: false,
   error: null,
   taskError: null,
+   successMessage: null,
 
   taskNames: [],               
   taskNamesLoading: false,
@@ -276,20 +278,51 @@ export const fetchAllTaskNames = createAsyncThunk<
 );
 
 export const overrideTask = createAsyncThunk<
-  any,
-  { taskId: number; override_date: string; reason: string }
+  { message: string; task: any },
+  { patientTaskId: number; override_date: string; reason: string },
+  { rejectValue: string }
 >(
   "tasks/overrideTask",
-  async ({ taskId, override_date, reason }, { rejectWithValue }) => {
+  async ({ patientTaskId, override_date, reason }, { rejectWithValue }) => {
     try {
       const res = await axios.post(
-        `${BASE_URL}/tasks/${taskId}/override`,   // ✅ use BASE_URL
+        `${BASE_URL}/tasks/${patientTaskId}/override`,
         { override_date, reason },
         { withCredentials: true }
       );
       return res.data;
     } catch (err: any) {
-      return rejectWithValue(err.response?.data || "Failed to override task");
+      const msg: string =
+        err?.response?.data?.error ||
+        err?.response?.data?.message ||
+        err?.message ||
+        "Failed to override task";
+      return rejectWithValue(msg);
+    }
+  }
+);
+
+export const decideOverride = createAsyncThunk<
+  { message: string },
+  { patientTaskId: number; decision: "Approved" | "Denied" },
+  { rejectValue: string }
+>(
+  "tasks/decideOverride",
+  async ({ patientTaskId, decision }, { rejectWithValue }) => {
+    try {
+      const res = await axios.patch(
+        `${BASE_URL}/tasks/${patientTaskId}/overridedecision`, 
+        { decision },
+        { withCredentials: true }
+      );
+      return res.data;
+    } catch (err: any) {
+      const msg: string =
+        err?.response?.data?.error ||
+        err?.response?.data?.message ||
+        err?.message ||
+        "Failed to decide override";
+      return rejectWithValue(msg);
     }
   }
 );
@@ -312,7 +345,11 @@ const taskSlice = createSlice({
           state.missedTasks = [];
           state.error = null;
           state.taskError = null;
-        }
+        },
+         clearTaskMessages(state) {
+           state.error = null;
+          state.successMessage = null;
+        },
 
 
   },
@@ -471,28 +508,51 @@ const index = state.patientTasks.findIndex(
     state.taskNamesLoading = false;
     state.taskNamesError = action.payload || "Unknown error";
   })
-   .addCase(overrideTask.pending, (state) => {
-        state.loading = true;
-        state.taskError = null;
-      })
-     .addCase(overrideTask.fulfilled, (state, action) => {
+// in the same slice file
+.addCase(overrideTask.pending, (state) => {
+  state.loading = true;
+  state.taskError = null;
+})
+.addCase(overrideTask.fulfilled, (state, action) => {
   state.loading = false;
 
-  const updatedTask = action.payload.task || action.payload;
+  const updatedTask = action.payload.task;
+  if (!updatedTask) {
+    return;
+  }
+
   const idx = state.patientTasks.findIndex(
     (t) => t.patient_task_id === updatedTask.id
   );
-
   if (idx !== -1) {
     state.patientTasks[idx] = {
       ...state.patientTasks[idx],
-      ...updatedTask,
+      patient_task_id: updatedTask.id,
+      due_date: updatedTask.due_date,
+      override_count: updatedTask.override_count,
+      override_count_max: updatedTask.override_count_max,
+      admin_override_approval: updatedTask.admin_override_approval,
+      status_history: updatedTask.status_history,
     };
   }
 })
-      .addCase(overrideTask.rejected, (state, action) => {
+
+.addCase(overrideTask.rejected, (state, action) => {
+  state.loading = false;
+  state.taskError = action.payload || "Failed to override task";
+})
+ .addCase(decideOverride.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+        state.successMessage = null;
+      })
+      .addCase(decideOverride.fulfilled, (state, action) => {
         state.loading = false;
-        state.taskError = action.payload as string;
+        state.successMessage = action.payload.message; 
+      })
+      .addCase(decideOverride.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload || "Failed to process override decision";
       });
 
   },

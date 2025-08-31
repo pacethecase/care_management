@@ -6,9 +6,18 @@ import { addNotification } from '../redux/slices/notificationSlice';
 import socket from '../utils/socket'; 
 import type { AppDispatch } from '../redux/store';
 
+
 interface NotificationPayload {
+  id: number;  
+  user_id: number;
+  patient_id?: number;
+  patient_task_id?: number;
   title: string;
   message: string;
+  type: string;
+  created_at?: string;
+  read?: boolean;
+  request_status: "Pending" | "Approved" | "Denied";
 }
 
 const Notifications = () => {
@@ -20,16 +29,10 @@ const Notifications = () => {
 
     socket.emit('join', `user-${user.id}`);
 
-    const handleNotification = (data: NotificationPayload) => {
-      dispatch(addNotification({
-        id: Date.now(),
-        title: data.title,
-        message: data.message,
-        created_at: new Date().toISOString(),
-        read: false,
-      }));
+     const handleNotification = (data: NotificationPayload) => {
+      if (data.user_id !== user.id) return;
+      dispatch(addNotification(data));
     };
-
     socket.on('notification', handleNotification);
 
     return () => {

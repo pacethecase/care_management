@@ -1,20 +1,32 @@
 const pool = require('../models/db');
 
 const getUserNotifications = async (req, res) => {
-   if (!req.user.is_approved) {
-    return res.status(403).json({ error: 'Access denied. User not approved.' });
+  if (!req.user.is_approved) {
+    return res.status(403).json({ error: "Access denied. User not approved." });
   }
   try {
     const result = await pool.query(
-      `SELECT * FROM notifications WHERE user_id = $1 ORDER BY created_at DESC`,
+      `
+      SELECT n.*,
+             r.status AS request_status
+      FROM notifications n
+      LEFT JOIN task_override_requests r
+        ON n.patient_task_id = r.task_id
+       AND r.status = 'Pending'
+      WHERE n.user_id = $1
+      ORDER BY n.created_at DESC
+      `,
       [req.user.id]
     );
+
     res.json(result.rows);
   } catch (err) {
     console.error("❌ Error fetching notifications:", err);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: "Internal server error" });
   }
 };
+
+
 
 const markNotificationRead = async (req, res) => {
    if (!req.user.is_approved) {

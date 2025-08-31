@@ -180,27 +180,36 @@ const addPatient = async (req, res) => {
 
     await assignTasksToPatient(newPatient.id, timezone, selectedAlgorithms);
 
-    // Send real-time notifications to assigned staff
     if (assignedStaffIds.length > 0) {
       const io = req.app.get("io");
       for (const staffId of assignedStaffIds) {
+        const title = "New Patient Assigned";
         const message = `You are assigned to ${newPatient.first_name} ${newPatient.last_name}`;
-        io.to(`user-${staffId}`).emit("notification", {
-          title: "New Patient Assigned",
-          message
-        });
-        await pool.query(
-          `INSERT INTO notifications (user_id, title, message) VALUES ($1, $2, $3)`,
-          [staffId, "New Patient Assigned", message]
+
+
+        const { rows: [notif] } = await pool.query(
+          `INSERT INTO notifications (user_id, patient_id, title, message, type)
+          VALUES ($1, $2, $3, $4, $5)
+          RETURNING *`,
+          [
+            staffId,
+            newPatient.id,   
+            title,
+            message,
+            "assignment"    
+          ]
         );
+
+        
+        io?.to?.(`user-${staffId}`)?.emit("notification", notif);
       }
     }
 
-    res.status(201).json({ message: "Patient added and tasks assigned", patient: newPatient });
-  } catch (err) {
-    console.error("❌ Error adding patient:", err);
-    res.status(500).json({ error: "Internal server error" });
-  }
+      res.status(201).json({ message: "Patient added and tasks assigned", patient: newPatient });
+    } catch (err) {
+      console.error("❌ Error adding patient:", err);
+      res.status(500).json({ error: "Internal server error" });
+    }
 };
 
 
@@ -435,23 +444,26 @@ const dischargePatient = async (req, res) => {
   [patientId]
   );
 
-    for (const { staff_id } of staffRes.rows) {
-      io.to(`user-${staff_id}`).emit("notification", {
-        title: "Patient Discharged",
-        message: `${patient.first_name} ${patient.last_name} has been discharged.`,
-      });
+  for (const { staff_id } of staffRes.rows) {
+    const title = "Patient Discharged";
+    const message = `${patient.first_name} ${patient.last_name} has been discharged.`;
 
-      await pool.query(
-        `INSERT INTO notifications (user_id, patient_id, title, message)
-         VALUES ($1, $2, $3, $4)`,
-        [
-          staff_id,
-          patient.id,
-          "Patient Discharged",
-          `${patient.first_name} ${patient.last_name} has been discharged.`
-        ]
-      );
-    }
+    const { rows: [notif] } = await pool.query(
+      `INSERT INTO notifications (user_id, patient_id, title, message, type)
+      VALUES ($1, $2, $3, $4, $5)
+      RETURNING *`,
+      [
+        staff_id,
+        patient.id,
+        title,
+        message,
+        "discharge"   
+      ]
+    );
+
+
+    io?.to?.(`user-${staff_id}`)?.emit("notification", notif);
+  }
 
     res.status(200).json({ message: "Patient discharged successfully" });
 
@@ -491,35 +503,38 @@ const reactivatePatient = async (req, res) => {
       [patientId]
     );
 
-    const io = req.app.get('io');
+const io = req.app.get("io");
 
-   const staffRes = await pool.query(
-    `SELECT u.id AS staff_id
-    FROM patient_staff ps
-      JOIN users u ON u.id = ps.staff_id
-    WHERE ps.patient_id = $1 AND u.is_staff = true`,
-    [patientId]
-    );
-  
-    for (const { staff_id } of staffRes.rows) {
-      io.to(`user-${staff_id}`).emit("notification", {
-        title: "Patient Reinstated",
-        message: `${patient.first_name} ${patient.last_name} has been reinstated to active care1.`,
-      });
+const staffRes = await pool.query(
+  `SELECT u.id AS staff_id
+   FROM patient_staff ps
+   JOIN users u ON u.id = ps.staff_id
+   WHERE ps.patient_id = $1 AND u.is_staff = true`,
+  [patientId]
+);
 
-      await pool.query(
-        `INSERT INTO notifications (user_id, patient_id, title, message)
-         VALUES ($1, $2, $3, $4)`,
-        [
-          staff_id,
-          patient.id,
-          "Patient Reinstated",
-          `${patient.first_name} ${patient.last_name} has been reinstated to active care.`
-        ]
-      );
-    }
+for (const { staff_id } of staffRes.rows) {
+  const title = "Patient Reinstated";
+  const message = `${patient.first_name} ${patient.last_name} has been reinstated to active care.`;
 
-    res.json({ message: 'Patient reactivated successfully' });
+
+  const { rows: [notif] } = await pool.query(
+    `INSERT INTO notifications (user_id, patient_id, title, message, type)
+     VALUES ($1, $2, $3, $4, $5)
+     RETURNING *`,
+    [
+      staff_id,
+      patient.id,
+      title,
+      message,
+      "reinstated"  
+    ]
+  );
+  io?.to?.(`user-${staff_id}`)?.emit("notification", notif);
+
+}
+
+res.json({ message: "Patient reactivated successfully" });
 
   } catch (err) {
     console.error("❌ Error reactivating patient:", err);

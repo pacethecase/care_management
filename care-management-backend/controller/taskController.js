@@ -3,7 +3,7 @@ const { DateTime } = require('luxon');
 
 const appendStatusHistory = async (taskId, newEntry, client) => {
    const timezone = "America/New_York"; 
-  const timestamp = DateTime.local().setZone(timezone).toFormat("yyyy-MM-dd HH:mm:ssZZ");
+ const timestamp = DateTime.local().setZone(timezone).toISO(); 
 
   await client.query(`
     UPDATE patient_tasks
@@ -186,13 +186,14 @@ try {
 }
 
 if (task.status === "Missed") {
-  const missedWithoutReason = [...history].reverse().find(
-    h => h.status === "Missed" && !h.reason
-  );
+  // look only at the most recent "Missed" entry
+const latestMissed = [...history].reverse().find(h => h.status === "Missed");
 
-  if (missedWithoutReason && missedReason) {
+if (latestMissed && !latestMissed.reason) {
+  if (missedReason) {
+    // ✅ fill in reason for the latest Missed
     const index = history.findIndex(
-      h => h.status === "Missed" && !h.reason
+      h => h.timestamp === latestMissed.timestamp && h.status === "Missed"
     );
     if (index !== -1) {
       history[index].reason = missedReason;
@@ -204,12 +205,14 @@ if (task.status === "Missed") {
         [JSON.stringify(history), taskId]
       );
     }
-  } else if (missedWithoutReason && !missedReason) {
+  } else {
     await client.query("ROLLBACK");
     return res.status(400).json({
       error: "This task was marked as missed, but no reason was provided. Please provide a reason first."
     });
   }
+}
+
 } 
 }
 
@@ -990,75 +993,293 @@ const getTaskNames = async (req, res) => {
 
 const overrideTask = async (req, res) => {
   const client = await pool.connect();
+  const toSocket = [];
   try {
     await client.query("BEGIN");
-    const { taskId } = req.params;
-    const { override_date, reason } = req.body;
 
+    const taskId = Number(req.params.taskId);
+    if (!Number.isInteger(taskId)) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ error: `Invalid patient_task_id: ${req.params.taskId}` });
+    }
+
+    const { override_date, reason } = req.body;
     if (!req.user?.is_approved) {
+      await client.query("ROLLBACK");
       return res.status(403).json({ error: "Access denied: user not approved" });
     }
     if (!reason?.trim()) {
+      await client.query("ROLLBACK");
       return res.status(400).json({ error: "Override reason is required." });
     }
+    if (!override_date || typeof override_date !== "string") {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ error: "Override date (YYYY-MM-DD) is required." });
+    }
 
-    const taskRes = await client.query(
-      `SELECT pt.*, p.hospital_id
-       FROM patient_tasks pt
-       JOIN patients p ON pt.patient_id = p.id
-       WHERE pt.id = $1
-       FOR UPDATE`,
+    const timezone = req.headers["x-timezone"] || "America/New_York";
+    const parsed = DateTime.fromISO(override_date, { zone: timezone });
+    if (!parsed.isValid) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ error: "Invalid override_date. Use YYYY-MM-DD." });
+    }
+    const newDueDate = parsed.set({ hour: 23, minute: 59 }).toUTC().toJSDate();
+
+    const { rows: [task] } = await client.query(
+      `SELECT pt.*, p.hospital_id, p.added_by_user_id, t.name AS task_name, p.first_name, p.last_name
+         FROM patient_tasks pt
+         JOIN patients p ON pt.patient_id = p.id
+         JOIN tasks t    ON t.id = pt.task_id
+        WHERE pt.id = $1
+        FOR UPDATE`,
       [taskId]
     );
-    if (taskRes.rows.length === 0) {
+    if (!task) {
       await client.query("ROLLBACK");
       return res.status(404).json({ error: "Task not found" });
     }
-    const task = taskRes.rows[0];
-
     if (task.hospital_id !== req.user.hospital_id) {
       await client.query("ROLLBACK");
       return res.status(403).json({ error: "Unauthorized" });
     }
-
-    if (task.override_count >= 2) {
+    if (["Completed", "Delayed Completed", "Acknowledged"].includes(task.status)) {
       await client.query("ROLLBACK");
-      return res.status(400).json({ error: "Override limit reached (max 2 allowed)." });
+      return res.status(409).json({ error: "Cannot override a completed/acknowledged task." });
     }
 
-    const timezone = req.headers["x-timezone"] || "America/New_York";
-    const overrideDue = DateTime.fromISO(override_date, { zone: timezone })
-      .set({ hour: 23, minute: 59, second: 0, millisecond: 0 })
-      .toUTC()
-      .toJSDate();
+    const wouldExceed = (task.override_count || 0) + 1 > task.override_count_max;
 
-    // Update override fields
-    await client.query(
-    `UPDATE patient_tasks
-    SET override_count = COALESCE(override_count, 0) + 1,
-        override_due_date = $1,
-        due_date = $1 
-    WHERE id = $2`,
-    [overrideDue, taskId]
+    if (wouldExceed) {
+      // No duplicate pending
+      const dup = await client.query(
+        `SELECT id FROM task_override_requests
+          WHERE task_id = $1 AND status = 'Pending'
+          ORDER BY created_at DESC LIMIT 1`,
+        [taskId]
+      );
+      if (dup.rowCount > 0) {
+        await client.query("ROLLBACK");
+        return res.status(409).json({ error: "An override request is already pending admin review for this task." });
+      }
+
+      await client.query(
+        `INSERT INTO task_override_requests (task_id, requested_by, requested_date, reason, status)
+         VALUES ($1, $2, $3, $4, 'Pending')`,
+        [taskId, req.user.id, newDueDate, reason.trim()]
+      );
+
+      // find the admin who added this patient (must be admin & approved)
+      const { rows: [admin] } = await client.query(
+        `SELECT u.id
+           FROM users u
+          WHERE u.id = $1 AND u.is_admin = TRUE AND u.is_approved = TRUE
+          LIMIT 1`,
+        [task.added_by_user_id]
+      );
+
+      const originalDue = task.due_date
+        ? DateTime.fromJSDate(task.due_date).setZone(timezone).toFormat("yyyy-LL-dd")
+        : "N/A";
+      const requestedDue = DateTime.fromJSDate(newDueDate).setZone(timezone).toFormat("yyyy-LL-dd");
+      const staffName = (await client.query(`SELECT name FROM users WHERE id = $1`, [req.user.id]))
+        .rows?.[0]?.name || "Unknown Staff";
+
+      const title = "Override Approval Needed";
+      const message =
+        `Task "${task.task_name}" for patient ${task.first_name} ${task.last_name} requires admin approval.\n\n` +
+        `Requested by: ${staffName}\n` +
+        `Reason: ${reason.trim()}\n` +
+        `Current Due Date: ${originalDue}\n` +
+        `Requested Override: ${requestedDue}`;
+
+      let notif = null;
+if (admin) {
+  const { rows: [row] } = await client.query(
+    `INSERT INTO notifications (user_id, patient_id, patient_task_id, title, message, type)
+     VALUES ($1, $2, $3, $4, $5, 'override_request')
+     RETURNING *`,
+    [admin.id, task.patient_id, task.id, title, message]
   );
+  notif = { ...row, request_status: "Pending" }; 
+}
 
-    // Append status history with helper
-    await appendStatusHistory(taskId, {
-      status: "Overridden",
-      reason,
-      staff_id: req.user.id,
-    }, client);
+await client.query("COMMIT");
+
+if (notif) {
+  const io = req.app.get("io");
+  io?.to?.(`user-${admin.id}`)?.emit?.("notification", notif);
+}
+      return res.status(200).json({ message: "Override request submitted for admin approval." });
+    }
+
+
+    const tsLocal = DateTime.local().setZone(timezone).toISO();
+    await client.query(
+      `UPDATE patient_tasks
+          SET override_count = COALESCE(override_count,0) + 1,
+              due_date = $1,
+              admin_override_approval = FALSE,
+              status_history = COALESCE(status_history, '[]'::jsonb) || $3::jsonb
+        WHERE id = $2`,
+      [
+        newDueDate,
+        taskId,
+        JSON.stringify([{ status: "Overridden", reason: reason.trim(), staff_id: req.user.id, timestamp: tsLocal }]),
+      ]
+    );
 
     await client.query("COMMIT");
-    res.json({ message: "✅ Task overridden successfully" });
+    return res.json({ message: "✅ Task overridden successfully." });
   } catch (err) {
     await client.query("ROLLBACK");
-    console.error("❌ Error overriding task:", err);
-    res.status(500).json({ error: "Internal Server Error" });
+    console.error("❌ Error overriding task:", err?.stack || err);
+    return res.status(500).json({ error: "Internal Server Error" });
   } finally {
     client.release();
   }
 };
+
+const handleOverrideDecision = async (req, res) => {
+  const client = await pool.connect();
+  const insertedNotifications = [];
+  try {
+    await client.query("BEGIN");
+
+    const taskIdRaw = req.params.taskId; // patient_task_id
+    const taskId = Number(taskIdRaw);
+    if (!Number.isInteger(taskId)) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ error: `Invalid patient_task_id: ${taskIdRaw}` });
+    }
+
+    const { decision } = req.body; // "Approved" | "Denied"
+    if (!["Approved", "Denied"].includes(decision)) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ error: "Invalid decision. Must be Approved or Denied." });
+    }
+
+    // Latest pending request for this task
+    const { rows: [request] } = await client.query(
+      `
+      SELECT
+        r.*,
+        pt.id            AS patient_task_id,
+        pt.patient_id,
+        pt.task_id,
+        pt.due_date,
+        pt.override_count,
+        pt.override_count_max,
+        pt.admin_override_approval,
+        t.name           AS task_name,
+        p.first_name,
+        p.last_name
+      FROM task_override_requests r
+      JOIN patient_tasks pt ON r.task_id = pt.id
+      JOIN patients p       ON pt.patient_id = p.id
+      JOIN tasks t          ON pt.task_id = t.id
+      WHERE r.task_id = $1
+        AND r.status = 'Pending'
+      ORDER BY r.created_at DESC
+      LIMIT 1
+      FOR UPDATE
+      `,
+      [taskId]
+    );
+
+    if (!request) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ error: "No pending override request found" });
+    }
+
+    if (decision === "Approved") {
+  // 1) bump counts and set due_date
+  await client.query(
+    `
+    UPDATE patient_tasks
+       SET due_date = $1,
+           override_count = COALESCE(override_count,0) + 1,
+           override_count_max = COALESCE(override_count_max,0) + 2,
+           admin_override_approval = TRUE
+     WHERE id = $2
+    `,
+    [request.requested_date, request.patient_task_id]
+  );
+
+  // 2) always append the "Overridden" entry with the reason from the request
+  await appendStatusHistory(request.patient_task_id, {
+    status: "Overridden",
+    staff_id: request.requested_by,
+    reason: request.reason
+  }, client);
+
+  // 3) append the "Override Approved" entry with admin stamp
+  await appendStatusHistory(request.patient_task_id, {
+    status: "Override Approved",
+    staff_id: req.user.id
+  }, client);
+
+} else {
+  await appendStatusHistory(request.patient_task_id, {
+    status: "Override Denied",
+    staff_id: req.user.id
+  }, client);
+}
+
+
+
+    // Close out the request
+    await client.query(
+      `UPDATE task_override_requests
+         SET status = $1,
+             approved_by = $2,
+             decided_at = NOW()
+       WHERE id = $3`,
+      [decision, req.user.id, request.id]
+    );
+
+    // Notify all staff on this patient
+    const { rows: staffRows } = await client.query(
+      `SELECT ps.staff_id AS id
+         FROM patient_staff ps
+         JOIN users u ON u.id = ps.staff_id
+        WHERE ps.patient_id = $1 AND u.is_approved = TRUE`,
+      [request.patient_id]
+    );
+
+    const title = `Override ${decision}`;
+    const message = `Task "${request.task_name}" for patient ${request.first_name} ${request.last_name} was ${decision.toLowerCase()}.`;
+    const type = decision === "Approved" ? "override_approved" : "override_denied";
+
+    for (const r of staffRows) {
+      const { rows: [notif] } = await client.query(
+        `INSERT INTO notifications (user_id, patient_id, patient_task_id, title, message, type)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         RETURNING *`,
+        [r.id, request.patient_id, request.patient_task_id, title, message, type]
+      );
+      insertedNotifications.push(notif);
+    }
+
+    await client.query("COMMIT");
+
+    const io = req.app.get("io");
+    for (const row of insertedNotifications) {
+      io?.to?.(`user-${row.user_id}`)?.emit?.("notification", row);
+    }
+
+    return res.json({ message: `✅ Override ${decision.toLowerCase()} and task updated.` });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("❌ Error handling override decision:", err?.stack || err);
+    return res.status(500).json({ error: "Internal Server Error" });
+  } finally {
+    client.release();
+  }
+};
+
+
+
+
 
 module.exports = {
   startTask,
@@ -1071,6 +1292,7 @@ module.exports = {
   acknowledgeTask,
   addManualTaskForPatient,
   getTaskNames,
-  overrideTask
+  overrideTask,
+  handleOverrideDecision
 
 };

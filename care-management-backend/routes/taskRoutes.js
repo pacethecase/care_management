@@ -12,7 +12,8 @@ const {
   acknowledgeTask,
   addManualTaskForPatient,
   getTaskNames,
-  overrideTask
+  overrideTask,
+  handleOverrideDecision
 } = require("../controller/taskController");
 const { verifyToken } = require("../middleware/authMiddleware");
 
@@ -33,4 +34,6 @@ router.patch("/:id/acknowledge", verifyToken, acknowledgeTask);
 router.post("/patients/:id/manual-task",verifyToken, addManualTaskForPatient);
 router.get("/task-names",verifyToken, getTaskNames);
 router.post("/:taskId/override", verifyToken, overrideTask);
+router.patch("/:taskId/overridedecision", verifyToken, handleOverrideDecision);
+
 module.exports = router;

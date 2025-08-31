@@ -96,6 +96,8 @@ export interface Note {
     include_note_in_report?: boolean;
     is_court_date?:boolean;
     override_count: number; 
+    override_count_max: number;
+    admin_override_approval?: boolean;
    status_history?: {
   status: string;
   timestamp: string;
@@ -110,9 +112,14 @@ export interface Note {
     id:  number;
     title: string;
     message: string;
+    task_id?: number | string;
     timestamp?: string;
     created_at?: string;
+    patientTaskId?: number;
+    type?:string; 
     read?: boolean;
+    request_status?: string;
+  
   }
   
   // redux/types.ts

@@ -9,8 +9,8 @@ function setupCourtReminderJob(io) {
       try {
         const timezone = "America/New_York";
         const now = DateTime.local().setZone(timezone);
-        const todayStart = now.startOf('day').toUTC();
-        const todayEnd = now.endOf('day').toUTC();
+        const todayStart = now.startOf("day").toUTC();
+        const todayEnd = now.endOf("day").toUTC();
 
         console.log("📅 Running court reminder job at", now.toISO());
 
@@ -21,10 +21,16 @@ function setupCourtReminderJob(io) {
             p.guardianship_court_datetime,
             p.ltc_court_datetime,
             ps.staff_id,
-            u.is_approved
+            u.is_approved,
+            pt.id AS patient_task_id
           FROM patients p
           JOIN patient_staff ps ON p.id = ps.patient_id
           JOIN users u ON u.id = ps.staff_id
+          LEFT JOIN patient_tasks pt 
+            ON pt.patient_id = p.id 
+           AND pt.task_id IN (
+                SELECT id FROM tasks WHERE is_court_date = true
+           )
           WHERE p.status = 'Admitted'
             AND u.is_approved = true
             AND (
@@ -50,30 +56,40 @@ function setupCourtReminderJob(io) {
 
             const formattedTime = dt.setZone(timezone).toFormat("h:mm a");
 
+            const title = "Court Date Reminder";
             const message = `Reminder: ${patient.patient_name} has a ${type} court date today at ${formattedTime}.`;
 
-            io.to(`user-${patient.staff_id}`).emit("notification", {
-              title: "Court Date Reminder",
-              message,
-            });
 
-            await pool.query(`
-              INSERT INTO notifications (user_id, patient_id, title, message)
-              SELECT $1, $2, $3, $4
+            const { rows: [notif] } = await pool.query(`
+              INSERT INTO notifications (user_id, patient_id, patient_task_id, title, message, type)
+              SELECT $1, $2, $3, $4, $5, $6
               WHERE NOT EXISTS (
                 SELECT 1 FROM notifications
-                WHERE user_id = $1 AND patient_id = $2 AND title = $3 AND DATE(created_at AT TIME ZONE 'UTC' AT TIME ZONE $5) = $6
+                WHERE user_id = $1 
+                  AND patient_id = $2 
+                  AND patient_task_id = $3
+                  AND type = $6
+                  AND DATE(created_at AT TIME ZONE 'UTC' AT TIME ZONE $7) = $8
               )
+              RETURNING *
             `, [
-              patient.staff_id,
-              patient.patient_id,
-              "Court Date Reminder",
-              message,
-              timezone,
-              now.toFormat("yyyy-MM-dd")
+              patient.staff_id,                
+              patient.patient_id,              
+              patient.patient_task_id,         
+              title,                           
+              message,                         
+              "court-reminder",                 
+              timezone,                       
+              now.toFormat("yyyy-MM-dd")        
             ]);
 
-            console.log(`📨 Sent ${type} court reminder for patient ${patient.patient_id}`);
+           
+            if (notif) {
+              io?.to?.(`user-${patient.staff_id}`)?.emit("notification", notif);
+              console.log(`📨 Sent ${type} court reminder → user ${patient.staff_id} (patient ${patient.patient_id}, task ${patient.patient_task_id})`);
+            } else {
+              console.log(`↪︎ Skipped duplicate ${type} reminder for user ${patient.staff_id} (patient ${patient.patient_id})`);
+            }
           }
         }
       } catch (err) {
@@ -82,7 +98,7 @@ function setupCourtReminderJob(io) {
     },
     null,
     true,
-    "America/New_York" // run on NY time
+    "America/New_York" 
   );
 
   job.start();
