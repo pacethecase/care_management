@@ -41,6 +41,7 @@ const getDailyReport = async (req, res) => {
         AND pt.due_date <= $1::timestamp
         AND pt.is_visible = TRUE
         AND p.status != 'Discharged'
+         AND COALESCE(p.is_archived, false) = false
         AND p.hospital_id = $2
     `;
 
@@ -122,6 +123,7 @@ const getDailyReport = async (req, res) => {
           AND pt.due_date <= $2::timestamp
           AND pt.status IN ('Pending', 'In Progress', 'Missed')
           AND p.status != 'Discharged'
+          AND COALESCE(p.is_archived, false) = false
           AND pt.is_visible = TRUE
           AND p.hospital_id = $3
       `;
@@ -607,6 +609,7 @@ const algorithmFilter = req.query.algorithm || null;
       WHERE p.hospital_id = $1
       ${isStaff ? 'AND ps.staff_id = $2' : ''}
       ${includeDischarged ? '' : 'AND p.status = \'Admitted\''}
+      AND COALESCE(p.is_archived, false) = false
     `;
      const queryParams = isStaff ? [hospitalId, staffId] : [hospitalId];
     if (startDate) {
@@ -739,6 +742,7 @@ const getOpportunityDaysSummary = async (req, res) => {
       WHERE p.hospital_id = $1
       ${isStaff ? 'AND ps.staff_id = $2' : ''}
       ${includeDischarged ? '' : "AND p.status = 'Admitted'"}
+      AND COALESCE(p.is_archived, false) = false
     `;
 
        const patientParams = isStaff ? [hospitalId, staffId] : [hospitalId];
@@ -835,7 +839,7 @@ const getStaffPerformanceReport = async (req, res) => {
   const hospitalId = req.user.hospital_id;
   const startDate = DateTime.fromISO(start).toUTC().toISO();
   const endDate = DateTime.fromISO(end).endOf("day").toUTC().toISO();
-  const dischargeFilter = includeDischarged === 'true' ? '' : "AND p.status != 'Discharged'";
+  const dischargeFilter = includeDischarged === 'true' ? "AND COALESCE(p.is_archived, false) = false" : "AND p.status != 'Discharged'  AND COALESCE(p.is_archived, false) = false";
   try {
     if (staffId && taskName) {
   const summaryQuery = `

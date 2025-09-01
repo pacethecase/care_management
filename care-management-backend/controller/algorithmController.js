@@ -15,15 +15,15 @@ const getPatientCountsByAlgorithm = async (req, res) => {
       query = `
         SELECT 'Behavioral' AS algorithm, COUNT(*) AS count 
         FROM patients 
-        WHERE is_behavioral = true AND status != 'Discharged' AND hospital_id = $1
+        WHERE is_behavioral = true AND status != 'Discharged' AND status = 'Admitted'  AND COALESCE(is_archived, false) = false  AND hospital_id = $1
         UNION ALL
         SELECT 'Guardianship' AS algorithm, COUNT(*) AS count 
         FROM patients 
-        WHERE is_guardianship = true AND status != 'Discharged' AND hospital_id = $1
+        WHERE is_guardianship = true AND status != 'Discharged' AND status = 'Admitted'  AND COALESCE(is_archived, false) = false  AND hospital_id = $1
         UNION ALL
         SELECT 'LTC' AS algorithm, COUNT(*) AS count 
         FROM patients 
-        WHERE is_ltc = true AND status != 'Discharged' AND hospital_id = $1
+        WHERE is_ltc = true AND status != 'Discharged' AND status = 'Admitted'  AND COALESCE(is_archived, false) = false  AND hospital_id = $1
       `;
       params = [hospital_id];
     } else {
@@ -31,21 +31,21 @@ const getPatientCountsByAlgorithm = async (req, res) => {
         SELECT 'Behavioral' AS algorithm, COUNT(*) AS count
         FROM patients p
         JOIN patient_staff ps ON p.id = ps.patient_id
-        WHERE p.is_behavioral = true AND p.status != 'Discharged' AND ps.staff_id = $1 AND p.hospital_id = $2
+        WHERE p.is_behavioral = true AND p.status != 'Discharged' AND p.status = 'Admitted'  AND COALESCE(p.is_archived, false) = false  AND ps.staff_id = $1 AND p.hospital_id = $2
 
         UNION ALL
 
         SELECT 'Guardianship' AS algorithm, COUNT(*) AS count
         FROM patients p
         JOIN patient_staff ps ON p.id = ps.patient_id
-        WHERE p.is_guardianship = true AND p.status != 'Discharged' AND ps.staff_id = $1 AND p.hospital_id = $2
+        WHERE p.is_guardianship = true AND p.status != 'Discharged'  AND p.status = 'Admitted'  AND COALESCE(p.is_archived, false) = false  AND ps.staff_id = $1 AND p.hospital_id = $2
 
         UNION ALL
 
         SELECT 'LTC' AS algorithm, COUNT(*) AS count
         FROM patients p
         JOIN patient_staff ps ON p.id = ps.patient_id
-        WHERE p.is_ltc = true AND p.status != 'Discharged' AND ps.staff_id = $1 AND p.hospital_id = $2
+        WHERE p.is_ltc = true AND p.status != 'Discharged'  AND p.status = 'Admitted'  AND COALESCE(p.is_archived, false) = false AND ps.staff_id = $1 AND p.hospital_id = $2
       `;
       params = [staffId, hospital_id];
     }
@@ -88,7 +88,7 @@ const getPatientsByAlgorithm = async (req, res) => {
       query = `
         SELECT id, first_name, last_name, birth_date, bed_id, created_at,admitted_date
         FROM patients
-        WHERE ${column} = true AND status != 'Discharged' AND hospital_id = $1
+        WHERE ${column} = true AND status != 'Discharged' AND status = 'Admitted'  AND COALESCE(is_archived, false) = false  AND hospital_id = $1
       `;
       params = [hospital_id];
     } else {
@@ -96,7 +96,7 @@ const getPatientsByAlgorithm = async (req, res) => {
         SELECT p.id, p.first_name , p.last_name , p.birth_date, p.bed_id, p.created_at
         FROM patients p
         JOIN patient_staff ps ON p.id = ps.patient_id
-        WHERE ${column} = true AND p.status != 'Discharged' AND ps.staff_id = $1 AND p.hospital_id = $2
+        WHERE ${column} = true AND p.status != 'Discharged' AND status = 'Admitted'  AND COALESCE(is_archived, false) = false AND ps.staff_id = $1 AND p.hospital_id = $2
       `;
       params = [staffId, hospital_id];
     }

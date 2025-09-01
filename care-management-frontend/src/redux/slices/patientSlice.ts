@@ -8,7 +8,11 @@ const BASE_URL = import.meta.env.VITE_API_BASE_URL;
 interface PatientState {
   patients: Patient[];
   dischargedPatients: Patient[];
+  dischargedCount: number;
   searchResults: Patient[];
+  archivedPatients: Patient[];
+  archivedLoading: boolean;
+  archivedError: string | null;
   selectedPatient: Patient | null;
   loading: boolean;
   error: string | null;
@@ -18,6 +22,10 @@ interface PatientState {
 const initialState: PatientState = {
   patients: [],
   dischargedPatients: [],
+  dischargedCount: 0,
+  archivedPatients: [],
+  archivedLoading: false,
+  archivedError: null,
   searchResults: [],
   selectedPatient: null,
   loading: false,
@@ -94,20 +102,33 @@ export const reactivatePatient = createAsyncThunk<
   }
 });
 
-
-export const fetchDischargedPatients = createAsyncThunk(
-  'patients/fetchDischargedPatients',
-  async (_, { rejectWithValue }) => {
+export const fetchDischargedPatients = createAsyncThunk<
+  { count: number; patients: any[] },      
+  { start?: string; end?: string } | void, 
+  { rejectValue: string }                
+>(
+  "patients/fetchDischargedPatients",
+  async (params, { rejectWithValue }) => {
     try {
-      const res = await axios.get(`${BASE_URL}/patients/discharged`, {
-        withCredentials: true,
-      });
-      return res.data;
+      const qs = new URLSearchParams();
+      if (params?.start) qs.append("start", params.start);
+      if (params?.end) qs.append("end", params.end);
+
+      const res = await axios.get(
+        `${BASE_URL}/patients/discharged${qs.toString() ? `?${qs}` : ""}`,
+        { withCredentials: true }
+      );
+
+      return res.data; // { count, patients }
     } catch (err: any) {
-      return rejectWithValue(err.response?.data || 'Failed to fetch discharged patients');
+      return rejectWithValue(
+        err.response?.data || "Failed to fetch discharged patients"
+      );
     }
   }
 );
+
+
 
 export const updatePatient = createAsyncThunk(
   'patients/updatePatient',
@@ -186,6 +207,19 @@ export const updateCourtDate = createAsyncThunk(
 );
 
 
+export const archiveDischargedPatient = createAsyncThunk<
+  { patientId: number },                               
+  { patientId: number; reason?: string },             
+  { rejectValue: string }
+>("patients/archiveDischargedPatient", async ({ patientId, reason }, { rejectWithValue }) => {
+  try {
+    await axios.post(`${BASE_URL}/patients/${patientId}/archive`, { reason }, { withCredentials: true });
+    return { patientId };
+  } catch (e: any) {
+    return rejectWithValue(e?.response?.data?.error || "Failed to archive patient");
+  }
+});
+
 const patientsSlice = createSlice({
   name: 'patients',
   initialState,
@@ -239,10 +273,12 @@ const patientsSlice = createSlice({
         );
         state.loading = false;
       })
-      .addCase(fetchDischargedPatients.fulfilled, (state, action) => {
-        state.dischargedPatients = action.payload;
+     .addCase(fetchDischargedPatients.fulfilled, (state, action) => {
+        state.dischargedPatients = action.payload.patients || [];
+        state.dischargedCount = action.payload.count || 0;
         state.loading = false;
       })
+
       .addCase(updatePatient.fulfilled, (state, action) => {
         const updated = action.payload;
         const index = state.patients.findIndex((p) => p.id === updated.id);

@@ -7,6 +7,7 @@ import {
   fetchPatients,
   reactivatePatient,
   fetchDischargedPatients,
+   archiveDischargedPatient
 } from "../redux/slices/patientSlice";
 import { toast } from "react-toastify";
 
@@ -100,6 +101,25 @@ switch (patient.task_status) {
       });
   };
 
+// 👇 NEW: Archive handler (simpler)
+const handleArchive = async () => {
+  if (!user?.is_super_admin) return;
+  const fullName = `${patient.first_name} ${patient.last_name}`;
+  const reason =
+    window.prompt(
+      `Archive "${fullName}"?\nEnter a reason:`,
+    ) || undefined;
+
+  try {
+    await dispatch(archiveDischargedPatient({ patientId: patient.id, reason })).unwrap();
+    toast.success(`Archived ${fullName}`);
+    dispatch(fetchDischargedPatients()); // refresh discharged list
+  } catch (err: any) {
+    toast.error(err || "Failed to archive patient");
+  }
+};
+
+
   return (
     <div
       className="bg-white p-6 rounded-xl shadow-lg border border-[var(--border-muted)] transition-all duration-300 hover:shadow-xl hover:-translate-y-1 relative"
@@ -137,6 +157,13 @@ switch (patient.task_status) {
               View Historical Report
             </button>
           )}
+           <button
+            className="btn mt-4"
+            onClick={handleArchive}
+            title="Archive (hide from Discharged & all reports)"
+          >
+            Archive
+          </button>
         </div>
       )}
 

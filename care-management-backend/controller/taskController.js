@@ -572,6 +572,8 @@ if (!req.user?.is_approved) {
         AND pt.status IN ('Pending', 'In Progress', 'Missed')
         AND pt.due_date <= CURRENT_DATE + INTERVAL '2 day'
         AND p.status != 'Discharged'
+        AND p.status = 'Admitted'
+        AND COALESCE(p.is_archived, false) = false
         AND pt.is_visible = TRUE
     `;
 
@@ -613,6 +615,8 @@ if (!req.user?.is_approved) {
       WHERE ps.staff_id = $1
         AND pt.status = 'Missed'
         AND p.status != 'Discharged'
+        AND p.status = 'Admitted'
+        AND COALESCE(p.is_archived, false) = false
         AND pt.is_visible = TRUE
         AND NOT EXISTS (
           SELECT 1 FROM jsonb_array_elements(pt.status_history) elem

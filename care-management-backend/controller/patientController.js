@@ -52,8 +52,8 @@ const getPatients = async (req, res) => {
       LEFT JOIN patient_staff ps ON p.id = ps.patient_id
       LEFT JOIN users u ON ps.staff_id = u.id
       ${isStaff 
-        ? `WHERE ps.staff_id = $2 AND p.status != 'Discharged' AND p.hospital_id = $3`
-        : `WHERE p.status != 'Discharged' AND p.hospital_id = $2`
+        ? `WHERE ps.staff_id = $2 AND p.status != 'Discharged' AND p.status = 'Admitted' AND p.hospital_id = $3   AND COALESCE(p.is_archived, false) = false`
+        : `WHERE p.status != 'Discharged' AND p.status = 'Admitted' AND p.hospital_id = $2   AND COALESCE(p.is_archived, false) = false`
       }
       GROUP BY p.id
       ORDER BY p.created_at DESC
@@ -279,7 +279,8 @@ const getPatientById = async (req, res) => {
       FROM patients p
       LEFT JOIN patient_staff ps ON p.id = ps.patient_id
       LEFT JOIN users u ON ps.staff_id = u.id
-      WHERE p.id = $1 AND p.hospital_id = $2
+      WHERE p.id = $1 AND p.hospital_id = $2 
+      AND COALESCE(p.is_archived,false) = false
       GROUP BY p.id
     `, [patientId, userHospitalId]);
 
@@ -390,6 +391,7 @@ const getPatientTasks = async (req, res) => {
 
       JOIN patients p ON pt.patient_id = p.id
       WHERE pt.patient_id = $1 AND p.hospital_id = $2 AND pt.is_visible = TRUE
+      AND COALESCE(p.is_archived,false) = false
       ORDER BY pt.due_date ASC`,
       [patientId, userHospitalId]
     );
@@ -543,35 +545,60 @@ res.json({ message: "Patient reactivated successfully" });
 };
 const getDischargedPatients = async (req, res) => {
   if (!req.user?.is_approved) {
-  return res.status(403).json({ error: "Access denied: User not approved." });
-}
+    return res.status(403).json({ error: "Access denied: User not approved." });
+  }
 
   try {
     const userHospitalId = req.user.hospital_id;
+    const { start, end } = req.query; 
 
-    const result = await pool.query(`
+    let filters = [`p.hospital_id = $1`, `p.status = 'Discharged'`, `COALESCE(p.is_archived,false) = false`];
+    const params = [userHospitalId];
+
+    if (start) {
+      params.push(start);
+      filters.push(`p.discharge_date::date >= $${params.length}`);
+    }
+    if (end) {
+      params.push(end);
+      filters.push(`p.discharge_date::date <= $${params.length}`);
+    }
+
+    const sql = `
       SELECT 
         p.*,
         json_agg(
-          json_build_object(
-            'id', u.id,
-            'name', u.name
-          )
+          json_build_object('id', u.id, 'name', u.name)
         ) FILTER (WHERE u.id IS NOT NULL) AS assigned_staff
       FROM patients p
       LEFT JOIN patient_staff ps ON p.id = ps.patient_id
       LEFT JOIN users u ON ps.staff_id = u.id
-      WHERE p.status = 'Discharged' AND p.hospital_id = $1
+      WHERE ${filters.join(" AND ")}
       GROUP BY p.id
-      ORDER BY p.discharge_date DESC
-    `, [userHospitalId]);
+      ORDER BY p.discharge_date DESC NULLS LAST
+    `;
 
-    res.status(200).json(result.rows);
+    const countSql = `
+      SELECT COUNT(*)::int AS count
+      FROM patients p
+      WHERE ${filters.join(" AND ")}
+    `;
+
+    const [{ rows: patients }, { rows: countRows }] = await Promise.all([
+      pool.query(sql, params),
+      pool.query(countSql, params),
+    ]);
+
+    res.status(200).json({
+      count: countRows[0]?.count ?? 0,
+      patients,
+    });
   } catch (err) {
     console.error("❌ Error fetching discharged patients:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 };
+
 
 const updatePatient = async (req, res) => {
   if (!req.user?.is_approved) {
@@ -775,6 +802,7 @@ const getSearchedPatients = async (req, res) => {
        LEFT JOIN patient_staff ps ON p.id = ps.patient_id
        LEFT JOIN users u ON ps.staff_id = u.id
        WHERE p.hospital_id = $2
+      AND COALESCE(p.is_archived,false) = false
          AND (
            LOWER(p.first_name || ' ' || p.last_name) LIKE $1 OR
            LOWER(p.mrn) LIKE $1 OR
@@ -833,7 +861,7 @@ const getPatientsByAdmin = async (req, res) => {
       FROM patients p
       LEFT JOIN patient_staff ps ON p.id = ps.patient_id
       LEFT JOIN users u ON ps.staff_id = u.id
-      WHERE p.added_by_user_id = $1 AND p.hospital_id = $2 AND p.status != 'Discharged'
+      WHERE p.added_by_user_id = $1 AND p.hospital_id = $2 AND p.status != 'Discharged'   AND COALESCE(p.is_archived, false) = false AND p.status = 'Admitted'
       GROUP BY p.id
       ORDER BY p.created_at DESC`,
       [adminId, hospitalId, today]
@@ -868,7 +896,6 @@ const updateCourtDate = async (req, res) => {
     : "ltc_court_datetime";
 
   try {
-    // Convert input datetime string (e.g. 2025-07-01T10:00) in local time to UTC
     const localDateTime = DateTime.fromISO(newDate, { zone: timezone });
     const utcDateTime = localDateTime.toUTC().toISO();
 
@@ -885,6 +912,53 @@ const updateCourtDate = async (req, res) => {
 };
 
 
+const archiveDischargedPatient = async (req, res) => {
+  if (!req.user?.is_approved) return res.status(403).json({ error: "Access denied: User not approved." });
+  if (!req.user?.is_admin && !req.user?.is_super_admin) {
+    return res.status(403).json({ error: "Only admins can archive patients." });
+  }
+
+  try {
+    const { patientId } = req.params;
+    const { reason } = req.body || {};
+    const hospitalId = req.user.hospital_id;
+    if (!reason) {
+      return res.status(400).json({ error: "Archive reason is required." });
+    }
+    const { rows } = await pool.query(
+      `SELECT id, status, hospital_id FROM patients WHERE id = $1`,
+      [patientId]
+    );
+    if (rows.length === 0 || rows[0].hospital_id !== hospitalId) {
+      return res.status(404).json({ error: "Patient not found or access denied" });
+    }
+    if (!['Discharged', 'Archived'].includes(rows[0].status)) {
+      // Allow idempotent re-archive if already Archived
+      return res.status(400).json({ error: "Only discharged patients can be archived." });
+    }
+
+    const { rows: updated } = await pool.query(
+      `UPDATE patients
+         SET is_archived = TRUE,
+             archived_at = NOW(),
+             archived_by_user_id = $1,
+             archived_reason = $2,
+             status = 'Archived'
+       WHERE id = $3
+       RETURNING *`,
+      [req.user.id, reason ?? null, patientId]
+    );
+
+    return res.status(200).json({ message: "Patient archived successfully.", patient: updated[0] });
+  } catch (err) {
+    console.error("❌ Error archiving patient:", err);
+    if (err.code === "42703") {
+      return res.status(400).json({ error: "Archive fields missing on patients table." });
+    }
+    return res.status(500).json({ error: "Internal server error" });
+  }
+};
+
 
 module.exports = {
   getPatients,
@@ -897,6 +971,7 @@ module.exports = {
   updatePatient,
   getSearchedPatients,
   getPatientsByAdmin,
-  updateCourtDate
+  updateCourtDate,
+  archiveDischargedPatient
 
 };
