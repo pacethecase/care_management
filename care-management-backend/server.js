@@ -76,7 +76,9 @@ const io = socketIo(server, {
   cors: {
     origin: allowedOrigins,
     credentials: true,
+  
   },
+  path: "/socket.io",  
 });
 
 app.set('io', io);
