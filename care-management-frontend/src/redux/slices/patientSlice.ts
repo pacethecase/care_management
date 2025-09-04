@@ -103,31 +103,28 @@ export const reactivatePatient = createAsyncThunk<
 });
 
 export const fetchDischargedPatients = createAsyncThunk<
-  { count: number; patients: any[] },      
-  { start?: string; end?: string } | void, 
-  { rejectValue: string }                
+  { count: number; patients: any[] },
+  { start?: string; end?: string } | void,
+  { rejectValue: string }
 >(
   "patients/fetchDischargedPatients",
   async (params, { rejectWithValue }) => {
     try {
-      const qs = new URLSearchParams();
-      if (params?.start) qs.append("start", params.start);
-      if (params?.end) qs.append("end", params.end);
-
-      const res = await axios.get(
-        `${BASE_URL}/patients/discharged${qs.toString() ? `?${qs}` : ""}`,
-        { withCredentials: true }
+      const response = await axios.get(
+        `${BASE_URL}/patients/discharged`,
+        {
+          params,            
+          withCredentials: true,
+        }
       );
-
-      return res.data; // { count, patients }
-    } catch (err: any) {
+      return response.data;   
+    } catch (error: any) {
       return rejectWithValue(
-        err.response?.data || "Failed to fetch discharged patients"
+        error.response?.data || "Failed to fetch discharged patients"
       );
     }
   }
 );
-
 
 
 export const updatePatient = createAsyncThunk(
