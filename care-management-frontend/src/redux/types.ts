@@ -37,6 +37,8 @@ export interface Patient {
     added_by_user_id:number;
     selected_algorithms?: string[];
     updated_at?:string;
+    archived_at?:string | null;
+    archived_reason?:string | null;
   }
   
   export interface UserInfo {

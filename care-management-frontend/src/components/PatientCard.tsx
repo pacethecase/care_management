@@ -19,6 +19,7 @@ interface PatientCardProps {
   patient: Patient;
   user: UserInfo | null;
   showDischargeInfo?: boolean;
+  showArchivedInfo?: boolean;
   onClick?: () => void;
   onViewReport?: (id: number) => void;
 }
@@ -27,6 +28,7 @@ const PatientCard: React.FC<PatientCardProps> = ({
   patient,
   user,
   showDischargeInfo = false,
+  showArchivedInfo= false,
   onClick,
   onViewReport,
 }) => {
@@ -47,7 +49,7 @@ const PatientCard: React.FC<PatientCardProps> = ({
     (today.getMonth() === birthDate.getMonth() && today.getDate() >= birthDate.getDate());
   if (!isBirthdayPassed) age--;
 
-  // Determine button color based on task_status
+
 let taskButtonColor = "";
 
 switch (patient.task_status) {
@@ -126,7 +128,7 @@ const handleArchive = async () => {
       onClick={onClick}
     >
       {/* Admin Controls */}
-      {user?.is_super_admin && !showDischargeInfo && (
+      {user?.is_super_admin && !showDischargeInfo && !showArchivedInfo && (
         <div className="absolute top-2 right-2 flex gap-3 text-lg">
           <FaEdit
             className="text-blue-600 cursor-pointer"
@@ -167,7 +169,19 @@ const handleArchive = async () => {
         </div>
       )}
 
-      {/* Patient Info */}
+      {user?.is_super_admin && showArchivedInfo && (
+        <div className="absolute top-2 right-2 flex gap-3 text-sm">
+          {onViewReport && (
+            <button
+              className="btn mt-4"
+              onClick={() => onViewReport(patient.id)}
+            >
+              View Historical Timeline
+            </button>
+          )}
+        </div>
+      )}
+
       <h3 className="text-xl font-bold mb-1">
         {patient.last_name}, {patient.first_name}
       </h3>
@@ -197,9 +211,21 @@ const handleArchive = async () => {
           </p>
         </div>
       )}
+      {showArchivedInfo && patient.archived_at && (
+          <div className="mt-2 text-sm text-gray-700">
+          <p>
+            <strong>Archived on:</strong>{" "}
+            {new Date(patient.archived_at).toLocaleDateString()}
+          </p>
+          <p>
+            <em>{patient.archived_reason}</em>
+          </p>
+        </div>
+      )}
+
 
       {/* CTA */}
-      {!showDischargeInfo && (
+      {!showDischargeInfo && !showArchivedInfo && (
         <div className="mt-4 flex justify-center">
         <Link
           to={`/patients/${patient.id}/tasks`}

@@ -110,6 +110,9 @@ const Patients = () => {
                 <button className="btn w-full" onClick={() => navigate('/discharged')}>
                   View Discharged Patients
                 </button>
+                 <button className="btn w-full" onClick={() => navigate('/archived')}>
+                  View Archived Patients
+                </button>
                 <button className="btn w-full" onClick={() => navigate('/add-patient')}>
                   + Add Patient
                 </button>

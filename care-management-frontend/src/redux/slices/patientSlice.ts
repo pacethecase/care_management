@@ -217,6 +217,29 @@ export const archiveDischargedPatient = createAsyncThunk<
   }
 });
 
+
+export const fetchArchivedPatients = createAsyncThunk<
+  { count: number; patients: Patient[] },
+  { start?: string; end?: string } | void,
+  { rejectValue: string }
+>(
+  "patients/fetchArchivedPatients",
+  async (params, { rejectWithValue }) => {
+    try {
+      const response = await axios.get(`${BASE_URL}/patients/archived`, {
+        params,
+        withCredentials: true,
+      });
+      return response.data; 
+    } catch (error: any) {
+      return rejectWithValue(
+        error.response?.data || "Failed to fetch archived patients"
+      );
+    }
+  }
+);
+
+
 const patientsSlice = createSlice({
   name: 'patients',
   initialState,
@@ -349,8 +372,22 @@ const patientsSlice = createSlice({
         state.loading = false;
         state.error = action.payload as string;
         state.updateSuccess = false;
-      });
+      })
+       .addCase(fetchArchivedPatients.pending, (state) => {
+        state.archivedLoading = true;
+        state.archivedError = null;
+      })
+      .addCase(fetchArchivedPatients.fulfilled, (state, action) => {
+        state.archivedLoading = false;
+        state.archivedPatients = action.payload.patients || [];
       
+
+      })
+      .addCase(fetchArchivedPatients.rejected, (state, action) => {
+        state.archivedLoading = false;
+        state.archivedError = action.payload as string;
+      });
+          
       
   },
 });

@@ -31,6 +31,7 @@ import { Routes, Route } from 'react-router-dom';
 import axios from "axios";
 import LengthOfStayReport from "./pages/LengthOfStayReport";
 import OpportunityLOSPage from './pages/OpportunityLOSPage';
+import ArchivedPatients from './pages/ArchivedPatients';
   function App() {
     const dispatch = useDispatch<AppDispatch>();
 
@@ -178,6 +179,7 @@ import OpportunityLOSPage from './pages/OpportunityLOSPage';
               </PrivateRoute>
           }
         />
+        <Route path="/archived" element={<ArchivedPatients />} />
    
 
           <Route path="/forgot-password" element={<ForgotPassword />} />

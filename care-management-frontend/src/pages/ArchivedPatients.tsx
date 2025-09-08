@@ -1,18 +1,20 @@
 import { useEffect, useState, useMemo } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { fetchDischargedPatients } from "../redux/slices/patientSlice";
+import { Link } from "react-router-dom";
+import { fetchArchivedPatients } from "../redux/slices/patientSlice";
 import { fetchHistoricalTimelineReport } from "../redux/slices/reportSlice";
 import { RootState } from "../redux/store";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import PatientCard from "../components/PatientCard";
 import HistoricalTimelineReport from "../components/HistoricalTimelineReport";
+import BlueLoader from "../components/BlueLoader";
 import type { AppDispatch } from "../redux/store";
-import { Link } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
-const DischargedPatients = () => {
+
+const ArchivedPatients = () => {
   const dispatch = useDispatch<AppDispatch>();
-  const { dischargedPatients, dischargedCount, loading, error } = useSelector(
+  const { archivedPatients, archivedLoading, archivedError } = useSelector(
     (state: RootState) => state.patients
   );
   const { historicalReport, loading: reportLoading } = useSelector(
@@ -20,30 +22,26 @@ const DischargedPatients = () => {
   );
   const { user } = useSelector((state: RootState) => state.user);
 
-
-  const [expandedPatientId, setExpandedPatientId] = useState<number | null>(null);
-
-
   const [currentPage, setCurrentPage] = useState(1);
+  const [expandedPatientId, setExpandedPatientId] = useState<number | null>(null);
   const itemsPerPage = 9;
 
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
   const backLink = "/patients";
-
   useEffect(() => {
-    dispatch(fetchDischargedPatients({ start: start || undefined, end: end || undefined }));
+    dispatch(fetchArchivedPatients({ start: start || undefined, end: end || undefined }));
     setCurrentPage(1);
   }, [dispatch, start, end]);
 
-  const totalPages = Math.ceil(dischargedPatients.length / itemsPerPage);
+  const totalPages = Math.ceil(archivedPatients.length / itemsPerPage);
 
   const paginatedPatients = useMemo(() => {
-    return dischargedPatients.slice(
+    return archivedPatients.slice(
       (currentPage - 1) * itemsPerPage,
       currentPage * itemsPerPage
     );
-  }, [dischargedPatients, currentPage]);
+  }, [archivedPatients, currentPage]);
 
   const handleNext = () => {
     if (currentPage < totalPages) {
@@ -62,9 +60,9 @@ const DischargedPatients = () => {
   return (
     <div className="flex flex-col min-h-screen bg-[var(--bg-light)] text-[var(--text-dark)]">
       <Navbar />
-      
       <div className="p-6">
-          <div>
+        {/* header with back button + count */}
+        <div>
               <Link
                 to={backLink}
                 className="inline-flex items-center hover:underline mb-4"
@@ -72,12 +70,17 @@ const DischargedPatients = () => {
                 <ArrowLeft className="w-4 h-4 mr-1" /> Back
             </Link>
         </div>
-        {/* header with count */}
         <div className="flex justify-between items-center mb-4">
-          <h2 className="text-2xl font-bold text-red-600">Discharged Patients</h2>
-          {!loading && (
+          
+          <div className="flex flex-col">
+            <h2 className="text-2xl font-semibold text-red-600">
+              Archived Patients
+            </h2>
+          </div>
+
+          {!archivedLoading && (
             <span className="text-sm text-gray-700">
-              Total in range: <b>{dischargedCount}</b>
+              Total archived: <b>{archivedPatients.length}</b>
             </span>
           )}
         </div>
@@ -105,13 +108,13 @@ const DischargedPatients = () => {
         </div>
 
         {/* messages */}
-        {loading && <p>Loading patients...</p>}
-        {error && <p className="text-red-500">{error}</p>}
-        {!loading && dischargedPatients.length === 0 && (
+        {archivedLoading && <BlueLoader />}
+        {archivedError && <p className="text-red-500">{archivedError}</p>}
+        {!archivedLoading && archivedPatients.length === 0 && (
           <p className="text-gray-500">
             {start || end
-              ? "No discharged patients in this date range."
-              : "No discharged patients found."}
+              ? "No archived patients in this date range."
+              : "No archived patients found."}
           </p>
         )}
 
@@ -122,21 +125,21 @@ const DischargedPatients = () => {
               <PatientCard
                 patient={patient}
                 user={user}
-                showDischargeInfo={true}
+                showArchivedInfo={true}
                 onViewReport={(id) => {
-                  if (typeof id === "number") {
-                    setExpandedPatientId(id);
-                    dispatch(fetchHistoricalTimelineReport({ patientId: id }));
-                  }
+                  setExpandedPatientId(id);
+                  dispatch(fetchHistoricalTimelineReport({ patientId: id }));
                 }}
               />
 
               {expandedPatientId === patient.id && (
                 <div className="mt-4">
                   {reportLoading ? (
-                    <p className="text-gray-600">Loading historical report...</p>
+                    <p className="text-gray-600">Loading historical timeline...</p>
                   ) : (
-                    historicalReport && <HistoricalTimelineReport report={historicalReport} />
+                    historicalReport && (
+                      <HistoricalTimelineReport report={historicalReport} />
+                    )
                   )}
                 </div>
               )}
@@ -178,4 +181,4 @@ const DischargedPatients = () => {
   );
 };
 
-export default DischargedPatients;
+export default ArchivedPatients;

@@ -960,6 +960,68 @@ const archiveDischargedPatient = async (req, res) => {
 };
 
 
+const getArchivedPatients = async (req, res) => {
+  if (!req.user?.is_approved) {
+    return res.status(403).json({ error: "Access denied: User not approved." });
+  }
+
+  try {
+    const userHospitalId = req.user.hospital_id;
+    const { start, end } = req.query;
+
+    let filters = [
+      `p.hospital_id = $1`,
+      `p.status = 'Archived'`,
+      `COALESCE(p.is_archived,false) = true`
+    ];
+    const params = [userHospitalId];
+
+    if (start) {
+      params.push(start);
+      filters.push(`p.archived_at::date >= $${params.length}`);
+    }
+    if (end) {
+      params.push(end);
+      filters.push(`p.archived_at::date <= $${params.length}`);
+    }
+
+      const sql = `
+  SELECT 
+    p.*,
+    json_agg(
+      json_build_object('id', u.id, 'name', u.name)
+    ) FILTER (WHERE u.id IS NOT NULL) AS assigned_staff
+  FROM patients p
+  LEFT JOIN patient_staff ps ON p.id = ps.patient_id
+  LEFT JOIN users u ON ps.staff_id = u.id
+  WHERE ${filters.join(" AND ")}
+  GROUP BY p.id
+  ORDER BY p.archived_at DESC NULLS LAST
+`;
+
+
+    const countSql = `
+      SELECT COUNT(*)::int AS count
+      FROM patients p
+      WHERE ${filters.join(" AND ")}
+    `;
+
+    const [{ rows: patients }, { rows: countRows }] = await Promise.all([
+      pool.query(sql, params),
+      pool.query(countSql, params),
+    ]);
+
+    res.status(200).json({
+      count: countRows[0]?.count ?? 0,
+      patients,
+    });
+  } catch (err) {
+    console.error("❌ Error fetching archived patients:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+
 module.exports = {
   getPatients,
   addPatient,
@@ -972,6 +1034,6 @@ module.exports = {
   getSearchedPatients,
   getPatientsByAdmin,
   updateCourtDate,
-  archiveDischargedPatient
-
+  archiveDischargedPatient,
+  getArchivedPatients
 };
