@@ -599,14 +599,14 @@ const getDischargedPatients = async (req, res) => {
   }
 };
 
-
 const updatePatient = async (req, res) => {
   if (!req.user?.is_approved) {
-  return res.status(403).json({ error: "Access denied: User not approved." });
-}
-  const timezone = req.headers['x-timezone'] || 'America/New_York';
+    return res.status(403).json({ error: "Access denied: User not approved." });
+  }
 
+  const timezone = req.headers["x-timezone"] || "America/New_York";
   const patientId = req.params.patientId;
+
   const {
     first_name,
     last_name,
@@ -617,140 +617,294 @@ const updatePatient = async (req, res) => {
     mrn,
     medical_info,
     assignedStaffIds = [],
-    selected_algorithms = []
+    selected_algorithms = [],
+    reason,
   } = req.body;
 
   try {
-    const isAdmin = req.user.is_admin;
-    const userHospitalId = req.user.hospital_id;
-    if (!isAdmin) {
-      return res.status(403).json({ error: "Only admins can edit patient data." });
-    }
+    // --- Get current patient
+    const { rows: patientRows } = await pool.query(`SELECT * FROM patients WHERE id = $1`, [patientId]);
+    if (patientRows.length === 0) return res.status(404).json({ error: "Patient not found." });
 
-    // Fetch patient and enforce hospital isolation
-    const checkRes = await pool.query(`SELECT * FROM patients WHERE id = $1`, [patientId]);
-    if (checkRes.rows.length === 0) {
-      return res.status(404).json({ error: "Patient not found." });
-    }
+    const existing = patientRows[0];
+    if (existing.hospital_id !== req.user.hospital_id)
+      return res.status(403).json({ error: "Access denied: Patient belongs to another hospital." });
 
-    const existing = checkRes.rows[0];
-
-    if (existing.hospital_id !== userHospitalId) {
-      return res.status(403).json({ error: "Access denied: Patient belongs to a different hospital." });
-    }
+    // --- Concurrency check
     const clientUpdatedAt = req.body.updated_at;
-      if (!clientUpdatedAt) {
-        return res.status(400).json({ error: "Missing updated_at timestamp." });
-      }
+    if (!clientUpdatedAt) return res.status(400).json({ error: "Missing updated_at timestamp." });
+    if (existing.updated_at?.toISOString() !== new Date(clientUpdatedAt).toISOString()) {
+      return res.status(409).json({ error: "This patient was already updated by someone else." });
+    }
 
-      const dbUpdatedAt = existing.updated_at?.toISOString();
-      const clientTime = new Date(clientUpdatedAt).toISOString();
-      if (dbUpdatedAt !== clientTime) {
-        return res.status(409).json({ error: "This patient was already updated by someone else. Please refresh and try again." });
-      }
+    const isAdmin = req.user.is_admin || req.user.is_super_admin;
 
+    // --- Current staff and new staff comparison
+    const { rows: currentStaff } = await pool.query(
+      `SELECT staff_id FROM patient_staff WHERE patient_id = $1`,
+      [patientId]
+    );
+    const currentStaffIds = currentStaff.map((s) => String(s.staff_id)).sort();
+    const newStaffIds = assignedStaffIds.map(String).sort();
+    const staffChanged = currentStaffIds.join(",") !== newStaffIds.join(",");
 
-    const prevAlgorithms = existing.selected_algorithms || [];
-    const addedAlgorithms = selected_algorithms.filter(a => !prevAlgorithms.includes(a));
-    const removedAlgorithms = prevAlgorithms.filter(a => !selected_algorithms.includes(a));
+    if (!isAdmin && staffChanged && (!reason || reason.trim() === "")) {
+      return res.status(400).json({ error: "Reason is required when changing staff assignments." });
+    }
 
-    // Prepare flag updates based on selected algorithms
+    const oldSet = new Set(currentStaffIds);
+    const newlyAddedStaffIds = newStaffIds.filter((id) => !oldSet.has(id));
+    const removedStaffIds = currentStaffIds.filter((id) => !newStaffIds.includes(id));
+
+    // --- Flags
     const flagUpdates = {
       is_behavioral: selected_algorithms.includes("Behavioral"),
       is_ltc: selected_algorithms.includes("LTC"),
       is_guardianship: selected_algorithms.includes("Guardianship"),
     };
+
     const admittedDateUTC = admitted_date
-  ? DateTime.fromISO(admitted_date, { zone: timezone }).toUTC().toISO()
-  : null;
+      ? DateTime.fromISO(admitted_date, { zone: timezone }).toUTC().toISO()
+      : null;
 
 
-    // Update patient details
+    const changes = {};
+    const addChange = (key, oldVal, newVal) => {
+      if (oldVal !== newVal) changes[key] = { old: oldVal, new: newVal };
+    };
+
+    addChange("first_name", existing.first_name, first_name);
+    addChange("last_name", existing.last_name, last_name);
+    addChange("birth_date", existing.birth_date?.toISOString().split("T")[0], birth_date);
+    addChange("age", existing.age, age);
+    addChange("bed_id", existing.bed_id, bedId);
+    addChange("mrn", existing.mrn, mrn);
+    addChange("medical_info", existing.medical_info, medical_info);
+    addChange("admitted_date", existing.admitted_date?.toISOString(), admitted_date);
+
+    addChange("is_behavioral", existing.is_behavioral, flagUpdates.is_behavioral);
+    addChange("is_restrained", existing.is_restrained, req.body.is_restrained);
+    addChange("is_geriatric_psych_available", existing.is_geriatric_psych_available, req.body.is_geriatric_psych_available);
+    addChange("is_behavioral_team", existing.is_behavioral_team, req.body.is_behavioral_team);
+
+    addChange("is_ltc", existing.is_ltc, flagUpdates.is_ltc);
+    addChange("is_ltc_medical", existing.is_ltc_medical, req.body.is_ltc_medical);
+    addChange("is_ltc_financial", existing.is_ltc_financial, req.body.is_ltc_financial);
+
+    addChange("is_guardianship", existing.is_guardianship, flagUpdates.is_guardianship);
+    addChange("is_guardianship_financial", existing.is_guardianship_financial, req.body.is_guardianship_financial);
+    addChange("is_guardianship_person", existing.is_guardianship_person, req.body.is_guardianship_person);
+    addChange("is_guardianship_emergency", existing.is_guardianship_emergency, req.body.is_guardianship_emergency);
+
+    if (staffChanged) {
+      const { rows: oldStaff } = await pool.query(
+        `SELECT name FROM users WHERE id = ANY($1::int[])`,
+        [currentStaffIds.map(Number)]
+      );
+      const { rows: newStaff } = await pool.query(
+        `SELECT name FROM users WHERE id = ANY($1::int[])`,
+        [newStaffIds.map(Number)]
+      );
+      changes.staff_assignments = {
+        old: oldStaff.map((s) => s.name),
+        new: newStaff.map((s) => s.name),
+      };
+    }
+
+    // --- Update patient record
     await pool.query(
-      `UPDATE patients
-       SET first_name = $1,
-           last_name = $2,
-           birth_date = $3,
-           age = $4,
-           bed_id = $5,
-           mrn = $6,
-     
-           medical_info = $7,
-           selected_algorithms = $8,
-           is_behavioral = $9,
-           is_restrained = $10,
-           is_geriatric_psych_available = $11,
-           is_behavioral_team = $12,
-           is_ltc = $13,
-           is_ltc_medical = $14,
-           is_ltc_financial = $15,
-           is_guardianship = $16,
-           is_guardianship_financial = $17,
-           is_guardianship_person = $18,
-           is_guardianship_emergency = $19,
-            admitted_date = $20
-       WHERE id = $21`,
+      `UPDATE patients SET 
+        first_name=$1,last_name=$2,birth_date=$3,age=$4,bed_id=$5,mrn=$6,
+        medical_info=$7,selected_algorithms=$8,is_behavioral=$9,
+        is_restrained=$10,is_geriatric_psych_available=$11,is_behavioral_team=$12,
+        is_ltc=$13,is_ltc_medical=$14,is_ltc_financial=$15,
+        is_guardianship=$16,is_guardianship_financial=$17,
+        is_guardianship_person=$18,is_guardianship_emergency=$19,
+        admitted_date=$20,updated_at=NOW()
+       WHERE id=$21`,
       [
-        first_name,
-        last_name,
-        birth_date,
-        age,
-        bedId,
-        mrn,
-       
-        medical_info,
-        selected_algorithms,
-
-        flagUpdates.is_behavioral,
-        req.body.is_restrained,
-        req.body.is_geriatric_psych_available,
-        req.body.is_behavioral_team,
-
-        flagUpdates.is_ltc,
-        req.body.is_ltc_medical,
-        req.body.is_ltc_financial,
-
-        flagUpdates.is_guardianship,
-        req.body.is_guardianship_financial,
-        req.body.is_guardianship_person,
-        req.body.is_guardianship_emergency,
-        admittedDateUTC,
-        patientId
+        first_name, last_name, birth_date, age, bedId, mrn, medical_info, selected_algorithms,
+        flagUpdates.is_behavioral, req.body.is_restrained, req.body.is_geriatric_psych_available,
+        req.body.is_behavioral_team, flagUpdates.is_ltc, req.body.is_ltc_medical, req.body.is_ltc_financial,
+        flagUpdates.is_guardianship, req.body.is_guardianship_financial, req.body.is_guardianship_person,
+        req.body.is_guardianship_emergency, admittedDateUTC, patientId,
       ]
     );
 
-    // Replace staff assignments
-    await pool.query(`DELETE FROM patient_staff WHERE patient_id = $1`, [patientId]);
-    for (const staffId of assignedStaffIds) {
-      await pool.query(
-        `INSERT INTO patient_staff (patient_id, staff_id) VALUES ($1, $2)`,
-        [patientId, staffId]
-      );
+    // --- Update staff assignment
+    await pool.query(`DELETE FROM patient_staff WHERE patient_id=$1`, [patientId]);
+    for (const sid of assignedStaffIds) {
+      await pool.query(`INSERT INTO patient_staff (patient_id, staff_id) VALUES ($1, $2)`, [patientId, sid]);
     }
 
-    // Assign or update tasks
+    await assignTasksToPatient(patientId, timezone, selected_algorithms);
+
+    await pool.query(
+      `INSERT INTO patient_update_logs (patient_id, user_id, reason, changes, created_at)
+       VALUES ($1, $2, $3, $4, NOW())`,
+      [patientId, req.user.id, reason || "N/A", JSON.stringify(changes)]
+    );
+
   
-    await assignTasksToPatient(patientId, timezone, selected_algorithms, addedAlgorithms, removedAlgorithms);
+    const io = req.app.get("io");
+    const { rows: admins } = await pool.query(
+      `SELECT id, name FROM users WHERE hospital_id=$1 AND (is_admin=true OR is_super_admin=true)`,
+      [req.user.hospital_id]
+    );
+    const updaterName = req.user.name || req.user.email || "Unknown User";
 
-    // Return updated patient data
-    const updatedPatientRes = await pool.query(`
-      SELECT 
-        p.*,
-        json_agg(json_build_object('id', u.id, 'name', u.name)) FILTER (WHERE u.id IS NOT NULL) AS assigned_staff
-      FROM patients p
-      LEFT JOIN patient_staff ps ON p.id = ps.patient_id
-      LEFT JOIN users u ON ps.staff_id = u.id
-      WHERE p.id = $1
-      GROUP BY p.id
-    `, [patientId]);
+      
+    const formatVal = (val) => {
+      if (val === true || val === "true") return "Enabled";
+      if (val === false || val === "false" || val === null || val === undefined) return "Disabled";
+      return String(val);
+    };
 
-    return res.status(200).json({ message: "Patient updated successfully", patient: updatedPatientRes.rows[0] });
+    const prettyField = (key) => {
+      const map = {
+        first_name: "First Name",
+        last_name: "Last Name",
+        birth_date: "Birth Date",
+        bed_id: "Bed ID",
+        mrn: "MRN",
+        is_behavioral: "Behavioral Flag",
+        is_restrained: "Restrained",
+        is_geriatric_psych_available: "Geriatric Psych Availability",
+        is_behavioral_team: "Behavioral Team",
+        is_ltc: "LTC Flag",
+        is_ltc_medical: "LTC Medical",
+        is_ltc_financial: "LTC Financial",
+        is_guardianship: "Guardianship",
+        is_guardianship_financial: "Guardianship Financial",
+        is_guardianship_person: "Guardianship Person",
+        is_guardianship_emergency: "Guardianship Emergency",
+      };
+      return map[key] || key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+    };
+
+    let summary = Object.entries(changes)
+      .map(([f, v]) => {
+        if (f === "staff_assignments") {
+          return `Staff changed:\n   From: ${v.old.join(", ") || "None"}\n   To: ${v.new.join(", ") || "None"}`;
+        }
+        const oldVal = formatVal(v.old);
+        const newVal = formatVal(v.new);
+        return `${prettyField(f)}: ${oldVal} → ${newVal}`;
+      })
+      .join("\n");
+
+    if (reason) summary += `\nReason: ${reason}`;
+
+
+    const adminMessage = `Patient ${first_name} ${last_name} updated by ${updaterName}.\n\n${summary}`;
+    const staffMessage = `Patient ${first_name} ${last_name} updated by ${updaterName}.\n\n${summary}`;
+
+    if (isAdmin) {
+      for (const sid of assignedStaffIds) {
+        const { rows: [notif] } = await pool.query(
+          `INSERT INTO notifications (user_id, patient_id, title, message, type)
+           VALUES ($1, $2, 'Patient Updated by Admin', $3, 'update') RETURNING *`,
+          [sid, patientId, staffMessage]
+        );
+        io?.to?.(`user-${sid}`)?.emit("notification", notif);
+      }
+
+
+      for (const admin of admins) {
+        const { rows: [notif] } = await pool.query(
+          `INSERT INTO notifications (user_id, patient_id, title, message, type)
+           VALUES ($1, $2, 'Audit: Patient Record Updated', $3, 'audit') RETURNING *`,
+          [admin.id, patientId, adminMessage]
+        );
+        io?.to?.(`user-${admin.id}`)?.emit("notification", notif);
+      }
+
+      for (const sid of newlyAddedStaffIds) {
+        const message = `You’ve been assigned to patient ${first_name} ${last_name} by ${updaterName}.`;
+        const { rows: [notif] } = await pool.query(
+          `INSERT INTO notifications (user_id, patient_id, title, message, type)
+           VALUES ($1, $2, 'New Patient Assignment', $3, 'assignment') RETURNING *`,
+          [sid, patientId, message]
+        );
+        io?.to?.(`user-${sid}`)?.emit("notification", notif);
+      }
+
+      for (const sid of removedStaffIds) {
+        const message = `You’ve been unassigned from patient ${first_name} ${last_name} by ${updaterName}.`;
+        const { rows: [notif] } = await pool.query(
+          `INSERT INTO notifications (user_id, patient_id, title, message, type)
+           VALUES ($1, $2, 'Patient Unassignment', $3, 'unassignment') RETURNING *`,
+          [sid, patientId, message]
+        );
+        io?.to?.(`user-${sid}`)?.emit("notification", notif);
+      }
+
+    } else {
+      // --- Staff Updates
+      for (const admin of admins) {
+        const { rows: [notif] } = await pool.query(
+          `INSERT INTO notifications (user_id, patient_id, title, message, type)
+           VALUES ($1, $2, 'Patient Record Change', $3, 'update') RETURNING *`,
+          [admin.id, patientId, adminMessage]
+        );
+        io?.to?.(`user-${admin.id}`)?.emit("notification", notif);
+      }
+
+  
+      for (const sid of assignedStaffIds) {
+        const { rows: [notif] } = await pool.query(
+          `INSERT INTO notifications (user_id, patient_id, title, message, type)
+           VALUES ($1, $2, 'Patient Updated by Staff', $3, 'update') RETURNING *`,
+          [sid, patientId, staffMessage]
+        );
+        io?.to?.(`user-${sid}`)?.emit("notification", notif);
+      }
+
+
+      for (const sid of newlyAddedStaffIds) {
+        const message = `You’ve been assigned to patient ${first_name} ${last_name} by ${updaterName}. ${reason ? `Reason: ${reason}` : ""}`;
+        const { rows: [notif] } = await pool.query(
+          `INSERT INTO notifications (user_id, patient_id, title, message, type)
+           VALUES ($1, $2, 'New Patient Assignment', $3, 'assignment') RETURNING *`,
+          [sid, patientId, message]
+        );
+        io?.to?.(`user-${sid}`)?.emit("notification", notif);
+      }
+
+      for (const sid of removedStaffIds) {
+        const message = `You’ve been unassigned from patient ${first_name} ${last_name} by ${updaterName}. ${reason ? `Reason: ${reason}` : ""}`;
+        const { rows: [notif] } = await pool.query(
+          `INSERT INTO notifications (user_id, patient_id, title, message, type)
+           VALUES ($1, $2, 'Patient Unassignment', $3, 'unassignment') RETURNING *`,
+          [sid, patientId, message]
+        );
+        io?.to?.(`user-${sid}`)?.emit("notification", notif);
+      }
+    }
+
+    // --- Final return
+    const { rows: [updatedPatient] } = await pool.query(
+      `SELECT p.*, json_agg(json_build_object('id', u.id, 'name', u.name)) AS assigned_staff
+       FROM patients p
+       LEFT JOIN patient_staff ps ON ps.patient_id = p.id
+       LEFT JOIN users u ON u.id = ps.staff_id
+       WHERE p.id = $1
+       GROUP BY p.id`,
+      [patientId]
+    );
+
+    return res.status(200).json({
+      message: "Patient updated successfully",
+      patient: updatedPatient,
+    });
 
   } catch (err) {
     console.error("❌ Failed to update patient:", err);
     res.status(500).json({ error: "Internal Server Error" });
   }
 };
+
+
 
 
 const getSearchedPatients = async (req, res) => {

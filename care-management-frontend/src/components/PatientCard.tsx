@@ -127,8 +127,8 @@ const handleArchive = async () => {
       className="bg-white p-6 rounded-xl shadow-lg border border-[var(--border-muted)] transition-all duration-300 hover:shadow-xl hover:-translate-y-1 relative"
       onClick={onClick}
     >
-      {/* Admin Controls */}
-      {user?.is_super_admin && !showDischargeInfo && !showArchivedInfo && (
+    
+    {!showDischargeInfo && !showArchivedInfo && (
         <div className="absolute top-2 right-2 flex gap-3 text-lg">
           <FaEdit
             className="text-blue-600 cursor-pointer"
@@ -138,14 +138,18 @@ const handleArchive = async () => {
               handleEdit();
             }}
           />
-          <FaUserSlash
-            className="text-red-500 cursor-pointer"
-            title="Discharge patient"
-            onClick={(e) => {
-              e.stopPropagation();
-              handleDischarge();
-            }}
-          />
+
+        
+          {(user?.is_admin || user?.is_super_admin) && (
+            <FaUserSlash
+              className="text-red-500 cursor-pointer"
+              title="Discharge patient"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleDischarge();
+              }}
+            />
+          )}
         </div>
       )}
 

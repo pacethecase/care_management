@@ -18,7 +18,7 @@ const EditPatientPage = () => {
   const { patientId } = useParams<{ patientId: string }>();
   const staffs = useSelector((state: RootState) => state.user.staffs);
   const patient = useSelector((state: RootState) => state.patients.selectedPatient);
-
+  const { user } = useSelector((state: RootState) => state.user);
 
   const [formData, setFormData] = useState<any>({
     first_name: '',
@@ -113,37 +113,57 @@ const EditPatientPage = () => {
 
   const handleSubmit = async () => {
     try {
-      const algorithms = [];
+      const algorithms: string[] = [];
+      if (formData.is_behavioral) algorithms.push("Behavioral");
+      if (formData.is_guardianship) algorithms.push("Guardianship");
+      if (formData.is_ltc) algorithms.push("LTC");
 
-    if (formData.is_behavioral) algorithms.push("Behavioral");
-    if (formData.is_guardianship) algorithms.push("Guardianship");
-    if (formData.is_ltc) algorithms.push("LTC");
+      // Compare staff assignments
+      const previousStaffIds =
+        patient?.assigned_staff?.map((s) => String(s.id)) || [];
+      const currentStaffIds = formData.assignedStaffIds;
+      const staffChanged =
+        previousStaffIds.sort().join(",") !== currentStaffIds.sort().join(",");
 
-    const updatedForm = {
-      ...formData,
-      selected_algorithms: algorithms,
-      age: Number(formData.age),
-      updated_at: patient?.updated_at,
-    };
-    await dispatch(updatePatient({ id: Number(patientId), data: updatedForm })).unwrap();
+      let reason: string | undefined;
+      if (!user?.is_admin && !user?.is_super_admin && staffChanged) {
+        const input = window.prompt(
+          "Please provide a reason for changing assigned staff:"
+        );
+        reason = input ?? undefined;
+        if (!reason || reason.trim() === "") {
+          toast.error("Reason is required when changing staff assignments.");
+          return;
+        }
+      }
 
-    toast.success("✅ Patient updated successfully");
-      navigate('/patients');
+      const updatedForm = {
+        ...formData,
+        selected_algorithms: algorithms,
+        age: Number(formData.age),
+        updated_at: patient?.updated_at,
+        ...(reason ? { reason } : {}),
+      };
+
+      await dispatch(updatePatient({ id: Number(patientId), data: updatedForm })).unwrap();
+
+      toast.success("✅ Patient updated successfully");
+      navigate("/patients");
     } catch (err: any) {
-
-  // If thunk rejected withValue(err.response), it shows up here as `err`
       const errorMsg = err?.data?.error;
-
       if (errorMsg?.includes("already updated")) {
-        toast.error("⚠️ Someone else already updated this patient. Please refresh and try again.");
+        toast.error(
+          "⚠️ Someone else already updated this patient. Please refresh and try again."
+        );
+      } else if (errorMsg?.includes("Reason is required")) {
+        toast.error("Reason is required for this update.");
       } else {
         toast.error("❌ Failed to update patient.");
       }
-
       console.error("Update failed:", err);
     }
+  };
 
-};
 
   if (!patient) return <p className="p-6">Loading patient info...</p>;
 

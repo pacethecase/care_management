@@ -193,6 +193,15 @@ const createTables = async () => {
             decided_at TIMESTAMPTZ,
             created_at TIMESTAMPTZ DEFAULT NOW()
         );
+        CREATE TABLE patient_update_logs (
+          id SERIAL PRIMARY KEY,
+          patient_id INTEGER NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+          user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE SET NULL,
+          reason TEXT NOT NULL,
+          changes JSONB DEFAULT '{}', -- store changed fields if you want
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+
 
 
     

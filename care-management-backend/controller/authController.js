@@ -41,7 +41,7 @@ const signup = async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // ✅ Insert into DB first
+
     const result = await pool.query(
       `INSERT INTO users (name, email, password, is_admin, is_staff, is_verified, hospital_id)
        VALUES ($1, $2, $3, $4, $5, false, $6)
@@ -51,9 +51,11 @@ const signup = async (req, res) => {
 
     const user = result.rows[0];
 
-    // ✅ Now generate token with actual user ID
+
     const token = jwt.sign({
       id: user.id,
+      name: user.name,       
+      email: user.email,
       is_admin: user.is_admin,
       is_staff: user.is_staff,
       hospital_id: user.hospital_id,
@@ -127,6 +129,8 @@ const login = async (req, res) => {
         {
           id: user.id,
           is_admin: user.is_admin,
+          name: user.name,            
+          email: user.email, 
           is_staff: user.is_staff,
           hospital_id: user.hospital_id,
           is_approved:user.is_approved,
@@ -157,8 +161,8 @@ const login = async (req, res) => {
           hospital_id: user.hospital_id,
           is_verified: user.is_verified,
           is_approved: user.is_approved,
-        has_global_access: user.has_global_access,
-        is_super_admin:user.is_super_admin,
+          has_global_access: user.has_global_access,
+          is_super_admin:user.is_super_admin,
 
         }
       });

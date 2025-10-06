@@ -134,12 +134,14 @@ export const updatePatient = createAsyncThunk(
       const res = await axios.patch(`${BASE_URL}/patients/${id}/update`, data, {
         withCredentials: true,
       });
-      return res.data.patient;
-    }catch (err: any) {
+      // Some APIs only return a message — handle both cases safely
+      return res.data.patient || { id, ...data }; 
+    } catch (err: any) {
       return rejectWithValue(err.response);
     }
   }
 );
+
 
 export const searchPatients = createAsyncThunk(
   'patients/search',
