@@ -588,10 +588,10 @@ const algorithmFilter = req.query.algorithm || null;
   try {
     // Get national average for this hospital
     const { rows: hospitalRows } = await pool.query(
-      `SELECT daily_bed_cost FROM hospitals WHERE id = $1`,
+      `SELECT daily_room_cost FROM hospitals WHERE id = $1`,
       [hospitalId]
     );
-    const nationalAvg = hospitalRows[0]?.daily_bed_cost || 2883;
+    const nationalAvg = hospitalRows[0]?.daily_room_cost || 2883;
 
     // Build query
     let query = `
@@ -722,10 +722,10 @@ const getOpportunityDaysSummary = async (req, res) => {
 
   try {
     const { rows: hospitalRows } = await pool.query(
-      `SELECT daily_bed_cost FROM hospitals WHERE id = $1`,
+      `SELECT daily_room_cost FROM hospitals WHERE id = $1`,
       [hospitalId]
     );
-    const nationalAvg = hospitalRows[0]?.daily_bed_cost || 2883;
+    const nationalAvg = hospitalRows[0]?.daily_room_cost || 2883;
 
     let patientQuery = `
       SELECT

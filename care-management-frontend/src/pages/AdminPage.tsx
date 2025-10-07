@@ -11,7 +11,7 @@ import {
   clearHospitalMessage,
 } from "../redux/slices/adminSlice";
 import { fetchAllUsers } from "../redux/slices/userSlice";
-import { loadHospitals,updateDailyBedCost } from "../redux/slices/hospitalSlice";
+import { loadHospitals,updateDailyRoomCost } from "../redux/slices/hospitalSlice";
 import { toast } from "react-toastify";
 import type { Hospital } from "../redux/types";
 import Navbar from "../components/Navbar";
@@ -152,7 +152,7 @@ const handleDeleteHospital = async (id: number) => {
         <div>
              {isSuperAdmin && (
               <div className="mt-6">
-                <h2 className="text-lg font-bold mb-2">Edit Hospital Bed Rates</h2>
+                <h2 className="text-lg font-bold mb-2">Edit Hospital Room Rates</h2>
                 <ul className="divide-y max-w-md">
                   {[...hospitals]
                   .filter((h) => h.id === hospitalId)
@@ -163,8 +163,8 @@ const handleDeleteHospital = async (id: number) => {
                       <form
                         onSubmit={(e) => {
                           e.preventDefault();
-                          const newRate = rates[h.id] ?? h.daily_bed_cost;
-                          dispatch(updateDailyBedCost({ hospitalId: h.id, daily_bed_cost: newRate }))
+                          const newRate = rates[h.id] ?? h.daily_room_cost;
+                          dispatch(updateDailyRoomCost({ hospitalId: h.id, daily_room_cost: newRate }))
                             .unwrap()
                             .then(() => toast.success(`Updated rate for ${h.name}`))
                             .catch((_err) => toast.error("Failed to update"));
@@ -175,7 +175,7 @@ const handleDeleteHospital = async (id: number) => {
                           type="number"
                           step="0.01"
                           min="0"
-                          value={rates[h.id] ?? h.daily_bed_cost}
+                          value={rates[h.id] ?? h.daily_room_cost}
                           onChange={(e) =>
                             setRates((prev) => ({ ...prev, [h.id]: Number(e.target.value) }))
                           }
@@ -339,8 +339,8 @@ const handleDeleteHospital = async (id: number) => {
     <form
       onSubmit={(e) => {
         e.preventDefault();
-        const newRate = rates[h.id] ?? h.daily_bed_cost;
-        dispatch(updateDailyBedCost({ hospitalId: h.id, daily_bed_cost: newRate }))
+        const newRate = rates[h.id] ?? h.daily_room_cost;
+        dispatch(updateDailyRoomCost({ hospitalId: h.id, daily_room_cost: newRate }))
           .unwrap()
           .then(() => toast.success(`Updated rate for ${h.name}`))
           .catch(() => toast.error("Failed to update"));
@@ -351,7 +351,7 @@ const handleDeleteHospital = async (id: number) => {
         type="number"
         step="0.01"
         className="border px-2 py-1 rounded w-24"
-        value={rates[h.id] ?? h.daily_bed_cost}
+        value={rates[h.id] ?? h.daily_room_cost}
         onChange={(e) =>
           setRates((prev) => ({
             ...prev,
@@ -360,8 +360,8 @@ const handleDeleteHospital = async (id: number) => {
         }
         onBlur={() => {
           const newRate = rates[h.id];
-          if (newRate !== undefined && newRate !== h.daily_bed_cost) {
-            dispatch(updateDailyBedCost({ hospitalId: h.id, daily_bed_cost: newRate }))
+          if (newRate !== undefined && newRate !== h.daily_room_cost) {
+            dispatch(updateDailyRoomCost({ hospitalId: h.id, daily_room_cost: newRate }))
               .unwrap()
               .then(() => toast.success(`Updated rate for ${h.name}`))
               .catch(() => toast.error("Failed to update"));

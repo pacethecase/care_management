@@ -2,7 +2,7 @@ const pool = require("../models/db");
 
 const getHospitals = async (req, res) => {
   try {
-    const { rows } = await pool.query("SELECT id, name,daily_bed_cost  FROM hospitals ORDER BY name");
+    const { rows } = await pool.query("SELECT id, name,daily_room_cost  FROM hospitals ORDER BY name");
     res.status(200).json(rows);
   } catch (error) {
     console.error("Error fetching hospitals:", error);
@@ -10,12 +10,12 @@ const getHospitals = async (req, res) => {
   }
 };
 
-const updateDailyBedCost = async (req, res) => {
+const updateDailyRoomCost = async (req, res) => {
   const user = req.user;
   const hospitalId = parseInt(req.params.id, 10);
-  const { daily_bed_cost } = req.body;
+  const { daily_room_cost } = req.body;
 
-  if (isNaN(hospitalId) || isNaN(daily_bed_cost)) {
+  if (isNaN(hospitalId) || isNaN(daily_room_cost)) {
     return res.status(400).json({ error: "Invalid input." });
   }
 
@@ -26,8 +26,8 @@ if (!user.is_admin || (!user.is_super_admin && user.hospital_id !== hospitalId))
 
   try {
     await pool.query(
-      "UPDATE hospitals SET daily_bed_cost = $1 WHERE id = $2",
-      [daily_bed_cost, hospitalId]
+      "UPDATE hospitals SET daily_room_cost = $1 WHERE id = $2",
+      [daily_room_cost, hospitalId]
     );
     res.json({ message: "Hospital rate updated successfully." });
   } catch (err) {
@@ -39,5 +39,5 @@ if (!user.is_admin || (!user.is_super_admin && user.hospital_id !== hospitalId))
 
 module.exports = {
   getHospitals,
-updateDailyBedCost
+updateDailyRoomCost
 };

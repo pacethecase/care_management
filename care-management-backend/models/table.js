@@ -45,7 +45,7 @@ const createTables = async () => {
         CREATE TABLE hospitals (
         id SERIAL PRIMARY KEY,
         name TEXT NOT NULL,
-         daily_bed_cost NUMERIC DEFAULT 2883.00,
+         daily_room_cost NUMERIC DEFAULT 2883.00,
         created_at TIMESTAMP DEFAULT NOW()
       );
 
@@ -74,7 +74,7 @@ const createTables = async () => {
           last_name VARCHAR(50) NOT NULL,
           birth_date DATE NOT NULL,
           age INTEGER, 
-          bed_id VARCHAR(20),
+          room_no VARCHAR(20),
           medical_info TEXT,
           status VARCHAR(50) DEFAULT 'Admitted',
           discharge_date TIMESTAMP WITH TIME ZONE,
@@ -115,6 +115,7 @@ const createTables = async () => {
         staff_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         assigned_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY (patient_id, staff_id)
+        access_level VARCHAR(10) DEFAULT 'view',
     );
 
       CREATE TABLE IF NOT EXISTS tasks (

@@ -17,7 +17,7 @@ interface FormData {
   birth_date: string;
   admitted_date:string;
   age: number;
-  bedId: string;
+  roomNo: string;
   mrn: string;
   medical_info: string;
   assignedStaffIds: string[];
@@ -48,7 +48,7 @@ const AddPatientPage = () => {
     last_name: '',
     birth_date: '',
     age: 0,
-    bedId: '',
+    roomNo: '',
     mrn: '',
     medical_info: '',
     admitted_date:'',
@@ -110,7 +110,7 @@ const AddPatientPage = () => {
   };
 
   const validateForm = () => {
-    const requiredFields: (keyof FormData)[] = ['first_name', 'last_name', 'birth_date', 'bedId'];
+    const requiredFields: (keyof FormData)[] = ['first_name', 'last_name', 'birth_date', 'roomNo'];
     return requiredFields.every((field) => !!formData[field]);
   };
 
@@ -245,13 +245,13 @@ const AddPatientPage = () => {
 
 
             <div>
-              <label htmlFor="bedId" className="block font-medium">Bed ID*</label>
+              <label htmlFor="roomNo" className="block font-medium">Room No*</label>
               <input
                 type="text"
-                id="bedId"
-                name="bedId"
+                id="roomNo"
+                name="roomNo"
                 className="bg-white text-black placeholder-gray-400 border rounded py-2 px-3"
-                value={formData.bedId}
+                value={formData.roomNo}
                 onChange={handleChange}
                 required
               />

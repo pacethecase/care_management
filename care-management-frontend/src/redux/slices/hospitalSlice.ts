@@ -32,20 +32,20 @@ export const loadHospitals = createAsyncThunk<
 });
 
 
-export const updateDailyBedCost = createAsyncThunk<
-  { hospitalId: number; daily_bed_cost: number },
-  { hospitalId: number; daily_bed_cost: number },
+export const updateDailyRoomCost = createAsyncThunk<
+  { hospitalId: number; daily_room_cost: number },
+  { hospitalId: number; daily_room_cost: number },
   { rejectValue: string }
->("hospital/updateDailyBedCost", async ({ hospitalId, daily_bed_cost }, { rejectWithValue }) => {
+>("hospital/updateDailyRoomCost", async ({ hospitalId, daily_room_cost }, { rejectWithValue }) => {
   try {
     await axios.patch(
       `${BASE_URL}/hospitals/${hospitalId}/rate`,
-      { daily_bed_cost },
+      { daily_room_cost },
       { withCredentials: true }
     );
-    return { hospitalId, daily_bed_cost };
+    return { hospitalId, daily_room_cost };
   } catch (err: any) {
-    return rejectWithValue(err.response?.data?.error || "Failed to update bed cost");
+    return rejectWithValue(err.response?.data?.error || "Failed to update room cost");
   }
 });
 
@@ -69,13 +69,13 @@ const hospitalSlice = createSlice({
         state.error = payload as string;
       })
 
-      // updateDailyBedCost
-      .addCase(updateDailyBedCost.fulfilled, (state, { payload }) => {
+      // updateDailyRoomCost
+      .addCase(updateDailyRoomCost.fulfilled, (state, { payload }) => {
         const h = state.hospitals.find((x) => x.id === payload.hospitalId);
-        if (h) h.daily_bed_cost = payload.daily_bed_cost;
+        if (h) h.daily_room_cost = payload.daily_room_cost;
         state.error = null;
       })
-      .addCase(updateDailyBedCost.rejected, (state, { payload }) => {
+      .addCase(updateDailyRoomCost.rejected, (state, { payload }) => {
         state.error = payload as string;
       })
 

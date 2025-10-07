@@ -8,7 +8,7 @@ export interface Patient {
     birth_date: string;
    
     age?: number;
-    bed_id?: string;
+    room_no?: string;
     medical_info?: string;
     status?: string;
     assigned_staff_id?: number | null;
@@ -135,7 +135,7 @@ export interface AlgorithmPatientCount {
 export interface Hospital {
   id: number;
   name: string;
-  daily_bed_cost: number; 
+  daily_room_cost: number; 
 }
 
 export interface PatientTask {

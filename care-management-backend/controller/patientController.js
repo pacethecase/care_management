@@ -89,7 +89,7 @@ const addPatient = async (req, res) => {
       last_name,
       birth_date,
       age,
-      bedId,
+      roomNo,
       mrn,
       medical_info,
       assignedStaffIds = [],
@@ -109,7 +109,7 @@ const addPatient = async (req, res) => {
     } = req.body;
 
     // Validate required fields
-    if (!first_name || !last_name || !birth_date || !bedId || !age || !mrn) {
+    if (!first_name || !last_name || !birth_date || !roomNo || !age || !mrn) {
       return res.status(400).json({ message: "Missing required fields" });
     }
 
@@ -132,7 +132,7 @@ const addPatient = async (req, res) => {
     // Insert patient into DB
     const result = await pool.query(
       `INSERT INTO patients (
-        first_name, last_name, birth_date, age, bed_id, mrn, medical_info,
+        first_name, last_name, birth_date, age, room_no, mrn, medical_info,
         is_behavioral, is_restrained, is_geriatric_psych_available, is_behavioral_team,
         is_ltc, is_ltc_medical, is_ltc_financial,
         is_guardianship, is_guardianship_financial, is_guardianship_person, is_guardianship_emergency,
@@ -147,7 +147,7 @@ const addPatient = async (req, res) => {
       )
       RETURNING *`,
       [
-        first_name, last_name, birth_date, age, bedId, mrn, medical_info,
+        first_name, last_name, birth_date, age, roomNo, mrn, medical_info,
         is_behavioral, is_restrained, is_geriatric_psych_available, is_behavioral_team,
         is_ltc, is_ltc_medical, is_ltc_financial,
         is_guardianship, is_guardianship_financial, is_guardianship_person, is_guardianship_emergency,
@@ -232,7 +232,7 @@ const getPatientById = async (req, res) => {
         p.last_name,
         p.birth_date,
         p.age,
-        p.bed_id,
+        p.room_no,
         p.medical_info,
         p.status,
         p.discharge_date,
@@ -612,7 +612,7 @@ const updatePatient = async (req, res) => {
     last_name,
     birth_date,
     age,
-    bedId,
+    roomNo,
     admitted_date,
     mrn,
     medical_info,
@@ -677,7 +677,7 @@ const updatePatient = async (req, res) => {
     addChange("last_name", existing.last_name, last_name);
     addChange("birth_date", existing.birth_date?.toISOString().split("T")[0], birth_date);
     addChange("age", existing.age, age);
-    addChange("bed_id", existing.bed_id, bedId);
+    addChange("room_no", existing.room_no, roomNo);
     addChange("mrn", existing.mrn, mrn);
     addChange("medical_info", existing.medical_info, medical_info);
     addChange("admitted_date", existing.admitted_date?.toISOString(), admitted_date);
@@ -714,7 +714,7 @@ const updatePatient = async (req, res) => {
     // --- Update patient record
     await pool.query(
       `UPDATE patients SET 
-        first_name=$1,last_name=$2,birth_date=$3,age=$4,bed_id=$5,mrn=$6,
+        first_name=$1,last_name=$2,birth_date=$3,age=$4,room_no=$5,mrn=$6,
         medical_info=$7,selected_algorithms=$8,is_behavioral=$9,
         is_restrained=$10,is_geriatric_psych_available=$11,is_behavioral_team=$12,
         is_ltc=$13,is_ltc_medical=$14,is_ltc_financial=$15,
@@ -723,7 +723,7 @@ const updatePatient = async (req, res) => {
         admitted_date=$20,updated_at=NOW()
        WHERE id=$21`,
       [
-        first_name, last_name, birth_date, age, bedId, mrn, medical_info, selected_algorithms,
+        first_name, last_name, birth_date, age, roomNo, mrn, medical_info, selected_algorithms,
         flagUpdates.is_behavioral, req.body.is_restrained, req.body.is_geriatric_psych_available,
         req.body.is_behavioral_team, flagUpdates.is_ltc, req.body.is_ltc_medical, req.body.is_ltc_financial,
         flagUpdates.is_guardianship, req.body.is_guardianship_financial, req.body.is_guardianship_person,
@@ -765,7 +765,7 @@ const updatePatient = async (req, res) => {
         first_name: "First Name",
         last_name: "Last Name",
         birth_date: "Birth Date",
-        bed_id: "Bed ID",
+        room_no: "Room No",
         mrn: "MRN",
         is_behavioral: "Behavioral Flag",
         is_restrained: "Restrained",

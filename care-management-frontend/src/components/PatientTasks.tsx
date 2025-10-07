@@ -884,7 +884,7 @@ if (patientLoading || taskLoading || !patient) {
                 : "Unassigned"}
             </h3>
           <p className="text-sm font-semibold">
-          • Age {patient.age} • Bed {patient.bed_id} • Admitted on{" "}
+          • Age {patient.age} • Room {patient.room_no} • Admitted on{" "}
            {patient.admitted_date
                       ? new Date(patient.admitted_date).toLocaleString(undefined, {
                           year: 'numeric',

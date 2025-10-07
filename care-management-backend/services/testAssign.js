@@ -7,7 +7,7 @@ const run = async () => {
     // Step 1: Insert a mock patient (assuming user with ID 1 is the creator and hospital ID 1)
     const { rows } = await pool.query(`
       INSERT INTO patients (
-        first_name, last_name, birth_date, age, bed_id,
+        first_name, last_name, birth_date, age, room_no,
         admitted_date, is_behavioral, is_guardianship,
         is_guardianship_financial, is_guardianship_person,
         is_guardianship_emergency, is_ltc, is_ltc_financial, is_ltc_medical,

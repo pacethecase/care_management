@@ -25,7 +25,7 @@ const EditPatientPage = () => {
     last_name: '',
     birth_date: '',
     age: '',
-    bedId: '',
+    roomNo: '',
     mrn: '',
     medical_info: '',
     assignedStaffIds: [] as string[],
@@ -65,7 +65,7 @@ const EditPatientPage = () => {
         last_name: patient.last_name || '',
         birth_date: new Date(patient.birth_date).toISOString().split("T")[0],
         age: calculatedAge >= 0 ? calculatedAge.toString() : '',
-        bedId: patient.bed_id || '',
+        roomNo: patient.room_no || '',
         mrn: patient.mrn || '',
         medical_info: patient.medical_info || '',
         assignedStaffIds: patient.assigned_staff?.map((s) => String(s.id)) || [],
@@ -232,8 +232,8 @@ const EditPatientPage = () => {
             </div>
 
             <div>
-              <label className="block font-medium">Bed ID*</label>
-              <input type="text" name="bedId" value={formData.bedId} onChange={handleChange} className="bg-white text-black placeholder-gray-400 border rounded py-2 px-3" />
+              <label className="block font-medium">Room No*</label>
+              <input type="text" name="roomNo" value={formData.roomNo} onChange={handleChange} className="bg-white text-black placeholder-gray-400 border rounded py-2 px-3" />
             </div>
             <div className="md:col-span-2">
               <label className="block font-medium">Medical Info</label>

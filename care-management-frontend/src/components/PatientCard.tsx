@@ -195,7 +195,7 @@ const handleArchive = async () => {
           <span className="font-semibold">Age:</span> {age} years
         </p>
         <p>
-          <span className="font-semibold">Bed:</span> {patient.bed_id || "N/A"}
+          <span className="font-semibold">Room:</span> {patient.room_no || "N/A"}
         </p>
         <p>
           <span className="font-semibold">Workflow Map:</span>{" "}

@@ -20,7 +20,7 @@ const PatientCard = React.memo(({ patient, onClick }: { patient: any; onClick: (
       </h2>
     </div>
     <div className="text-sm text-gray-600 mt-3">
-      <p>Bed: {patient.bed_id}</p>
+      <p>Room: {patient.room_no}</p>
       <p>DOB: {new Date(patient.birth_date).toLocaleDateString()}</p>
       <p>Admitted On: {patient.admitted_date ? new Date(patient.admitted_date).toLocaleDateString() : "N/A"}</p>
        <p>System Date of Entry: {patient.created_at ? new Date(patient.created_at).toLocaleDateString() : "N/A"}</p>

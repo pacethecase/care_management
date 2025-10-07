@@ -7,7 +7,7 @@ const insertHospitalAndAdmin = async () => {
 
     // Step 1: Insert the hospital
     const hospitalRes = await pool.query(
-      `INSERT INTO hospitals (name, daily_bed_cost)
+      `INSERT INTO hospitals (name, daily_room_cost)
        VALUES ($1, $2)
        RETURNING id`,
       [
