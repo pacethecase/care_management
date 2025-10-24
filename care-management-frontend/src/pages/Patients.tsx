@@ -70,38 +70,65 @@ const Patients = () => {
             onPatientClick={(id: number) => setSelectedPatientId(id)}
           />
 
-          {/* Search & Admin Filter */}
-          <div className="w-full lg:w-1/3 bg-white border border-[var(--border-muted)] shadow-sm rounded-xl p-6 h-fit space-y-4">
-            <input
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search by name or MRN"
-              className="input w-full"
-            />
+    
+        <div className="w-full lg:w-1/3 bg-white border border-[var(--border-muted)] shadow-sm rounded-xl p-6 h-fit space-y-4">
+          <input
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Search by name or MRN"
+            className="input w-full"
+          />
 
-            {user?.is_admin && (
-              <>
-                <label htmlFor="adminFilter" className="font-semibold">
-                  Filter by Leader:
-                </label>
-                <select
-                  id="adminFilter"
-                  className="input w-full"
-                  value={selectedAdminId}
-                  onChange={(e) =>
-                    setSelectedAdminId(e.target.value ? Number(e.target.value) : '')
-                  }
-                >
-                  <option value="">All Leaders</option>
-                  {admins.map((admin) => (
-                    <option key={admin.id} value={admin.id}>
-                      {admin.name}
-                    </option>
-                  ))}
-                </select>
-              </>
-            )}
+          {user?.is_admin && (
+            <>
+              <label htmlFor="adminFilter" className="font-semibold">
+                Filter by Leader:
+              </label>
+              <select
+                id="adminFilter"
+                className="input w-full"
+                value={selectedAdminId}
+                onChange={(e) =>
+                  setSelectedAdminId(e.target.value ? Number(e.target.value) : '')
+                }
+              >
+                <option value="">All Leaders</option>
+                {admins.map((admin) => (
+                  <option key={admin.id} value={admin.id}>
+                    {admin.name}
+                  </option>
+                ))}
+              </select>
+            </>
+          )}
+
+          <div className="mt-6">
+            <h3 className="font-semibold mb-2 text-[var(--prussian-blue)] text-center lg:text-left">
+              Status Key
+            </h3>
+            <div className="flex flex-col items-center lg:items-start space-y-2 text-sm">
+              <div className="flex items-center gap-2">
+                <span className="inline-block w-4 h-4 rounded-full bg-gray-400"></span>
+                <span>Not Started</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="inline-block w-4 h-4 rounded-full bg-blue-500"></span>
+                <span>Due Today or Upcoming</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="inline-block w-4 h-4 rounded-full bg-red-600"></span>
+                <span>Overdue</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="inline-block w-4 h-4 rounded-full bg-green-600"></span>
+                <span>Completed</span>
+              </div>
+            </div>
           </div>
+
+
+        </div>
+
 
           {/* Admin Buttons */}
           {user?.is_admin && (
