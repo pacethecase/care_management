@@ -249,7 +249,7 @@ const handleDeleteHospital = async (id: number) => {
                 {paginatedUsers.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="p-4 text-center">
-                      No users found
+                      No Pending User Request Found
                     </td>
                   </tr>
                 ) : (

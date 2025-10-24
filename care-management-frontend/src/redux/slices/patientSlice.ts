@@ -157,9 +157,10 @@ export const updatePatient = createAsyncThunk(
 
 export const searchPatients = createAsyncThunk(
   'patients/search',
-  async (query: string, { rejectWithValue }) => {
+  async ({ query, status = 'active' }: { query: string; status?: 'active' | 'discharged' | 'archived' }, { rejectWithValue }) => {
     try {
-      const res = await axios.get(`${BASE_URL}/patients/search?q=${encodeURIComponent(query)}`, {
+      const res = await axios.get(`${BASE_URL}/patients/search`, {
+        params: { q: query, status },
         withCredentials: true,
       });
       return res.data;
@@ -168,7 +169,6 @@ export const searchPatients = createAsyncThunk(
     }
   }
 );
-
 
 export const fetchPatientsByAdmin = createAsyncThunk<
 Patient[],

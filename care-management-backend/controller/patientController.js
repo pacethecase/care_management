@@ -955,11 +955,11 @@ const updatePatient = async (req, res) => {
 
 const getSearchedPatients = async (req, res) => {
   if (!req.user?.is_approved) {
-  return res.status(403).json({ error: "Access denied: User not approved." });
-}
+    return res.status(403).json({ error: "Access denied: User not approved." });
+  }
 
   try {
-    const { q } = req.query;
+    const { q, status } = req.query;
     const hospitalId = req.user.hospital_id;
     const timezone = req.headers["x-timezone"] || "America/New_York";
 
@@ -967,13 +967,41 @@ const getSearchedPatients = async (req, res) => {
       return res.status(400).json({ error: "Search query is required" });
     }
 
-   const today = DateTime.now()
-  .setZone(timezone)
-  .endOf('day')
-  .toUTC()
-  .toJSDate(); 
-
+    const today = DateTime.now().setZone(timezone).endOf("day").toUTC().toJSDate();
     const query = `%${q.toLowerCase()}%`;
+
+
+    const conditions = [`p.hospital_id = $2`];
+    const params = [query, hospitalId, today];
+
+    switch (status) {
+      case "discharged":
+        conditions.push("p.discharge_date IS NOT NULL");
+        conditions.push("COALESCE(p.is_archived, false) = false");
+        break;
+      case "archived":
+        // archived patients
+        conditions.push("COALESCE(p.is_archived, false) = true");
+        break;
+      default: // active patients
+        // not discharged and not archived
+        conditions.push("p.discharge_date IS NULL");
+        conditions.push("COALESCE(p.is_archived, false) = false");
+        break;
+    }
+
+
+  
+    conditions.push(`(
+      LOWER(p.first_name || ' ' || p.last_name) LIKE $1 OR
+      LOWER(p.mrn) LIKE $1 OR
+      p.admitted_date::text LIKE $1 OR
+      p.created_at::text LIKE $1 OR
+      p.discharge_date::text LIKE $1 OR
+      p.archived_at::text LIKE $1
+    )`);
+
+    const whereClause = conditions.join(" AND ");
 
     const result = await pool.query(
       `SELECT 
@@ -996,22 +1024,20 @@ const getSearchedPatients = async (req, res) => {
            ) THEN 'completed'
            ELSE NULL
          END AS task_status,
-         json_agg(json_build_object('id', u.id, 'name', u.name)) 
+         json_agg(json_build_object('id', u.id, 'name', u.name))
            FILTER (WHERE u.id IS NOT NULL) AS assigned_staff
        FROM patients p
        LEFT JOIN patient_staff ps ON p.id = ps.patient_id
        LEFT JOIN users u ON ps.staff_id = u.id
-       WHERE p.hospital_id = $2
-      AND COALESCE(p.is_archived,false) = false
-         AND (
-           LOWER(p.first_name || ' ' || p.last_name) LIKE $1 OR
-           LOWER(p.mrn) LIKE $1 OR
-           p.admitted_date::text LIKE $1 OR
-           p.created_at::text LIKE $1
-         )
+       WHERE ${whereClause}
        GROUP BY p.id
-       ORDER BY p.created_at DESC`,
-      [query, hospitalId, today]
+       ORDER BY 
+         CASE
+           WHEN $4 = 'discharged' THEN p.discharge_date
+           WHEN $4 = 'archived' THEN p.archived_at
+           ELSE p.created_at
+         END DESC`,
+      [...params, status || "active"]
     );
 
     res.status(200).json(result.rows);

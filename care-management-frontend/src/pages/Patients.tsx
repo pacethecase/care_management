@@ -35,20 +35,25 @@ const Patients = () => {
     }
   }, [dispatch, user?.is_admin]);
 
-  // Fetch patients on change of search term or admin selection
-  useEffect(() => {
-    const delay = setTimeout(() => {
-      if (searchTerm.trim()) {
-        dispatch(searchPatients(searchTerm));
-      } else if (user?.is_admin && selectedAdminId !== '') {
-        dispatch(fetchPatientsByAdmin(Number(selectedAdminId)));
-      } else {
-        dispatch(fetchPatients());
-      }
-    }, 300);
 
-    return () => clearTimeout(delay);
-  }, [searchTerm, selectedAdminId, dispatch, user]);
+ useEffect(() => {
+  const delay = setTimeout(() => {
+    const trimmed = searchTerm.trim();
+
+    if (trimmed.length > 0) {
+      dispatch(searchPatients({ query: trimmed, status: 'active' }));
+    } 
+    else if (user?.is_admin && selectedAdminId !== '') {
+      dispatch(fetchPatientsByAdmin(Number(selectedAdminId)));
+    } 
+    else {
+      dispatch(fetchPatients());
+    }
+  }, 300);
+
+  return () => clearTimeout(delay);
+}, [searchTerm, selectedAdminId, dispatch, user]);
+
 
 
 

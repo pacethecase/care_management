@@ -1,6 +1,9 @@
 import { useEffect, useState, useMemo } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { fetchDischargedPatients } from "../redux/slices/patientSlice";
+import {
+  fetchDischargedPatients,
+  searchPatients,
+} from "../redux/slices/patientSlice";
 import { fetchHistoricalTimelineReport } from "../redux/slices/reportSlice";
 import { RootState } from "../redux/store";
 import Navbar from "../components/Navbar";
@@ -10,40 +13,55 @@ import HistoricalTimelineReport from "../components/HistoricalTimelineReport";
 import type { AppDispatch } from "../redux/store";
 import { Link } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
+
 const DischargedPatients = () => {
   const dispatch = useDispatch<AppDispatch>();
-  const { dischargedPatients, dischargedCount, loading, error } = useSelector(
-    (state: RootState) => state.patients
-  );
+  const { dischargedPatients, dischargedCount, searchResults, loading, error } =
+    useSelector((state: RootState) => state.patients);
   const { historicalReport, loading: reportLoading } = useSelector(
     (state: RootState) => state.reports
   );
   const { user } = useSelector((state: RootState) => state.user);
 
-
   const [expandedPatientId, setExpandedPatientId] = useState<number | null>(null);
-
-
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 9;
 
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
   const backLink = "/patients";
 
+  // 🧭 Fetch discharged patients by date range
   useEffect(() => {
     dispatch(fetchDischargedPatients({ start: start || undefined, end: end || undefined }));
     setCurrentPage(1);
   }, [dispatch, start, end]);
 
-  const totalPages = Math.ceil(dischargedPatients.length / itemsPerPage);
+  // 🔍 Handle search
+  useEffect(() => {
+    const delay = setTimeout(() => {
+      const trimmed = searchTerm.trim();
+      if (trimmed.length > 0) {
+        dispatch(searchPatients({ query: trimmed, status: "discharged" }));
+      } else {
+        dispatch(fetchDischargedPatients({ start: start || undefined, end: end || undefined }));
+      }
+    }, 300);
+
+    return () => clearTimeout(delay);
+  }, [searchTerm, dispatch, start, end]);
+
+  // 🔢 Pagination
+  const dataToDisplay = searchTerm.trim() ? searchResults : dischargedPatients;
+  const totalPages = Math.ceil(dataToDisplay.length / itemsPerPage);
 
   const paginatedPatients = useMemo(() => {
-    return dischargedPatients.slice(
+    return dataToDisplay.slice(
       (currentPage - 1) * itemsPerPage,
       currentPage * itemsPerPage
     );
-  }, [dischargedPatients, currentPage]);
+  }, [dataToDisplay, currentPage]);
 
   const handleNext = () => {
     if (currentPage < totalPages) {
@@ -62,27 +80,43 @@ const DischargedPatients = () => {
   return (
     <div className="flex flex-col min-h-screen bg-[var(--bg-light)] text-[var(--text-dark)]">
       <Navbar />
-      
+
       <div className="p-6">
-          <div>
-              <Link
-                to={backLink}
-                className="inline-flex items-center hover:underline mb-4"
-            >
-                <ArrowLeft className="w-4 h-4 mr-1" /> Back
-            </Link>
-        </div>
-        {/* header with count */}
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-2xl font-bold text-red-600">Discharged Patients</h2>
-          {!loading && (
-            <span className="text-sm text-gray-700">
-              Total in range: <b>{dischargedCount}</b>
-            </span>
-          )}
+        <div>
+          <Link
+            to={backLink}
+            className="inline-flex items-center hover:underline mb-4"
+          >
+            <ArrowLeft className="w-4 h-4 mr-1" /> Back
+          </Link>
         </div>
 
-        {/* date filters */}
+        {/* Header with title, count, and search */}
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-4 gap-4">
+          <div>
+            <h2 className="text-2xl font-bold text-red-600">
+              Discharged Patients
+            </h2>
+            {!loading && (
+              <span className="text-sm text-gray-700">
+                Total in range: <b>{dischargedCount}</b>
+              </span>
+            )}
+          </div>
+
+          {/* 🔍 Search Input */}
+          <div className="w-full lg:w-1/3">
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search by name or MRN"
+              className="input input-bordered w-full"
+            />
+          </div>
+        </div>
+
+        {/* Date Filters */}
         <div className="flex gap-4 mb-6">
           <div>
             <label className="block text-xs text-gray-600">Start Date</label>
@@ -104,10 +138,10 @@ const DischargedPatients = () => {
           </div>
         </div>
 
-        {/* messages */}
+        {/* Messages */}
         {loading && <p>Loading patients...</p>}
         {error && <p className="text-red-500">{error}</p>}
-        {!loading && dischargedPatients.length === 0 && (
+        {!loading && dataToDisplay.length === 0 && (
           <p className="text-gray-500">
             {start || end
               ? "No discharged patients in this date range."
@@ -115,7 +149,7 @@ const DischargedPatients = () => {
           </p>
         )}
 
-        {/* patient list */}
+        {/* Patient List */}
         <div className="grid grid-cols-1 gap-6">
           {paginatedPatients.map((patient) => (
             <div key={patient.id}>
@@ -136,7 +170,9 @@ const DischargedPatients = () => {
                   {reportLoading ? (
                     <p className="text-gray-600">Loading historical report...</p>
                   ) : (
-                    historicalReport && <HistoricalTimelineReport report={historicalReport} />
+                    historicalReport && (
+                      <HistoricalTimelineReport report={historicalReport} />
+                    )
                   )}
                 </div>
               )}
@@ -144,7 +180,7 @@ const DischargedPatients = () => {
           ))}
         </div>
 
-        {/* pagination */}
+        {/* Pagination */}
         {totalPages > 1 && (
           <div className="flex justify-center items-center gap-4 mt-8">
             <button
@@ -173,6 +209,7 @@ const DischargedPatients = () => {
           </div>
         )}
       </div>
+
       <Footer />
     </div>
   );
