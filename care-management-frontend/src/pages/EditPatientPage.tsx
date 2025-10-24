@@ -12,6 +12,12 @@ import { reactSelectStyles } from '../reactSelectStyles';
 import type { AppDispatch } from '../redux/store';
 import dayjs from 'dayjs';
 import { toast } from 'react-toastify';
+
+interface StaffAccess {
+  id: string;
+  access_level: 'view' | 'edit';
+}
+
 const EditPatientPage = () => {
   const dispatch = useDispatch<AppDispatch>();
   const navigate = useNavigate();
@@ -28,7 +34,7 @@ const EditPatientPage = () => {
     roomNo: '',
     mrn: '',
     medical_info: '',
-    assignedStaffIds: [] as string[],
+    assignedStaffIds: [] as { id: string; access_level: 'view' | 'edit' }[],
     selected_algorithms: [] as string[],
 
     is_behavioral: false,
@@ -59,6 +65,11 @@ const EditPatientPage = () => {
       const birthDate = new Date(patient.birth_date);
       const today = new Date();
       const calculatedAge = Math.floor((today.getTime() - birthDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
+      const assignedStaffIds: StaffAccess[] =
+        patient.assigned_staff?.map((s: any) => ({
+          id: String(s.id),
+          access_level: s.access_level || 'view',
+        })) || [];
 
       setFormData({
         first_name: patient.first_name || '',
@@ -68,8 +79,10 @@ const EditPatientPage = () => {
         roomNo: patient.room_no || '',
         mrn: patient.mrn || '',
         medical_info: patient.medical_info || '',
-        assignedStaffIds: patient.assigned_staff?.map((s) => String(s.id)) || [],
+        assignedStaffIds,
         selected_algorithms: patient.selected_algorithms || [],
+        admitted_date: patient.admitted_date || '',
+        created_at: patient.created_at || '',
 
         is_behavioral: patient.is_behavioral || false,
         is_restrained: patient.is_restrained || false,
@@ -84,8 +97,6 @@ const EditPatientPage = () => {
         is_guardianship_financial: patient.is_guardianship_financial || false,
         is_guardianship_person: patient.is_guardianship_person || false,
         is_guardianship_emergency: patient.is_guardianship_emergency || false,
-        admitted_date:patient.admitted_date || '',
-        created_at: patient.created_at || '',
       });
     }
   }, [patient]);
@@ -143,9 +154,15 @@ const EditPatientPage = () => {
         age: Number(formData.age),
         updated_at: patient?.updated_at,
         ...(reason ? { reason } : {}),
+        assignedStaffIds: formData.assignedStaffIds.map((s: StaffAccess) => ({
+          staff_id: s.id,
+          access_level: s.access_level,
+        })),
       };
 
       await dispatch(updatePatient({ id: Number(patientId), data: updatedForm })).unwrap();
+
+
 
       toast.success("✅ Patient updated successfully");
       navigate("/patients");
@@ -239,24 +256,75 @@ const EditPatientPage = () => {
               <label className="block font-medium">Medical Info</label>
               <textarea name="medical_info" value={formData.medical_info} onChange={handleChange} className="bg-white text-black placeholder-gray-400 border rounded py-2 px-3" />
             </div>
-            <div className="md:col-span-2 text-black">
-              <label className="block text-white font-medium">Assign Staff</label>
+              <div className="md:col-span-2 text-black">
+              <label className="block text-white font-medium mb-2">Assign Staff</label>
+
               <Select
-                isMulti
                 styles={reactSelectStyles}
-                options={staffs.map(s => ({ value: s.id, label: s.name }))}
-                value={staffs.filter(s => formData.assignedStaffIds.includes(String(s.id))).map(s => ({
-                  value: s.id,
-                  label: s.name
-                }))}
-                onChange={(selectedOptions) => {
-                  setFormData((prev: any) => ({
-                    ...prev,
-                    assignedStaffIds: selectedOptions.map(opt => String(opt.value)),
-                  }));
+                options={staffs
+                  .filter((s) => !formData.assignedStaffIds.some((st: any) => st.id === String(s.id)))
+                  .map((s) => ({ value: s.id, label: s.name }))}
+                placeholder="Add staff..."
+                onChange={(selectedOption) => {
+                  if (selectedOption) {
+                    setFormData((prev: any) => ({
+                      ...prev,
+                      assignedStaffIds: [
+                        ...prev.assignedStaffIds,
+                        { id: String(selectedOption.value), access_level: 'view' },
+                      ],
+                    }));
+                  }
                 }}
               />
+
+              {formData.assignedStaffIds.map((staff: StaffAccess, index: number) => {
+                const staffName =
+                  staffs.find((s) => String(s.id) === staff.id)?.name || 'Unknown';
+
+                return (
+                  <div key={staff.id} className="flex justify-between items-center bg-white rounded-xl p-3 mt-3">
+                    <div>
+                      <div className="font-semibold text-gray-900">{staffName}</div>
+                      <div className="text-sm text-gray-500">
+                        {staff.access_level === 'edit' ? 'Edit Access' : 'View Only'}
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <select
+                        className="border rounded px-2 py-1"
+                        value={staff.access_level}
+                        onChange={(e) => {
+                          const newLevel = e.target.value as 'view' | 'edit';
+                          setFormData((prev: any) => ({
+                            ...prev,
+                            assignedStaffIds: prev.assignedStaffIds.map((st: any, i: number) =>
+                              i === index ? { ...st, access_level: newLevel } : st
+                            ),
+                          }));
+                        }}
+                      >
+                        <option value="view">View Only</option>
+                        <option value="edit">Edit</option>
+                      </select>
+
+                      <button
+                        className="text-red-500 font-bold"
+                        onClick={() =>
+                          setFormData((prev: any) => ({
+                            ...prev,
+                            assignedStaffIds: prev.assignedStaffIds.filter((_: any, i: number) => i !== index),
+                          }))
+                        }
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
+
 
             {/* 🧠 Algorithm Selection */}
             <div className="md:col-span-2">

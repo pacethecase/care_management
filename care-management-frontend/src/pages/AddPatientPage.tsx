@@ -11,6 +11,10 @@ import Select from 'react-select';
 import { reactSelectStyles } from '../reactSelectStyles';
 import dayjs from 'dayjs';
 
+interface StaffAccess {
+  id: string;
+  access_level: 'view' | 'edit';
+}
 interface FormData {
   first_name: string;
   last_name: string;
@@ -20,7 +24,7 @@ interface FormData {
   roomNo: string;
   mrn: string;
   medical_info: string;
-  assignedStaffIds: string[];
+  assignedStaffIds: StaffAccess[];
   is_behavioral: boolean;
   is_restrained: boolean;
   is_geriatric_psych_available: boolean;
@@ -122,7 +126,15 @@ const AddPatientPage = () => {
 
     try {
       setIsSubmitting(true);
-      await dispatch(addPatient({ ...formData})).unwrap();
+      await dispatch(
+        addPatient({
+          ...formData,
+          assignedStaffIds: formData.assignedStaffIds.map(s => ({
+            staff_id: s.id,
+            access_level: s.access_level
+          }))
+        })
+      ).unwrap();
       navigate('/patients');
     } catch (err: any) {
       alert(`Error: ${err?.message || 'Failed to add patient'}`);
@@ -267,22 +279,91 @@ const AddPatientPage = () => {
                 onChange={handleChange}
               />
             </div>
-
             <div className="md:col-span-2 text-black">
-              <label className="block text-white font-medium">Assign Staff</label>
+              <label className="block text-white font-medium mb-2">Assign Staff</label>
+
               <Select
-                isMulti
+                key={formData.assignedStaffIds.length} 
                 styles={reactSelectStyles}
-                options={staffOptions}
-                value={staffOptions.filter((opt) => formData.assignedStaffIds.includes(String(opt.value)))}
-                onChange={(selectedOptions) => {
-                  setFormData((prev) => ({
-                    ...prev,
-                    assignedStaffIds: selectedOptions.map((opt) => String(opt.value)),
-                  }));
+                options={staffOptions.filter(
+                  (opt) => !formData.assignedStaffIds.some((st) => st.id === String(opt.value))
+                )}
+                placeholder="Select a staff to assign..."
+                onChange={(selectedOption) => {
+                  if (selectedOption) {
+                    setFormData((prev) => ({
+                      ...prev,
+                      assignedStaffIds: [
+                        ...prev.assignedStaffIds,
+                        { id: String(selectedOption.value), access_level: 'view' as 'view' | 'edit' },
+                      ],
+                    }));
+                  }
                 }}
               />
-            </div>
+
+              {formData.assignedStaffIds.length > 0 && (
+                <div className="mt-4 grid gap-3">
+                  {formData.assignedStaffIds.map((staff, index) => {
+                    const staffName =
+                      staffs.find((s) => String(s.id) === staff.id)?.name || 'Unknown';
+
+                    return (
+                      <div
+                        key={staff.id}
+                        className="flex justify-between items-center bg-white rounded-xl p-3 shadow-sm border border-gray-200 transition hover:shadow-md"
+                      >
+                        <div className="flex flex-col">
+                          <span className="font-semibold text-gray-900 text-lg">{staffName}</span>
+                          <span
+                            className={`mt-1 inline-block text-xs font-semibold px-2 py-1 rounded-full ${
+                              staff.access_level === 'edit'
+                                ? 'bg-green-100 text-green-700 border border-green-300'
+                                : 'bg-blue-100 text-blue-700 border border-blue-300'
+                            }`}
+                          >
+                            {staff.access_level === 'edit' ? 'Edit Access' : 'View Only'}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <select
+                            className="border rounded-lg px-3 py-1.5 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                            value={staff.access_level}
+                            onChange={(e) => {
+                              const newAccess = e.target.value as 'view' | 'edit';
+                              setFormData((prev) => ({
+                                ...prev,
+                                assignedStaffIds: prev.assignedStaffIds.map((st, i) =>
+                                  i === index ? { ...st, access_level: newAccess } : st
+                                ),
+                              }));
+                            }}
+                          >
+                            <option value="view">View Only</option>
+                            <option value="edit">Edit</option>
+                          </select>
+
+                          <button
+                            className="text-red-500 hover:text-red-700 text-lg font-bold"
+                            onClick={() =>
+                              setFormData((prev) => ({
+                                ...prev,
+                                assignedStaffIds: prev.assignedStaffIds.filter(
+                                  (_, i) => i !== index
+                                ),
+                              }))
+                            }
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+          </div>
 
             <div className="md:col-span-2">
               <AlgorithmSelection formData={formData} setFormData={setFormData} />

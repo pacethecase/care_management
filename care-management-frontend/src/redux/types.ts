@@ -54,12 +54,11 @@ export interface Patient {
     token?: string;
   }
   
-  export interface Staff {
-    id: number;
-    name: string;
-
-  }
-
+export interface Staff {
+  id: number;
+  name: string;
+  access_level?: 'view' | 'edit'; 
+}
 
 export interface Note {
     id: number;

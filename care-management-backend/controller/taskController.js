@@ -100,7 +100,7 @@ const startTask = async (req, res) => {
 
 
 
-// ✅ Complete Task (handle repeat + dependency)
+
 const completeTask = async (req, res) => {
    const client = await pool.connect();
   try {

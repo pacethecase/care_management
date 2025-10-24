@@ -15,25 +15,20 @@ const {
   overrideTask,
   handleOverrideDecision
 } = require("../controller/taskController");
-const { verifyToken } = require("../middleware/authMiddleware");
+const { verifyToken,requireEditAccess } = require("../middleware/authMiddleware");
 
 
-router.post("/:taskId/start", verifyToken, startTask);
-
-router.post("/:taskId/complete", verifyToken, completeTask);
-
-router.post("/:taskId/missed", verifyToken, markTaskAsMissed);
-
-
+router.post("/:taskId/start", verifyToken,requireEditAccess, startTask);
+router.post("/:taskId/complete", verifyToken,requireEditAccess, completeTask);
+router.post("/:taskId/missed", verifyToken,requireEditAccess, markTaskAsMissed);
 router.get("/priority", verifyToken, getPriorityTasks);
-
 router.get("/missed", verifyToken, getMissedTasks);
-router.post("/:taskId/follow-up",verifyToken, followUpCourtTask);
-router.patch("/patient_tasks/:taskId/note", verifyToken, updateTaskNote);
-router.patch("/:id/acknowledge", verifyToken, acknowledgeTask);
-router.post("/patients/:id/manual-task",verifyToken, addManualTaskForPatient);
+router.post("/:taskId/follow-up",verifyToken,requireEditAccess, followUpCourtTask);
+router.patch("/patient_tasks/:taskId/note", verifyToken,requireEditAccess, updateTaskNote);
+router.patch("/:id/acknowledge", verifyToken,requireEditAccess, acknowledgeTask);
+router.post("/patients/:id/manual-task",verifyToken,requireEditAccess, addManualTaskForPatient);
 router.get("/task-names",verifyToken, getTaskNames);
-router.post("/:taskId/override", verifyToken, overrideTask);
+router.post("/:taskId/override", verifyToken,requireEditAccess, overrideTask);
 router.patch("/:taskId/overridedecision", verifyToken, handleOverrideDecision);
 
 module.exports = router;

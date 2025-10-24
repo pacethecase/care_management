@@ -171,10 +171,11 @@ const addPatient = async (req, res) => {
     }
 
     // Insert into patient_staff
-    for (const staffId of assignedStaffIds) {
+    for (const staff of assignedStaffIds) {
       await pool.query(
-        `INSERT INTO patient_staff (patient_id, staff_id) VALUES ($1, $2)`,
-        [newPatient.id, staffId]
+        `INSERT INTO patient_staff (patient_id, staff_id, access_level)
+        VALUES ($1, $2, $3)`,
+        [newPatient.id, staff.staff_id, staff.access_level || 'view']
       );
     }
 
@@ -257,7 +258,7 @@ const getPatientById = async (req, res) => {
         p.selected_algorithms,
         p.hospital_id,
         p.updated_at,
-        json_agg(json_build_object('id', u.id, 'name', u.name)) 
+        json_agg(json_build_object('id', u.id, 'name', u.name, 'access_level', ps.access_level))
           FILTER (WHERE u.id IS NOT NULL) AS assigned_staff,
         CASE
           WHEN EXISTS (
@@ -645,7 +646,7 @@ const updatePatient = async (req, res) => {
       [patientId]
     );
     const currentStaffIds = currentStaff.map((s) => String(s.staff_id)).sort();
-    const newStaffIds = assignedStaffIds.map(String).sort();
+    const newStaffIds = assignedStaffIds.map(s => String(s.staff_id ?? s.id)).sort();
     const staffChanged = currentStaffIds.join(",") !== newStaffIds.join(",");
 
     if (!isAdmin && staffChanged && (!reason || reason.trim() === "")) {
@@ -733,9 +734,35 @@ const updatePatient = async (req, res) => {
 
     // --- Update staff assignment
     await pool.query(`DELETE FROM patient_staff WHERE patient_id=$1`, [patientId]);
-    for (const sid of assignedStaffIds) {
-      await pool.query(`INSERT INTO patient_staff (patient_id, staff_id) VALUES ($1, $2)`, [patientId, sid]);
+    const normalizedStaff = assignedStaffIds.map((s) => {
+    if (typeof s === "string") {
+      try {
+        return JSON.parse(s);
+      } catch {
+        console.warn("⚠️ Invalid staff entry string:", s);
+        return null;
+      }
     }
+    return s;
+  }).filter(Boolean);
+
+  for (const staff of normalizedStaff) {
+    const staffIdRaw = staff.staff_id ?? staff.id;
+    const staffId = parseInt(staffIdRaw, 10);
+    const patientIdNum = parseInt(patientId, 10);
+    const accessLevel = staff.access_level || "view";
+
+    if (isNaN(staffId) || isNaN(patientIdNum)) {
+      console.warn("⚠️ Skipping invalid staff_id:", staff);
+      continue;
+    }
+
+    await pool.query(
+      `INSERT INTO patient_staff (patient_id, staff_id, access_level)
+      VALUES ($1, $2, $3)`,
+      [patientIdNum, staffId, accessLevel]
+    );
+  }
 
     await assignTasksToPatient(patientId, timezone, selected_algorithms);
 
@@ -800,13 +827,20 @@ const updatePatient = async (req, res) => {
     const staffMessage = `Patient ${first_name} ${last_name} updated by ${updaterName}.\n\n${summary}`;
 
     if (isAdmin) {
-      for (const sid of assignedStaffIds) {
-        const { rows: [notif] } = await pool.query(
+        for (const s of assignedStaffIds) {
+          const staffId = parseInt(s.staff_id ?? s.id, 10);
+          if (isNaN(staffId)) {
+            console.warn("⚠️ Skipping invalid staff id in notifications:", s);
+            continue;
+          }
+
+       const { rows: [notif] } = await pool.query(
           `INSERT INTO notifications (user_id, patient_id, title, message, type)
-           VALUES ($1, $2, 'Patient Updated by Admin', $3, 'update') RETURNING *`,
-          [sid, patientId, staffMessage]
+          VALUES ($1, $2, 'Patient Updated by Admin', $3, 'update') RETURNING *`,
+          [staffId, patientId, staffMessage]
         );
-        io?.to?.(`user-${sid}`)?.emit("notification", notif);
+
+        io?.to?.(`user-${staffId}`)?.emit("notification", notif);
       }
 
 
@@ -851,13 +885,19 @@ const updatePatient = async (req, res) => {
       }
 
   
-      for (const sid of assignedStaffIds) {
-        const { rows: [notif] } = await pool.query(
+        for (const s of assignedStaffIds) {
+          const staffId = parseInt(s.staff_id ?? s.id, 10);
+          if (isNaN(staffId)) {
+            console.warn("⚠️ Skipping invalid staff id in notifications:", s);
+            continue;
+          }
+
+       const { rows: [notif] } = await pool.query(
           `INSERT INTO notifications (user_id, patient_id, title, message, type)
-           VALUES ($1, $2, 'Patient Updated by Staff', $3, 'update') RETURNING *`,
-          [sid, patientId, staffMessage]
+          VALUES ($1, $2, 'Patient Updated by Admin', $3, 'update') RETURNING *`,
+          [staffId, patientId, staffMessage]
         );
-        io?.to?.(`user-${sid}`)?.emit("notification", notif);
+        io?.to?.(`user-${staffId}`)?.emit("notification", notif);
       }
 
 
@@ -884,12 +924,18 @@ const updatePatient = async (req, res) => {
 
     // --- Final return
     const { rows: [updatedPatient] } = await pool.query(
-      `SELECT p.*, json_agg(json_build_object('id', u.id, 'name', u.name)) AS assigned_staff
-       FROM patients p
-       LEFT JOIN patient_staff ps ON ps.patient_id = p.id
-       LEFT JOIN users u ON u.id = ps.staff_id
-       WHERE p.id = $1
-       GROUP BY p.id`,
+      `SELECT p.*, json_agg(
+        json_build_object(
+          'id', u.id,
+          'name', u.name,
+          'access_level', ps.access_level
+        )
+      ) AS assigned_staff
+      FROM patients p
+      LEFT JOIN patient_staff ps ON ps.patient_id = p.id
+      LEFT JOIN users u ON u.id = ps.staff_id
+      WHERE p.id = $1
+      GROUP BY p.id`,
       [patientId]
     );
 

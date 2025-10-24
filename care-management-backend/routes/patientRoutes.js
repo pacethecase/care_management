@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { verifyToken, requireAdmin } = require("../middleware/authMiddleware");
+const { verifyToken, requireAdmin,requireEditAccess } = require("../middleware/authMiddleware");
 const {
   getPatients,
   addPatient,
@@ -20,7 +20,7 @@ router.get("/:patientId/tasks", verifyToken, getPatientTasks);
 router.post("/:patientId/discharge", verifyToken, dischargePatient);
 
 
-router.patch("/:patientId/update", verifyToken, updatePatient);
+router.patch("/:patientId/update", verifyToken, requireEditAccess,updatePatient);
 router.patch('/:patientId/reactivate', verifyToken, reactivatePatient);
 router.get('/by-admin/:adminId',verifyToken, getPatientsByAdmin);
 

@@ -114,13 +114,13 @@ const createTables = async () => {
         patient_id INTEGER NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
         staff_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         assigned_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-        PRIMARY KEY (patient_id, staff_id)
+        PRIMARY KEY (patient_id, staff_id),
         access_level VARCHAR(10) DEFAULT 'view',
     );
 
       CREATE TABLE IF NOT EXISTS tasks (
           id SERIAL PRIMARY KEY,
-     name VARCHAR(200) NOT NULL,
+          name VARCHAR(200) NOT NULL,
           description TEXT,
           is_repeating BOOLEAN DEFAULT FALSE,  -- Determines if the task should repeat
           recurrence_interval INTEGER,  -- Number of days before it repeats (e.g., 7 for weekly)

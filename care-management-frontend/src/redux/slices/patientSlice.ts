@@ -47,7 +47,12 @@ export const fetchPatients = createAsyncThunk(
 
 export const addPatient = createAsyncThunk(
   'patients/addPatient',
-  async (patientData: any, { rejectWithValue }) => {
+  async (
+    patientData: {
+      [key: string]: any;
+      assignedStaffIds: { staff_id: string; access_level: 'view' | 'edit' }[];
+    },
+    { rejectWithValue }) => {
     try {
       const response = await axios.post(`${BASE_URL}/patients`, patientData, {
         withCredentials: true,
@@ -129,12 +134,19 @@ export const fetchDischargedPatients = createAsyncThunk<
 
 export const updatePatient = createAsyncThunk(
   'patients/updatePatient',
-  async ({ id, data }: { id: number | string; data: any }, { rejectWithValue }) => {
+  async (
+    {
+      id,
+      data,
+    }: {
+      id: number | string;
+      data: { [key: string]: any; assignedStaffIds: { staff_id: string; access_level: 'view' | 'edit' }[] };
+    },
+    { rejectWithValue }) => {
     try {
       const res = await axios.patch(`${BASE_URL}/patients/${id}/update`, data, {
         withCredentials: true,
       });
-      // Some APIs only return a message — handle both cases safely
       return res.data.patient || { id, ...data }; 
     } catch (err: any) {
       return rejectWithValue(err.response);
