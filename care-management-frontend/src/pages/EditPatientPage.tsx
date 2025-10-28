@@ -249,7 +249,7 @@ const EditPatientPage = () => {
             </div>
 
             <div>
-              <label className="block font-medium">Room No*</label>
+              <label className="block font-medium">Room #*</label>
               <input type="text" name="roomNo" value={formData.roomNo} onChange={handleChange} className="bg-white text-black placeholder-gray-400 border rounded py-2 px-3" />
             </div>
             <div className="md:col-span-2">

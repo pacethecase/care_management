@@ -158,53 +158,92 @@ const addPatient = async (req, res) => {
 
     const newPatient = result.rows[0];
 
-    // Validate staff assignment
+
     if (assignedStaffIds.length > 0) {
-      const { rows: validStaff } = await pool.query(
-        `SELECT id FROM users WHERE id = ANY($1::int[]) AND hospital_id = $2  AND is_approved = true`,
-        [assignedStaffIds, hospital_id]
-      );
-      const validStaffIds = validStaff.map(s => s.id);
-      if (validStaffIds.length !== assignedStaffIds.length) {
-        return res.status(400).json({ error: "One or more assigned staff are  not approve or not in your hospital" });
+  const staffIdsOnly = assignedStaffIds.map((s) => {
+    if (typeof s === "string") {
+      try {
+        const parsed = JSON.parse(s);
+        return parseInt(parsed.staff_id ?? parsed.id, 10);
+      } catch {
+        return null;
       }
     }
+    return parseInt(s.staff_id ?? s.id, 10);
+  }).filter((id) => !isNaN(id));
 
-    // Insert into patient_staff
-    for (const staff of assignedStaffIds) {
+  const { rows: validStaff } = await pool.query(
+    `SELECT id FROM users WHERE id = ANY($1::int[]) AND hospital_id = $2 AND is_approved = true`,
+    [staffIdsOnly, hospital_id]
+  );
+
+  const validStaffIds = validStaff.map((s) => s.id);
+  if (validStaffIds.length !== staffIdsOnly.length) {
+    return res.status(400).json({
+      error: "One or more assigned staff are not approved or not in your hospital",
+    });
+  }
+}
+
+
+
+    const normalizedStaff = assignedStaffIds.map((s) => {
+      if (typeof s === "string") {
+        try {
+          return JSON.parse(s);
+        } catch {
+          console.warn("⚠️ Invalid staff entry string:", s);
+          return null;
+        }
+      }
+      return s;
+    }).filter(Boolean);
+
+    // Then iterate over normalizedStaff instead
+    for (const staff of normalizedStaff) {
+      const staffIdRaw = staff.staff_id ?? staff.id;
+      const staffId = parseInt(staffIdRaw, 10);
+      const accessLevel = staff.access_level || "view";
+
+      if (isNaN(staffId)) {
+        console.warn("⚠️ Skipping invalid staff_id:", staff);
+        continue;
+      }
+
       await pool.query(
         `INSERT INTO patient_staff (patient_id, staff_id, access_level)
         VALUES ($1, $2, $3)`,
-        [newPatient.id, staff.staff_id, staff.access_level || 'view']
+        [newPatient.id, staffId, accessLevel]
       );
     }
 
-    await assignTasksToPatient(newPatient.id, timezone, selectedAlgorithms);
 
-    if (assignedStaffIds.length > 0) {
-      const io = req.app.get("io");
-      for (const staffId of assignedStaffIds) {
-        const title = "New Patient Assigned";
-        const message = `You are assigned to ${newPatient.first_name} ${newPatient.last_name}`;
+      await assignTasksToPatient(newPatient.id, timezone, selectedAlgorithms);
 
+      if (normalizedStaff.length > 0) {
+        const io = req.app.get("io");
 
-        const { rows: [notif] } = await pool.query(
-          `INSERT INTO notifications (user_id, patient_id, title, message, type)
-          VALUES ($1, $2, $3, $4, $5)
-          RETURNING *`,
-          [
-            staffId,
-            newPatient.id,   
-            title,
-            message,
-            "assignment"    
-          ]
-        );
+        for (const staff of normalizedStaff) {
+          const staffIdRaw = staff.staff_id ?? staff.id;
+          const staffId = parseInt(staffIdRaw, 10);
+          if (isNaN(staffId)) {
+            console.warn("⚠️ Skipping invalid staff_id for notification:", staff);
+            continue;
+          }
 
-        
-        io?.to?.(`user-${staffId}`)?.emit("notification", notif);
+          const title = "New Patient Assigned";
+          const message = `You are assigned to ${newPatient.first_name} ${newPatient.last_name}`;
+
+          const { rows: [notif] } = await pool.query(
+            `INSERT INTO notifications (user_id, patient_id, title, message, type)
+            VALUES ($1, $2, $3, $4, $5)
+            RETURNING *`,
+            [staffId, newPatient.id, title, message, "assignment"]
+          );
+
+          io?.to?.(`user-${staffId}`)?.emit("notification", notif);
+        }
       }
-    }
 
       res.status(201).json({ message: "Patient added and tasks assigned", patient: newPatient });
     } catch (err) {
@@ -792,7 +831,7 @@ const updatePatient = async (req, res) => {
         first_name: "First Name",
         last_name: "Last Name",
         birth_date: "Birth Date",
-        room_no: "Room No",
+        room_no: "Room #",
         mrn: "MRN",
         is_behavioral: "Behavioral Flag",
         is_restrained: "Restrained",

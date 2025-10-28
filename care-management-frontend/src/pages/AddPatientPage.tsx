@@ -257,7 +257,7 @@ const AddPatientPage = () => {
 
 
             <div>
-              <label htmlFor="roomNo" className="block font-medium">Room No*</label>
+              <label htmlFor="roomNo" className="block font-medium">Room #*</label>
               <input
                 type="text"
                 id="roomNo"
