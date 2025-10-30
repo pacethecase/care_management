@@ -38,19 +38,26 @@ const DischargedPatients = () => {
     setCurrentPage(1);
   }, [dispatch, start, end]);
 
-  // 🔍 Handle search
   useEffect(() => {
-    const delay = setTimeout(() => {
-      const trimmed = searchTerm.trim();
-      if (trimmed.length > 0) {
-        dispatch(searchPatients({ query: trimmed, status: "discharged" }));
-      } else {
-        dispatch(fetchDischargedPatients({ start: start || undefined, end: end || undefined }));
-      }
-    }, 300);
+      const delay = setTimeout(() => {
+        const trimmed = searchTerm.trim();
+        if (trimmed.length > 0) {
+          dispatch(
+            searchPatients({
+              query: trimmed,
+              status: "discharged",
+              start: start || undefined,
+              end: end || undefined,
+            })
+          );
+        } else {
+          dispatch(fetchDischargedPatients({ start: start || undefined, end: end || undefined }));
+        }
+      }, 300);
+  
+      return () => clearTimeout(delay);
+    }, [searchTerm, dispatch, start, end]);
 
-    return () => clearTimeout(delay);
-  }, [searchTerm, dispatch, start, end]);
 
   // 🔢 Pagination
   const dataToDisplay = searchTerm.trim() ? searchResults : dischargedPatients;
@@ -103,40 +110,43 @@ const DischargedPatients = () => {
               </span>
             )}
           </div>
-
-          {/* 🔍 Search Input */}
-          <div className="w-full lg:w-1/3">
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search by name or MRN"
-              className="input input-bordered w-full"
-            />
-          </div>
         </div>
 
-        {/* Date Filters */}
-        <div className="flex gap-4 mb-6">
+
+      <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 mb-8 flex flex-wrap items-end justify-between gap-4">
+        <div className="flex flex-wrap gap-4">
           <div>
-            <label className="block text-xs text-gray-600">Start Date</label>
+            <label className="block text-xs text-gray-500 mb-1">Start Date</label>
             <input
               type="date"
               value={start}
               onChange={(e) => setStart(e.target.value)}
-              className="input input-bordered input-sm"
+              className="input input-bordered input-sm rounded-md border-gray-300 focus:ring-2 focus:ring-blue-400"
             />
           </div>
           <div>
-            <label className="block text-xs text-gray-600">End Date</label>
+            <label className="block text-xs text-gray-500 mb-1">End Date</label>
             <input
               type="date"
               value={end}
               onChange={(e) => setEnd(e.target.value)}
-              className="input input-bordered input-sm"
+              className="input input-bordered input-sm rounded-md border-gray-300 focus:ring-2 focus:ring-blue-400"
             />
           </div>
         </div>
+
+        {/* 🔍 Search Bar (aligned to right) */}
+        <div className="relative w-full sm:w-64">
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Search by name or MRN..."
+            className="w-full pl-10 pr-4 py-2 rounded-full border border-gray-300 focus:ring-2 focus:ring-blue-400 focus:outline-none transition-all shadow-sm"
+          />
+        </div>
+      </div>
+
 
         {/* Messages */}
         {loading && <p>Loading patients...</p>}

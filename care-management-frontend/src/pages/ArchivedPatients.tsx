@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { Link } from "react-router-dom";
-import { fetchArchivedPatients } from "../redux/slices/patientSlice";
+import { fetchArchivedPatients, searchPatients } from "../redux/slices/patientSlice";
 import { fetchHistoricalTimelineReport } from "../redux/slices/reportSlice";
 import { RootState } from "../redux/store";
 import Navbar from "../components/Navbar";
@@ -14,34 +14,64 @@ import { ArrowLeft } from "lucide-react";
 
 const ArchivedPatients = () => {
   const dispatch = useDispatch<AppDispatch>();
-  const { archivedPatients, archivedLoading, archivedError } = useSelector(
-    (state: RootState) => state.patients
-  );
+  const {
+    archivedPatients,
+    archivedLoading,
+    archivedError,
+    searchResults,
+  } = useSelector((state: RootState) => state.patients);
+
   const { historicalReport, loading: reportLoading } = useSelector(
     (state: RootState) => state.reports
   );
+
   const { user } = useSelector((state: RootState) => state.user);
 
   const [currentPage, setCurrentPage] = useState(1);
   const [expandedPatientId, setExpandedPatientId] = useState<number | null>(null);
   const itemsPerPage = 9;
 
+  const [searchTerm, setSearchTerm] = useState("");
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
   const backLink = "/patients";
+
+  // 🧭 Fetch archived patients by date range
   useEffect(() => {
     dispatch(fetchArchivedPatients({ start: start || undefined, end: end || undefined }));
     setCurrentPage(1);
   }, [dispatch, start, end]);
 
-  const totalPages = Math.ceil(archivedPatients.length / itemsPerPage);
+  useEffect(() => {
+    const delay = setTimeout(() => {
+      const trimmed = searchTerm.trim();
+      if (trimmed.length > 0) {
+        dispatch(
+          searchPatients({
+            query: trimmed,
+            status: "archived",
+            start: start || undefined,
+            end: end || undefined,
+          })
+        );
+      } else {
+        dispatch(fetchArchivedPatients({ start: start || undefined, end: end || undefined }));
+      }
+    }, 300);
+
+    return () => clearTimeout(delay);
+  }, [searchTerm, dispatch, start, end]);
+
+  // 🔢 Pagination
+  const dataToDisplay = searchTerm.trim() ? searchResults : archivedPatients;
+  const totalPages = Math.ceil(dataToDisplay.length / itemsPerPage);
 
   const paginatedPatients = useMemo(() => {
-    return archivedPatients.slice(
+    return dataToDisplay.slice(
       (currentPage - 1) * itemsPerPage,
       currentPage * itemsPerPage
     );
-  }, [archivedPatients, currentPage]);
+  }, [dataToDisplay, currentPage]);
 
   const handleNext = () => {
     if (currentPage < totalPages) {
@@ -60,57 +90,71 @@ const ArchivedPatients = () => {
   return (
     <div className="flex flex-col min-h-screen bg-[var(--bg-light)] text-[var(--text-dark)]">
       <Navbar />
+
       <div className="p-6">
-        {/* header with back button + count */}
+        {/* 🔙 Back Button */}
         <div>
-              <Link
-                to={backLink}
-                className="inline-flex items-center hover:underline mb-4"
-            >
-                <ArrowLeft className="w-4 h-4 mr-1" /> Back
-            </Link>
+          <Link
+            to={backLink}
+            className="inline-flex items-center hover:underline mb-4"
+          >
+            <ArrowLeft className="w-4 h-4 mr-1" /> Back
+          </Link>
         </div>
-        <div className="flex justify-between items-center mb-4">
-          
-          <div className="flex flex-col">
-            <h2 className="text-2xl font-semibold text-red-600">
+
+        {/* 🧾 Header */}
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-4 gap-4">
+          <div>
+            <h2 className="text-2xl font-bold text-red-600">
               Archived Patients
             </h2>
-          </div>
-
-          {!archivedLoading && (
-            <span className="text-sm text-gray-700">
-              Total archived: <b>{archivedPatients.length}</b>
-            </span>
-          )}
-        </div>
-
-        {/* date filters */}
-        <div className="flex gap-4 mb-6">
-          <div>
-            <label className="block text-xs text-gray-600">Start Date</label>
-            <input
-              type="date"
-              value={start}
-              onChange={(e) => setStart(e.target.value)}
-              className="input input-bordered input-sm"
-            />
-          </div>
-          <div>
-            <label className="block text-xs text-gray-600">End Date</label>
-            <input
-              type="date"
-              value={end}
-              onChange={(e) => setEnd(e.target.value)}
-              className="input input-bordered input-sm"
-            />
+            {!archivedLoading && (
+              <span className="text-sm text-gray-700">
+                Total in range: <b>{archivedPatients.length}</b>
+              </span>
+            )}
           </div>
         </div>
 
-        {/* messages */}
+        {/* 📅 Date Filters + Search */}
+        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 mb-8 flex flex-wrap items-end justify-between gap-4">
+          <div className="flex flex-wrap gap-4">
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Start Date</label>
+              <input
+                type="date"
+                value={start}
+                onChange={(e) => setStart(e.target.value)}
+                className="input input-bordered input-sm rounded-md border-gray-300 focus:ring-2 focus:ring-blue-400"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">End Date</label>
+              <input
+                type="date"
+                value={end}
+                onChange={(e) => setEnd(e.target.value)}
+                className="input input-bordered input-sm rounded-md border-gray-300 focus:ring-2 focus:ring-blue-400"
+              />
+            </div>
+          </div>
+
+          {/* 🔍 Search Bar (aligned to right) */}
+          <div className="relative w-full sm:w-64">
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search by name or MRN..."
+              className="w-full pl-10 pr-4 py-2 rounded-full border border-gray-300 focus:ring-2 focus:ring-blue-400 focus:outline-none transition-all shadow-sm"
+            />
+          </div>
+        </div>
+
+        {/* 📄 Messages */}
         {archivedLoading && <BlueLoader />}
         {archivedError && <p className="text-red-500">{archivedError}</p>}
-        {!archivedLoading && archivedPatients.length === 0 && (
+        {!archivedLoading && dataToDisplay.length === 0 && (
           <p className="text-gray-500">
             {start || end
               ? "No archived patients in this date range."
@@ -118,7 +162,7 @@ const ArchivedPatients = () => {
           </p>
         )}
 
-        {/* patient list */}
+        {/* 🩺 Patient List */}
         <div className="grid grid-cols-1 gap-6">
           {paginatedPatients.map((patient) => (
             <div key={patient.id}>
@@ -127,8 +171,10 @@ const ArchivedPatients = () => {
                 user={user}
                 showArchivedInfo={true}
                 onViewReport={(id) => {
-                  setExpandedPatientId(id);
-                  dispatch(fetchHistoricalTimelineReport({ patientId: id }));
+                  if (typeof id === "number") {
+                    setExpandedPatientId(id);
+                    dispatch(fetchHistoricalTimelineReport({ patientId: id }));
+                  }
                 }}
               />
 
@@ -147,7 +193,7 @@ const ArchivedPatients = () => {
           ))}
         </div>
 
-        {/* pagination */}
+        {/* 📑 Pagination */}
         {totalPages > 1 && (
           <div className="flex justify-center items-center gap-4 mt-8">
             <button
@@ -176,6 +222,7 @@ const ArchivedPatients = () => {
           </div>
         )}
       </div>
+
       <Footer />
     </div>
   );

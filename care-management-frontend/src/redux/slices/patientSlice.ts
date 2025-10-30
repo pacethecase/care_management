@@ -154,17 +154,36 @@ export const updatePatient = createAsyncThunk(
   }
 );
 
-
 export const searchPatients = createAsyncThunk(
   'patients/search',
-  async ({ query, status = 'active' }: { query: string; status?: 'active' | 'discharged' | 'archived' }, { rejectWithValue }) => {
+  async (
+    {
+      query,
+      status = 'active',
+      start,
+      end,
+    }: {
+      query: string;
+      status?: 'active' | 'discharged' | 'archived';
+      start?: string;
+      end?: string;
+    },
+    { rejectWithValue }
+  ) => {
     try {
+      const params: Record<string, string> = { q: query, status };
+
+      if (start) params.start = start;
+      if (end) params.end = end;
+
       const res = await axios.get(`${BASE_URL}/patients/search`, {
-        params: { q: query, status },
+        params,
         withCredentials: true,
       });
+
       return res.data;
     } catch (err: any) {
+      console.error('❌ searchPatients error:', err);
       return rejectWithValue(err.response?.data || 'Search failed');
     }
   }
