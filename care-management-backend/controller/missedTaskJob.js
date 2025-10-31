@@ -29,7 +29,7 @@ function setupMissedTaskJob(io) {
           JOIN patients p ON pt.patient_id = p.id
           LEFT JOIN patient_staff ps ON pt.patient_id = ps.patient_id
           JOIN tasks t ON pt.task_id = t.id
-          WHERE pt.status IN ('Pending', 'In Progress')
+          WHERE pt.status IN ('Pending', 'In Progress','Follow Up')
              AND pt.is_visible = TRUE
             AND COALESCE(pt.due_date, pt.ideal_due_date) < $1::timestamptz
             AND p.status = 'Admitted'
