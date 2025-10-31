@@ -152,7 +152,6 @@ const addPatient = async (req, res) => {
         AND LOWER(last_name) = LOWER($2)
         AND birth_date::date = $3::date
         AND mrn = $4
-        AND COALESCE(is_archived, false) = false
         AND hospital_id = $5
       `,
       [first_name, last_name, birth_date, mrn, hospital_id]
