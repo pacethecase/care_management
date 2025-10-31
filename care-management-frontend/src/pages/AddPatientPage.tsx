@@ -170,7 +170,6 @@ const AddPatientPage = () => {
       console.error("❌ Submit failed:", err);
 
       if (err?.status === 409 && err?.data?.existingPatient) {
-        const p = err.data.existingPatient;
         toast.error(
           `🚫 Duplicate patient found`,
           {

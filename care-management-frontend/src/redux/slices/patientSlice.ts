@@ -47,7 +47,12 @@ export const fetchPatients = createAsyncThunk(
 
 export const addPatient = createAsyncThunk(
   'patients/addPatient',
-  async (patientData, { rejectWithValue }) => {
+  async (
+    patientData: {
+      [key: string]: any;
+      assignedStaffIds: { staff_id: string; access_level: 'view' | 'edit' }[];
+    },
+    { rejectWithValue }) => {
     try {
       const response = await axios.post(`${BASE_URL}/patients`, patientData, {
         withCredentials: true,
