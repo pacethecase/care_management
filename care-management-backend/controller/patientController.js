@@ -112,6 +112,58 @@ const addPatient = async (req, res) => {
     if (!first_name || !last_name || !birth_date || !roomNo || !age || !mrn) {
       return res.status(400).json({ message: "Missing required fields" });
     }
+    if (!assignedStaffIds || assignedStaffIds.length === 0) {
+      return res.status(400).json({
+        message: "At least one staff member must be assigned to the patient.",
+      });
+    }
+
+    const normalizedStaff1 = assignedStaffIds
+      .map((s) => {
+        if (typeof s === "string") {
+          try {
+            return JSON.parse(s);
+          } catch {
+            console.warn("⚠️ Invalid staff entry string:", s);
+            return null;
+          }
+        }
+        return s;
+      })
+      .filter(Boolean);
+
+    const hasEditAccess = normalizedStaff1.some(
+      (staff) =>
+        (staff.access_level &&
+          staff.access_level.toLowerCase() === "edit") ||
+        staff.access_level === "full"
+    );
+
+    if (!hasEditAccess) {
+      return res.status(400).json({
+        message: "At least one assigned staff member must have edit access.",
+      });
+    }
+    const { rows: existing } = await pool.query(
+      `
+      SELECT id, first_name, last_name, birth_date, mrn
+      FROM patients
+      WHERE LOWER(first_name) = LOWER($1)
+        AND LOWER(last_name) = LOWER($2)
+        AND birth_date::date = $3::date
+        AND mrn = $4
+        AND COALESCE(is_archived, false) = false
+        AND hospital_id = $5
+      `,
+      [first_name, last_name, birth_date, mrn, hospital_id]
+    );
+
+    if (existing.length > 0) {
+      return res.status(409).json({
+        error: "A patient with the same Name, DOB, and MRN already exists.",
+        existingPatient: existing[0],
+      });
+    }
 
     console.log("✅ Submitting patient with hospital_id:", hospital_id);
 
@@ -687,6 +739,41 @@ const updatePatient = async (req, res) => {
     const currentStaffIds = currentStaff.map((s) => String(s.staff_id)).sort();
     const newStaffIds = assignedStaffIds.map(s => String(s.staff_id ?? s.id)).sort();
     const staffChanged = currentStaffIds.join(",") !== newStaffIds.join(",");
+        // ✅ Require at least one assigned staff overall
+    if (!assignedStaffIds || assignedStaffIds.length === 0) {
+      return res.status(400).json({
+        error: "At least one staff member must be assigned to the patient.",
+      });
+    }
+
+    // ✅ Require at least one staff with 'edit' or 'full' access
+    const normalizedStaffForAccessCheck = assignedStaffIds
+      .map((s) => {
+        if (typeof s === "string") {
+          try {
+            return JSON.parse(s);
+          } catch {
+            console.warn("⚠️ Invalid staff entry string:", s);
+            return null;
+          }
+        }
+        return s;
+      })
+      .filter(Boolean);
+
+    const hasEditAccess = normalizedStaffForAccessCheck.some(
+      (staff) =>
+        (staff.access_level &&
+          staff.access_level.toLowerCase() === "edit") ||
+        (staff.access_level &&
+          staff.access_level.toLowerCase() === "full")
+    );
+
+    if (!hasEditAccess) {
+      return res.status(400).json({
+        error: "At least one assigned staff member must have edit access.",
+      });
+    }
 
     if (!isAdmin && staffChanged && (!reason || reason.trim() === "")) {
       return res.status(400).json({ error: "Reason is required when changing staff assignments." });

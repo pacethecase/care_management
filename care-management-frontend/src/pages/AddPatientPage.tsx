@@ -10,7 +10,7 @@ import Footer from '../components/Footer';
 import Select from 'react-select';
 import { reactSelectStyles } from '../reactSelectStyles';
 import dayjs from 'dayjs';
-
+  import { toast } from "react-toastify";
 interface StaffAccess {
   id: string;
   access_level: 'view' | 'edit';
@@ -118,31 +118,77 @@ const AddPatientPage = () => {
     return requiredFields.every((field) => !!formData[field]);
   };
 
+
   const handleSubmit = async () => {
     if (!validateForm()) {
-      alert("Please fill in all required fields.");
+      toast.warn("⚠️ Please fill in all required fields.", {
+        position: "top-right",
+        autoClose: 4000,
+      });
+      return;
+    }
+
+    if (formData.assignedStaffIds.length === 0) {
+      toast.error("At least one staff member must be assigned.", {
+        position: "top-right",
+        autoClose: 5000,
+      });
+      return;
+    }
+
+    const hasEditAccess = formData.assignedStaffIds.some(
+      (s) => s.access_level === "edit"
+    );
+    if (!hasEditAccess) {
+      toast.error("At least one assigned staff must have edit access.", {
+        position: "top-right",
+        autoClose: 5000,
+      });
       return;
     }
 
     try {
       setIsSubmitting(true);
+
       await dispatch(
         addPatient({
           ...formData,
-          assignedStaffIds: formData.assignedStaffIds.map(s => ({
+          assignedStaffIds: formData.assignedStaffIds.map((s) => ({
             staff_id: s.id,
-            access_level: s.access_level
-          }))
+            access_level: s.access_level,
+          })),
         })
       ).unwrap();
-      navigate('/patients');
+
+      toast.success("✅ Patient added successfully!", {
+        position: "top-right",
+        autoClose: 4000,
+      });
+
+      navigate("/patients");
     } catch (err: any) {
-      alert(`Error: ${err?.message || 'Failed to add patient'}`);
-      console.error("Submit failed:", err);
+      console.error("❌ Submit failed:", err);
+
+      if (err?.status === 409 && err?.data?.existingPatient) {
+        const p = err.data.existingPatient;
+        toast.error(
+          `🚫 Duplicate patient found`,
+          {
+            position: "top-right",
+            autoClose: 8000,
+          }
+        );
+      } else {
+        toast.error(err?.message || "❌ Failed to add patient.", {
+          position: "top-right",
+          autoClose: 5000,
+        });
+      }
     } finally {
       setIsSubmitting(false);
     }
   };
+
 
  const staffOptions = useMemo(() => {
   return staffs
