@@ -2,6 +2,7 @@ import { Routes, Route } from 'react-router-dom';
 
   import SignUp from "./pages/SignUp";
   import Login from "./pages/Login";
+  import Dashboard from "./pages/Dashboard";
   import HomePage from "./pages/HomePage";
   import AddPatientPage from './pages/AddPatientPage';
   import EditProfile from "./pages/EditProfile";
@@ -26,7 +27,6 @@ import { Routes, Route } from 'react-router-dom';
   import Notifications from './components/Notifications';
   import EditPatientPage from './pages/EditPatientPage';
   import { fetchNotifications } from './redux/slices/notificationSlice';
-  import AdminPage from './pages/AdminPage'
   import { getLocalTimezone } from "./utils/timezone";
 import axios from "axios";
 import LengthOfStayReport from "./pages/LengthOfStayReport";
@@ -62,6 +62,15 @@ import ArchivedPatients from './pages/ArchivedPatients';
         <Routes>
           <Route path="/signup" element={<SignUp />} />
           <Route path="/" element={<Login />} />
+          <Route
+            path="/dashboard"
+            element={
+              <PrivateRoute allowedRoles={["global", "super_admin", "admin"]}>
+                <Dashboard />
+              </PrivateRoute>
+            }
+          />
+
           <Route
             path="/homepage"
             element={
@@ -146,14 +155,7 @@ import ArchivedPatients from './pages/ArchivedPatients';
               </PrivateRoute>
           }
         />
-         <Route
-          path="/admin"
-          element={
-            <PrivateRoute>
-              <AdminPage />
-              </PrivateRoute>
-          }
-        />
+       
            <Route
           path="/reports/los"
           element={

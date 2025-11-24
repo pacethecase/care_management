@@ -198,8 +198,8 @@ export const fetchProjectedTimelineReport = createAsyncThunk<any, number, { reje
 export const fetchLengthOfStayReport = createAsyncThunk(
   "reports/fetchLengthOfStayReport",
   async (
-    { includeDischarged = false, startDate, endDate, algorithm }: 
-    { includeDischarged?: boolean; startDate?: string; endDate?: string; algorithm?: string } = {},
+    { includeDischarged = false, startDate, endDate, algorithm , hospitalId }: 
+    { includeDischarged?: boolean; startDate?: string; endDate?: string; algorithm?: string; hospitalId?: string; } = {},
     { rejectWithValue }
   ) => {
     try {
@@ -208,6 +208,7 @@ export const fetchLengthOfStayReport = createAsyncThunk(
       if (startDate) query.append("startDate", startDate);
       if (endDate) query.append("endDate", endDate);
       if (algorithm) query.append("algorithm", algorithm);
+      if (hospitalId) query.append("hospitalId", hospitalId);
 
       const res = await axios.get(
         `${BASE_URL}/reports/length-of-stay?${query.toString()}`,
@@ -224,8 +225,8 @@ export const fetchLengthOfStayReport = createAsyncThunk(
 export const fetchOpportunityDaysReport = createAsyncThunk(
   "reports/fetchOpportunityDaysReport",
   async (
-    { includeDischarged = false, startDate, endDate, algorithm }: 
-    { includeDischarged?: boolean; startDate?: string; endDate?: string; algorithm?: string } = {},
+    { includeDischarged = false, startDate, endDate, algorithm,hospitalId }: 
+    { includeDischarged?: boolean; startDate?: string; endDate?: string; algorithm?: string; hospitalId?: string; } = {},
     { rejectWithValue }
   ) => {
     try {
@@ -234,6 +235,7 @@ export const fetchOpportunityDaysReport = createAsyncThunk(
       if (startDate) query.append("startDate", startDate);
       if (endDate) query.append("endDate", endDate);
       if (algorithm) query.append("algorithm", algorithm);
+      if (hospitalId) query.append("hospitalId", hospitalId);
 
       const res = await axios.get(
         `${BASE_URL}/reports/opportunity-days?${query.toString()}`,
@@ -252,30 +254,37 @@ export const fetchStaffPerformanceReport = createAsyncThunk<
   {
     start: string;
     end: string;
-    workflow?: string;
+    algorithm?: string;     // NEW
     staffId?: number;
-    taskName?: string;
+    hospitalId?: string;    // NEW
     includeDischarged?: boolean;
   },
   { rejectValue: string }
 >(
   "reports/fetchStaffPerformanceReport",
-  async ({ start, end, workflow, staffId, taskName, includeDischarged }, { rejectWithValue }) => {
+  async (
+    { start, end, algorithm, staffId, hospitalId, includeDischarged },
+    { rejectWithValue }
+  ) => {
     try {
       const query = new URLSearchParams({ start, end });
-      if (workflow) query.append("workflow", workflow);
-      if (staffId !== undefined) query.append("staffId", staffId.toString());
-      if (taskName) query.append("taskName", taskName);
-      if (includeDischarged !== undefined) {
-              query.append("includeDischarged", includeDischarged.toString());
-            }
-      const response = await axios.get(`${BASE_URL}/reports/staff-performance?${query.toString()}`, {
-        withCredentials: true,
-      });
 
-      return response.data; // Must return { data, type }
+      if (algorithm) query.append("algorithm", algorithm);
+      if (staffId !== undefined) query.append("staffId", staffId.toString());
+      if (hospitalId) query.append("hospitalId", hospitalId);
+      if (includeDischarged !== undefined)
+        query.append("includeDischarged", includeDischarged.toString());
+
+      const response = await axios.get(
+        `${BASE_URL}/reports/staff-performance?${query.toString()}`,
+        { withCredentials: true }
+      );
+
+      return response.data;
     } catch (error: any) {
-      return rejectWithValue(error.response?.data || "Failed to fetch staff performance report");
+      return rejectWithValue(
+        error.response?.data || "Failed to fetch staff performance report"
+      );
     }
   }
 );

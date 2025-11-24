@@ -15,10 +15,16 @@ const Login = () => {
   const { user, loading, error } = useSelector((state: RootState) => state.user);
 
   const [formData, setFormData] = useState({ email: "", password: "" });
-
   useEffect(() => {
-    if (user) navigate("/homepage");
+    if (!user) return;
+
+    if (user.has_global_access) {
+      navigate("/dashboard");
+    } else {
+      navigate("/homepage");
+    }
   }, [user, navigate]);
+
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -32,7 +38,6 @@ const Login = () => {
       await dispatch(fetchCurrentUser()).unwrap();
 
       toast.success("🎉 Logged in successfully!");
-      navigate("/homepage");
     } catch (err: any) {
       const message = typeof err === "string" ? err : err?.error || err?.message || "Login failed";
       toast.error(message);

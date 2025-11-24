@@ -41,9 +41,15 @@ const createTables = async () => {
 
     
     await pool.query(`
+      CREATE TABLE IF NOT EXISTS organizations (
+        id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
 
         CREATE TABLE hospitals (
         id SERIAL PRIMARY KEY,
+        organization_id INTEGER REFERENCES organizations(id) ON DELETE SET NULL,
         name TEXT NOT NULL,
          daily_room_cost NUMERIC DEFAULT 2883.00,
         created_at TIMESTAMP DEFAULT NOW()
@@ -60,11 +66,12 @@ const createTables = async () => {
         is_staff BOOLEAN DEFAULT TRUE,
         is_super_admin BOOLEAN DEFAULT FALSE,
         is_verified BOOLEAN DEFAULT FALSE,
-         is_approved BOOLEAN DEFAULT FALSE, 
+        is_approved BOOLEAN DEFAULT FALSE, 
         reset_token TEXT,
         reset_token_expires TIMESTAMP  WITH TIME ZONE,
         created_at TIMESTAMP  WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-        hospital_id INTEGER NOT NULL REFERENCES hospitals(id),
+        hospital_id INTEGER REFERENCES hospitals(id),
+        organization_id INTEGER REFERENCES organizations(id) ON DELETE SET NULL,
         has_global_access BOOLEAN DEFAULT FALSE
       );
 
@@ -106,7 +113,7 @@ const createTables = async () => {
           is_archived BOOLEAN NOT NULL DEFAULT FALSE,
           archived_at TIMESTAMPTZ,
           archived_by_user_id INTEGER,
-          archived_reason TEXT;
+          archived_reason TEXT
       );
 
 
@@ -115,25 +122,25 @@ const createTables = async () => {
         staff_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         assigned_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY (patient_id, staff_id),
-        access_level VARCHAR(10) DEFAULT 'view',
+        access_level VARCHAR(10) DEFAULT 'view'
     );
 
       CREATE TABLE IF NOT EXISTS tasks (
           id SERIAL PRIMARY KEY,
           name VARCHAR(200) NOT NULL,
           description TEXT,
-          is_repeating BOOLEAN DEFAULT FALSE,  -- Determines if the task should repeat
-          recurrence_interval INTEGER,  -- Number of days before it repeats (e.g., 7 for weekly)
-          max_repeats INTEGER DEFAULT NULL,  -- Maximum times a task can repeat (NULL = unlimited)
-          condition_required TEXT,  -- e.g., "If patient is > 65", "If restrained"
-          category VARCHAR(100),  -- e.g., "Medication", "Psychiatry", "Documentation"
+          is_repeating BOOLEAN DEFAULT FALSE,  
+          recurrence_interval INTEGER,  
+          max_repeats INTEGER DEFAULT NULL, 
+          condition_required TEXT, 
+          category VARCHAR(100),  
           due_in_days_after_dependency INTEGER DEFAULT NULL,
           is_non_blocking BOOLEAN DEFAULT FALSE,
           created_at TIMESTAMP  WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
           algorithm VARCHAR(50),
           is_overridable BOOLEAN DEFAULT FALSE,
           is_court_date BOOLEAN DEFAULT FALSE,
-            is_manual BOOLEAN DEFAULT FALSE
+          is_manual BOOLEAN DEFAULT FALSE
       );
 
      
@@ -141,7 +148,7 @@ const createTables = async () => {
           id SERIAL PRIMARY KEY,
           patient_id INTEGER REFERENCES patients(id) ON DELETE CASCADE,
           task_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
-          status VARCHAR(50) DEFAULT 'Pending',  -- Pending, In Progress, Completed, Missed, FollowUp,Completed with Delay
+          status VARCHAR(50) DEFAULT 'Pending', 
           due_date TIMESTAMP  WITH TIME ZONE ,
           completed_at TIMESTAMP  WITH TIME ZONE ,
           ideal_due_date TIMESTAMP  WITH TIME ZONE ,
@@ -151,8 +158,7 @@ const createTables = async () => {
           task_note TEXT,
           include_note_in_report BOOLEAN DEFAULT false,
           contact_info TEXT,
-          override_count INT DEFAULT 0;
-          override_count INT DEFAULT 0,               
+          override_count INT DEFAULT 0,         
           override_count_max INT DEFAULT 2,              
           admin_override_approval BOOLEAN DEFAULT FALSE,          
           is_visible BOOLEAN DEFAULT TRUE
@@ -180,7 +186,7 @@ const createTables = async () => {
           message TEXT NOT NULL,
           created_at TIMESTAMP  WITH TIME ZONE DEFAULT NOW(),
           read BOOLEAN DEFAULT FALSE,
-          type TEXT DEFAULT 'general';
+          type TEXT DEFAULT 'general'
         );
        
         CREATE TABLE task_override_requests (
@@ -199,12 +205,9 @@ const createTables = async () => {
           patient_id INTEGER NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
           user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE SET NULL,
           reason TEXT NOT NULL,
-          changes JSONB DEFAULT '{}', -- store changed fields if you want
+          changes JSONB DEFAULT '{}',
           created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
-
-
-
     
     `);
 
@@ -217,7 +220,7 @@ const createTables = async () => {
 };
 
 // Step 3: Run init
-const init = async () => {
+const init = async () => { 
   await createTables();
 };
 

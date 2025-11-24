@@ -70,17 +70,23 @@ export const rejectUser = createAsyncThunk(
 
 export const addHospital = createAsyncThunk(
   "admin/addHospital",
-  async (data: { name: string }, { rejectWithValue }) => {
+  async (
+    data: { name: string; organization_id?: number | null },
+    { rejectWithValue }
+  ) => {
     try {
       const res = await axios.post(`${BASE_URL}/admin/hospitals`, data, {
         withCredentials: true,
       });
       return res.data.message as string;
     } catch (err: any) {
-      return rejectWithValue(err.response?.data?.error || "Failed to add hospital");
+      return rejectWithValue(
+        err.response?.data?.error || "Failed to add hospital"
+      );
     }
   }
 );
+
 
 export const deleteHospital = createAsyncThunk(
   "admin/deleteHospital",

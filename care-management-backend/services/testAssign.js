@@ -13,11 +13,11 @@ const run = async () => {
         is_guardianship_emergency, is_ltc, is_ltc_financial, is_ltc_medical,
         added_by_user_id, selected_algorithms, hospital_id
       ) VALUES (
-        'Test', 'Patient1', '1960-01-01', 64, 'B201',
+        'Test', 'Patient2', '1960-01-01', 64, 'B201',
         '2025-04-01', false, true,
         true, true,
         false, true, true, true,
-        4, ARRAY['Guardianship', 'LTC'], 6
+        3, ARRAY['Guardianship', 'LTC'],1
       ) RETURNING id
     `);
 

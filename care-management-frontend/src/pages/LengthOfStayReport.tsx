@@ -1,229 +1,271 @@
 import { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchLengthOfStayReport } from "../redux/slices/reportSlice";
+import { loadHospitals } from "../redux/slices/hospitalSlice";
 import type { RootState, AppDispatch } from "../redux/store";
+
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
-import { Link } from "react-router-dom";
 import LOSDashboardChart from "../components/LOSDashboardChart";
+import BlueLoader from "../components/BlueLoader";
+
 import { FaPrint } from "react-icons/fa";
 
-import BlueLoader from "../components/BlueLoader";
+const algoColors: Record<string, string> = {
+  Behavioral: "var(--algo-behavioral)",
+  Guardianship: "var(--algo-guardianship)",
+  LTC: "var(--algo-ltc)",
+};
+
 const LengthOfStayReport = () => {
   const dispatch = useDispatch<AppDispatch>();
-  const { data, loading, error } = useSelector((state: RootState) => state.reports.los);
+  const { data, loading, error } = useSelector((s: RootState) => s.reports.los);
+  const { hospitals } = useSelector((s: RootState) => s.hospitals);
+  const { user } = useSelector((s: RootState) => s.user);
 
+  // Filters
   const [includeDischarged, setIncludeDischarged] = useState(false);
   const [startDate, setStartDate] = useState("");
-const [endDate, setEndDate] = useState("");
-const [algorithm, setAlgorithm] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [algorithm, setAlgorithm] = useState("");
+  const [hospitalId, setHospitalId] = useState("");
 
+  useEffect(() => {
+    if (user?.is_super_admin) dispatch(loadHospitals());
+  }, [dispatch, user]);
+
+  useEffect(() => {
+    dispatch(
+      fetchLengthOfStayReport({
+        includeDischarged,
+        startDate: startDate || undefined,
+        endDate: endDate || undefined,
+        algorithm: algorithm || undefined,
+        hospitalId: hospitalId || undefined,
+      })
+    );
+  }, [dispatch, includeDischarged, startDate, endDate, algorithm, hospitalId]);
+
+  // ------- PRINT ---------
   const handlePrint = () => {
     const content = document.getElementById("los-content");
+    if (!content) return;
+
     const printWindow = window.open("", "_blank");
+    if (!printWindow) return;
 
-    if (content && printWindow) {
-      // Get CSS variables
-      const rootStyles = getComputedStyle(document.documentElement);
-      const cssVariables = `
-        :root {
-          --algo-behavioral: ${rootStyles.getPropertyValue("--algo-behavioral").trim()};
-          --algo-guardianship: ${rootStyles.getPropertyValue("--algo-guardianship").trim()};
-          --algo-ltc: ${rootStyles.getPropertyValue("--algo-ltc").trim()};
-        }
-      `;
+    const rootStyles = getComputedStyle(document.documentElement);
 
-      const printStyles = `
-        <style>
-          ${cssVariables}
-          body { font-family: Arial, sans-serif; margin: 1in; }
-          h1 { text-align: center; color: #003049; }
-          .logo { height: 100px; display: block; margin: 0 auto 1rem; }
-          .border { border: 1px solid #ddd; border-radius: 8px; }
-          .shadow { box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
-          .bg-white { background: white; }
-          .mb-2 { margin-bottom: 0.5rem; }
-          .text-xl { font-size: 1.25rem; }
-          .font-bold { font-weight: bold; }
-          .recharts-rectangle { shape-rendering: crispEdges; }
+    const cssVariables = `
+      :root {
+        --algo-behavioral: ${rootStyles.getPropertyValue("--algo-behavioral").trim()};
+        --algo-guardianship: ${rootStyles.getPropertyValue("--algo-guardianship").trim()};
+        --algo-ltc: ${rootStyles.getPropertyValue("--algo-ltc").trim()};
+      }
+    `;
 
-          #los-print {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-          }
-          #los-print .grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 1rem;
-            width: 100%;
-            max-width: 900px;
-          }
-          .chart-container {
-            display: flex;
-            justify-content: center;
-            width: 100%;
-            margin-top: 20px;
-          }
-          .chart-container > div {
-            width: 80%;
-          }
-          .page-break { page-break-before: always; }
-        </style>
-      `;
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Length of Stay Report</title>
+          <link rel="stylesheet"
+            href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" />
 
-      // Extract boxes and charts
-      const boxesHTML = content.querySelector(".grid")?.outerHTML || "";
-      const charts = Array.from(
-        content.querySelectorAll(".p-4.bg-white.rounded-xl.shadow-md")
-      )
-        .map(
-          (chart) =>
-            `<div class="page-break"></div>
-             <div class="chart-container">${chart.outerHTML}</div>`
-        )
-        .join("");
+          <style>
+            ${cssVariables}
 
-      // Final HTML
-      const printHTML = `
-        <div id="los-print">
-          ${boxesHTML}
-          ${charts}
-        </div>
-      `;
+            @page { margin: 12mm; }
 
-      printWindow.document.write(`
-        <html>
-          <head>
-            <title>Length of Stay Report</title>
-            ${printStyles}
-          </head>
-          <body>
-             <img src="/logo.png" alt="Logo" class="logo"/>
-            <h1>Length of Stay Dashboard</h1>
-            <div style="text-align:right; font-size: 0.9rem; color: #555;">
-              ${new Date().toLocaleDateString()}
-            </div>
-            ${printHTML}
-          </body>
-        </html>
-      `);
+            body {
+              font-family: Arial, sans-serif;
+              margin: 0 !important;
+              padding: 0 !important;
+            }
 
-      printWindow.document.close();
-      setTimeout(() => printWindow.print(), 250);
-    }
+            .logo {
+              height: 80px;
+              display: block;
+              margin: 0 auto 10px;
+            }
+
+            h1 {
+              text-align: center;
+              font-size: 26px;
+              color: #003049;
+              margin-bottom: 10px;
+            }
+
+            .no-break, .card, .chart-container {
+              page-break-inside: avoid;
+              break-inside: avoid;
+            }
+          </style>
+        </head>
+
+        <body>
+          <img src="/logo.png" class="logo"/>
+          <h1>Length of Stay Dashboard</h1>
+          ${content.outerHTML}
+        </body>
+      </html>
+    `);
+
+    printWindow.document.close();
+    setTimeout(() => printWindow.print(), 500);
   };
-  useEffect(() => {
-    dispatch(fetchLengthOfStayReport({ 
-      includeDischarged ,  
-      startDate: startDate || undefined, 
-      endDate: endDate || undefined, 
-      algorithm: algorithm || undefined }));
-  }, [dispatch, includeDischarged, startDate, endDate, algorithm]);
 
-  const renderCard = (label: string, values: any) => (
-    <div className="border rounded p-4 shadow bg-white">
-      <h3 className="font-bold text-xl mb-2">{label}</h3>
-      <p>Total Patients: {values.count}</p>
-      <p>Total Days: {values.totalDays}</p>
-      <p>Average LOS: {values.avgDays} days</p>
-      <p>Total Cost: ${values.cost.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
-    </div>
-  );
+  // ------- SUMMARY CARD -------
+  const renderCard = (label: string, values: any) => {
+    const color = algoColors[label] || "#003049";
 
+    return (
+      <div className="p-5 bg-white rounded-xl shadow-sm border border-gray-200"  style={{ borderLeft: `5px solid ${color}` }}>
+        
+        <h3 className="font-bold text-xl mb-3" style={{ color }}>
+          {label}
+        </h3>
+
+        <div className="space-y-1 text-sm text-gray-700">
+          <p><span className="font-medium">Total Patients:</span> {values.count}</p>
+          <p><span className="font-medium">Total Days:</span> {values.totalDays}</p>
+          <p><span className="font-medium">Average LOS:</span> {values.avgDays} days</p>
+          <p>
+            <span className="font-medium">Total Cost:</span>{" "}
+            <span style={{ color }}>
+              ${values.cost.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+            </span>
+          </p>
+        </div>
+      </div>
+    );
+  };
+
+ 
   return (
     <div className="flex flex-col min-h-screen bg-hospital-neutral text-hospital-blue">
       <Navbar />
-      <div className="container mx-auto px-4 py-6">
-     <div className="flex items-center justify-between mb-4">
-  <h1 className="text-3xl font-bold">Length of Stay Dashboard</h1>
-  <div className="flex items-center gap-6">
-    
 
-    <Link to="/homepage" className="hover:underline font-medium text-sm">
-      ← Back
-    </Link>
-  </div>
-</div>
-
-<div className="flex items-center gap-3 mb-4 flex-wrap">
-  {/* From Date */}
-  <div className="flex items-center gap-2">
-    <label className="text-sm whitespace-nowrap">From:</label>
-    <input
-      type="date"
-      value={startDate}
-      onChange={(e) => setStartDate(e.target.value)}
-      className="border rounded px-1 py-1 text-sm"
-    />
-  </div>
-
-  {/* To Date */}
-  <div className="flex items-center gap-2">
-    <label className="text-sm whitespace-nowrap">To:</label>
-    <input
-      type="date"
-      value={endDate}
-      onChange={(e) => setEndDate(e.target.value)}
-      className="border rounded px-1 py-1 text-sm"
-    />
-  </div>
-
-  {/* Workflow */}
-  <select
-    value={algorithm}
-    onChange={(e) => setAlgorithm(e.target.value)}
-    className="border rounded px-2 py-1 text-sm w-44"
-  >
-    <option value="">All Workflows</option>
-    <option value="Behavioral">Behavioral</option>
-    <option value="Guardianship">Guardianship</option>
-    <option value="LTC">LTC</option>
-  </select>
-
-  {/* Include Discharged */}
-  <label className="flex items-center gap-1 text-sm whitespace-nowrap">
-    <input
-      type="checkbox"
-      checked={includeDischarged}
-      onChange={() => setIncludeDischarged((v) => !v)}
-    />
-    Include Discharged
-  </label>
-</div>
-
-{/* Print Button */}
-<div className="mb-6 flex justify-end">
-  <button onClick={handlePrint} className="btn btn-secondary">
-    <FaPrint className="inline mr-2" />
-    Print Report
-  </button>
-</div>
+      <div className="container mx-auto px-4 py-6">          
+        <div className="flex justify-between items-center mb-6">
+          <div className="flex items-center gap-6">
+            <h1 className="text-3xl font-bold">Length of Stay Dashboard</h1>    
+          </div>
 
 
-       {loading && <BlueLoader />}
+          <button
+            onClick={handlePrint}
+            className="flex items-center gap-2 px-4 py-2 bg-[var(--prussian-blue)] 
+                      text-white rounded shadow hover:opacity-90 transition w-fit"
+          >
+            <FaPrint />
+            Print Report
+          </button>
+
+        </div>
+
+
+        {/* FILTERS SECTION */}
+        <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-200 mb-8">
+       <div className="grid grid-cols-1 gap-4 items-start">
+
+
+            {/* LEFT FILTERS */}
+            <div className="flex flex-wrap gap-6">
+              {/* Date, Workflow, Hospital */}
+              {[{
+                label: "Start Date", value: startDate, setter: setStartDate, type: "date"
+              },{
+                label: "End Date", value: endDate, setter: setEndDate, type: "date"
+              }].map((item, i) => (
+                <div key={i}>
+                  <label className="block text-xs text-gray-500 mb-1">{item.label}</label>
+                  <input
+                    type="date"
+                    value={item.value}
+                    onChange={(e) => item.setter(e.target.value)}
+                    className="border rounded-md px-2 py-1 text-sm"
+                  />
+                </div>
+              ))}
+
+              {/* Workflow */}
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Workflow</label>
+                <select
+                  value={algorithm}
+                  onChange={(e) => setAlgorithm(e.target.value)}
+                  className="border rounded-md px-2 py-1 text-sm w-44"
+                >
+                  <option value="">All Workflows</option>
+                  <option value="Behavioral">Behavioral</option>
+                  <option value="Guardianship">Guardianship</option>
+                  <option value="LTC">LTC</option>
+                </select>
+              </div>
+
+              {/* Hospital */}
+              {user?.is_super_admin && (
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Hospital</label>
+                  <select
+                    value={hospitalId}
+                    onChange={(e) => setHospitalId(e.target.value)}
+                    className="border rounded-md px-2 py-1 text-sm w-48"
+                  >
+                    <option value="">All Hospitals</option>
+                    {hospitals?.map((h: any) => (
+                      <option key={h.id} value={h.id}>{h.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Include Discharged */}
+              <label className="flex items-center gap-2 mt-6 text-sm">
+                <input
+                  type="checkbox"
+                  checked={includeDischarged}
+                  onChange={() => setIncludeDischarged(!includeDischarged)}
+                />
+                Include Discharged
+              </label>
+            </div>
+
+         
+  
+
+          </div>
+        </div>
+
+        {/* RESULTS */}
+        {loading && <BlueLoader />}
         {error && <p className="text-red-600">{error}</p>}
 
         {data && (
-          <>
-           <div id="los-content">
-    <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-      {renderCard("Behavioral", data.behavioral)}
-      {renderCard("Guardianship", data.guardianship)}
-      {renderCard("LTC", data.ltc)}
-    </div>
-    <LOSDashboardChart
-      data={[
-        { workflow: "Behavioral", totalDays: data.behavioral.totalDays, totalCost: data.behavioral.cost },
-        { workflow: "Guardianship", totalDays: data.guardianship.totalDays, totalCost: data.guardianship.cost },
-        { workflow: "LTC", totalDays: data.ltc.totalDays, totalCost: data.ltc.cost },
-      ]}
-      nationalAverage={data.nationalAverage}
-    />
-  </div>
-          </>
+          <div id="los-content">
+
+            {/* SUMMARY CARDS */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-6 no-break">
+              {renderCard("Behavioral", data.behavioral)}
+              {renderCard("Guardianship", data.guardianship)}
+              {renderCard("LTC", data.ltc)}
+            </div>
+
+            {/* CHART */}
+            <div className="chart-container">
+              <LOSDashboardChart
+                data={[
+                  { workflow: "Behavioral", totalDays: data.behavioral.totalDays, totalCost: data.behavioral.cost },
+                  { workflow: "Guardianship", totalDays: data.guardianship.totalDays, totalCost: data.guardianship.cost },
+                  { workflow: "LTC", totalDays: data.ltc.totalDays, totalCost: data.ltc.cost },
+                ]}
+                nationalAverage={data.nationalAverage}
+              />
+            </div>
+          </div>
         )}
       </div>
+
       <Footer />
     </div>
   );

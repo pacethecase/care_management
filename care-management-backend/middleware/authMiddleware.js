@@ -2,18 +2,36 @@ const jwt = require('jsonwebtoken');
 const JWT_SECRET = process.env.JWT_SECRET;
 const pool = require("../models/db");
 
-// ✅ Token Verification Middleware
 const verifyToken = (req, res, next) => {
   const token = req.cookies.token;
 
-  if (!token) return res.status(401).json({ error: "Access denied. No token." });
+  if (!token) {
+    return res.status(401).json({ error: "Access denied. No token." });
+  }
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
 
+
     if (!decoded.is_approved) {
       return res.status(403).json({ error: "Your account is pending approval." });
     }
+
+
+    if (decoded.is_super_admin) {
+      if (!decoded.organization_id) {
+        return res.status(403).json({ error: "Super admin missing organization context." });
+      }
+      req.user = decoded;
+      return next();
+    }
+
+
+    if (decoded.has_global_access) {
+      req.user = decoded;
+      return next();
+    }
+
 
     if (!decoded.hospital_id) {
       return res.status(403).json({ error: "Token missing hospital context." });
@@ -21,6 +39,7 @@ const verifyToken = (req, res, next) => {
 
     req.user = decoded;
     next();
+
   } catch (err) {
     console.error("JWT verification failed:", err);
     res.status(401).json({ error: "Invalid token." });

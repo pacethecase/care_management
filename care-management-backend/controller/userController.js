@@ -3,56 +3,199 @@ const bcrypt = require("bcryptjs");
 const { DateTime } = require("luxon");
 
 const getAllUsers = async (req, res) => {
-  const { has_global_access, hospital_id, id: currentUserId } = req.user;
+  const {
+    id: currentUserId,
+    has_global_access,
+    is_super_admin,
+    organization_id,
+    hospital_id
+  } = req.user;
 
   try {
-    const query = has_global_access
-      ? `SELECT id, name, email, is_admin, is_staff, is_approved, hospital_id 
-         FROM users 
-         WHERE id != $1 
-         ORDER BY created_at DESC`
-      : `SELECT id, name, email, is_admin, is_staff, is_approved, hospital_id 
-         FROM users 
-         WHERE hospital_id = $1 AND id != $2 
-         ORDER BY created_at DESC`;
+    let query;
+    let params;
 
-    const params = has_global_access ? [currentUserId] : [hospital_id, currentUserId];
+    // 1. SUPER ADMIN WITH GLOBAL ACCESS → ALL USERS
+    if (has_global_access) {
+      query = `
+        SELECT id, name, email, is_admin, is_staff,is_super_admin, is_approved, hospital_id, organization_id
+        FROM users
+        WHERE id != $1
+        ORDER BY created_at DESC
+      `;
+      params = [currentUserId];
+    }
+    // 2. SUPER ADMIN WITHOUT GLOBAL → USERS IN THEIR ORG
+    else if (is_super_admin && !has_global_access) {
+      query = `
+        SELECT id, name, email, is_admin, is_staff,is_super_admin, is_approved, hospital_id, organization_id
+        FROM users
+        WHERE organization_id = $1 
+        ORDER BY created_at DESC
+      `;
+      params = [organization_id];
+    }
+    // 3. ADMIN WITHOUT GLOBAL → USERS IN THEIR HOSPITAL
+    else if (!is_super_admin && !has_global_access) {
+      query = `
+        SELECT id, name, email, is_admin, is_staff,is_super_admin, is_approved, hospital_id, organization_id
+        FROM users
+        WHERE hospital_id = $1 
+        ORDER BY created_at DESC
+      `;
+      params = [hospital_id];
+    }
+    // 4. STAFF → NO ACCESS
+    else {
+      return res.status(403).json({ error: "Access denied" });
+    }
 
     const { rows } = await pool.query(query, params);
     res.status(200).json(rows);
+
   } catch (err) {
     console.error("Error fetching all users:", err);
     res.status(500).json({ error: "Failed to fetch users" });
   }
 };
 
-
-
 const getAdmins = async (req, res) => {
-   const { hospital_id } = req.user;
+  const {
+    has_global_access,
+    is_super_admin,
+    is_admin,
+    organization_id,
+    hospital_id
+  } = req.user;
+
   try {
-    const result = await pool.query(`
-      SELECT id, name FROM users WHERE is_admin = true AND is_verified = true  AND hospital_id = $1
-     `, [hospital_id]);
-    res.status(200).json(result.rows);
+    let query;
+    let params;
+
+    // SUPER ADMIN — GLOBAL ACCESS
+    if (has_global_access) {
+      query = `
+        SELECT id, name, email
+        FROM users
+        WHERE is_admin = TRUE
+          AND is_verified = TRUE
+          AND is_approved = TRUE
+        ORDER BY name ASC
+      `;
+      params = [];
+    }
+
+    // SUPER ADMIN — ORG ONLY
+    else if (is_super_admin) {
+      query = `
+        SELECT id, name, email
+        FROM users
+        WHERE is_admin = TRUE
+          AND is_verified = TRUE
+          AND is_approved = TRUE
+          AND organization_id = $1
+        ORDER BY name ASC
+      `;
+      params = [organization_id];
+    }
+
+    // ADMIN — HOSPITAL ONLY
+    else if (is_admin) {
+      query = `
+        SELECT id, name, email
+        FROM users
+        WHERE is_admin = TRUE
+          AND is_verified = TRUE
+          AND is_approved = TRUE
+          AND hospital_id = $1
+        ORDER BY name ASC
+      `;
+      params = [hospital_id];
+    }
+
+    // STAFF → NO ACCESS
+    else {
+      return res.status(403).json({ error: "Access denied" });
+    }
+
+    const { rows } = await pool.query(query, params);
+    res.status(200).json(rows);
+
   } catch (err) {
-    console.error("Error fetching admins:", err);
+    console.error("❌ Error fetching admins:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 };
 
 const getStaffs = async (req, res) => {
-  const { hospital_id } = req.user;
+  const {
+    id: currentUserId,
+    has_global_access,
+    is_super_admin,
+    is_admin,
+    organization_id,
+    hospital_id
+  } = req.user;
+
   try {
-    const result = await pool.query(
-      `SELECT id, name, email,is_approved FROM users WHERE is_staff = true AND is_verified = true  AND hospital_id = $1`
-   , [hospital_id]);
-    res.status(200).json(result.rows);
+    let query;
+    let params;
+
+    // SUPER ADMIN — GLOBAL ACCESS
+    if (has_global_access) {
+      query = `
+        SELECT id, name, email, hospital_id
+        FROM users 
+        WHERE is_staff = TRUE 
+          AND is_verified = TRUE
+          AND is_approved = TRUE
+          AND id != $1
+        ORDER BY name ASC
+      `;
+      params = [currentUserId];
+    }
+
+    // SUPER ADMIN — ORG ONLY
+    else if (is_super_admin) {
+      query = `
+        SELECT id, name, email, hospital_id
+        FROM users 
+        WHERE is_staff = TRUE 
+          AND is_verified = TRUE
+          AND is_approved = TRUE
+          AND organization_id = $1
+        ORDER BY name ASC
+      `;
+      params = [organization_id];
+    }
+
+    // ADMIN — HOSPITAL ONLY
+    else if (is_admin) {
+      query = `
+        SELECT id, name, email, hospital_id
+        FROM users 
+        WHERE is_staff = TRUE 
+          AND is_verified = TRUE
+          AND is_approved = TRUE
+          AND hospital_id = $1
+        ORDER BY name ASC
+      `;
+      params = [hospital_id];
+    }
+
+    // STAFF → FORBIDDEN
+    else {
+      return res.status(403).json({ error: "Access denied" });
+    }
+
+    const { rows } = await pool.query(query, params);
+    res.status(200).json(rows);
   } catch (err) {
-    console.error("❌ Error fetching staffs:", err);
+    console.error("❌ Error fetching staff:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 };
+
 
 const updateUser = async (req, res) => {
   try {
@@ -89,41 +232,75 @@ const updateUser = async (req, res) => {
 
 const getStaffStarRating = async (req, res) => {
   const staffId = parseInt(req.params.id, 10);
-  const hospitalId = req.user.hospital_id;
-  const hasGlobalAccess = req.user.has_global_access;
 
-  if (isNaN(staffId)) return res.status(400).json({ error: "Invalid staff ID" });
+  if (isNaN(staffId)) {
+    return res.status(400).json({ error: "Invalid staff ID" });
+  }
+
+  const {
+    has_global_access,
+    is_super_admin,
+    is_admin,
+    organization_id,
+    hospital_id
+  } = req.user;
 
   const now = DateTime.local().setZone("America/New_York");
   const past30Days = now.minus({ days: 30 }).toUTC().toISO();
   const today = now.endOf("day").toUTC().toISO();
 
   try {
+    // Base query – no restrictions yet
     let query = `
-      SELECT pt.status, pt.due_date, pt.completed_at
+      SELECT pt.status, pt.due_date, pt.completed_at, p.hospital_id
       FROM patient_tasks pt
       JOIN patient_staff ps ON pt.patient_id = ps.patient_id
       JOIN patients p ON pt.patient_id = p.id
       WHERE ps.staff_id = $1
         AND pt.due_date >= $2
-         AND pt.due_date <= $3
+        AND pt.due_date <= $3
     `;
 
-    const params = [staffId, past30Days,today];
+    const params = [staffId, past30Days, today];
 
-    if (!hasGlobalAccess) {
+    // ------------------------------
+    // ROLE-BASED FILTERING
+    // ------------------------------
+
+    // 1. GLOBAL ADMIN → no hospital/org restriction
+    if (has_global_access) {
+      // no filters added
+    }
+
+    // 2. SUPER ADMIN (ORG-LEVEL) → filter by organization
+    else if (is_super_admin) {
+      query += ` AND p.hospital_id IN (
+        SELECT id FROM hospitals WHERE organization_id = $4
+      )`;
+      params.push(organization_id);
+    }
+
+    // 3. ADMIN → restrict to their hospital
+    else if (is_admin) {
       query += ` AND p.hospital_id = $4`;
-      params.push(hospitalId);
+      params.push(hospital_id);
+    }
+
+    // 4. STAFF → restrict to their hospital
+    else {
+      query += ` AND p.hospital_id = $4`;
+      params.push(hospital_id);
     }
 
     const { rows: tasks } = await pool.query(query, params);
 
+    // Calculate rating
     const total = tasks.length;
+
     const completedOnTime = tasks.filter(
       (t) =>
         t.status === "Completed" &&
         t.completed_at &&
-        t.due_date &&
         new Date(t.completed_at) <= new Date(t.due_date)
     ).length;
 
@@ -136,7 +313,14 @@ const getStaffStarRating = async (req, res) => {
     else if (completionRate >= 50) stars = 2;
     else if (completionRate > 0) stars = 1;
 
-    return res.json({ staffId, total, completedOnTime, completionRate, stars });
+    return res.json({
+      staffId,
+      total,
+      completedOnTime,
+      completionRate,
+      stars
+    });
+
   } catch (err) {
     console.error("❌ Error getting star rating:", err);
     return res.status(500).json({ error: "Failed to get rating" });

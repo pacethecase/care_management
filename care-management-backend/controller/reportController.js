@@ -4,7 +4,47 @@
   dayjs.extend(isoWeek);
 
   const { DateTime } = require('luxon');
-    
+const getHospitalFilter = (req) => {
+  const user = req.user;
+
+  const isSuper = user.is_super_admin;
+  const isAdmin = user.is_admin;
+  const isStaff = user.is_staff;
+
+  const selectedHospital = req.query.hospitalId ? Number(req.query.hospitalId) : null;
+  const orgId = Number(user.organization_id);
+
+  if (isSuper) {
+    if (selectedHospital) {
+      return {
+        sql: "p.hospital_id = $1",
+        params: [selectedHospital],
+        staffFilter: false
+      };
+    }
+
+    return {
+      sql: "p.hospital_id IN (SELECT id FROM hospitals WHERE organization_id = $1)",
+      params: [orgId],
+      staffFilter: false
+    };
+  }
+
+  if (isAdmin) {
+    return {
+      sql: "p.hospital_id = $1",
+      params: [Number(user.hospital_id)],
+      staffFilter: false
+    };
+  }
+
+  return {
+    sql: "p.hospital_id = $1",
+    params: [Number(user.hospital_id)],
+    staffFilter: true
+  };
+};
+
 
   // Daily Report Controller
 const getDailyReport = async (req, res) => {
@@ -573,29 +613,41 @@ if (!req.user?.is_approved) {
     }
   };
 
-const getLengthOfStaySummary = async (req, res) => {
-  const user = req.user;
-  const hospitalId = user.hospital_id;
-  const isStaff = user.is_staff;
-  const staffId = user.id;
-  const startDate = req.query.startDate ? new Date(req.query.startDate) : null;
-const endDate = req.query.endDate ? new Date(req.query.endDate) : null;
-const algorithmFilter = req.query.algorithm || null; 
-
-
-  const includeDischarged = req.query.includeDischarged === 'true';
-
+  const getLengthOfStaySummary = async (req, res) => {
   try {
-    // Get national average for this hospital
-    const { rows: hospitalRows } = await pool.query(
+    const user = req.user;
+    const isStaff = user.is_staff;
+    const staffId = user.id;
+
+    const startDate = req.query.startDate ? new Date(req.query.startDate) : null;
+    const endDate = req.query.endDate ? new Date(req.query.endDate) : null;
+    const includeDischarged = req.query.includeDischarged === "true";
+    const algorithmFilter = req.query.algorithm || null;
+
+    // ---- Get hospital filtering logic ----
+    const { sql: hospitalSQL, params: hospitalParams, staffFilter } = getHospitalFilter(req);
+
+    // ---- FIX: Get hospital IDs for nationalAvg ----
+    let hospitalIdQuery = `
+      SELECT DISTINCT p.hospital_id 
+      FROM patients p 
+      WHERE ${hospitalSQL}
+      LIMIT 1
+    `;
+
+    const hospitalIdResult = await pool.query(hospitalIdQuery, hospitalParams);
+    const hospitalId = hospitalIdResult.rows[0]?.hospital_id;
+
+    const costQuery = await pool.query(
       `SELECT daily_room_cost FROM hospitals WHERE id = $1`,
       [hospitalId]
     );
-    const nationalAvg = hospitalRows[0]?.daily_room_cost || 2883;
 
-    // Build query
+    const nationalAvg = costQuery.rows[0]?.daily_room_cost || 2883;
+
+    // ---- MAIN QUERY ----
     let query = `
-      SELECT
+      SELECT 
         p.id,
         p.admitted_date,
         p.discharge_date,
@@ -605,31 +657,40 @@ const algorithmFilter = req.query.algorithm || null;
         p.is_ltc,
         p.status
       FROM patients p
-      ${isStaff ? 'JOIN patient_staff ps ON ps.patient_id = p.id' : ''}
-      WHERE p.hospital_id = $1
-      ${isStaff ? 'AND ps.staff_id = $2' : ''}
-      ${includeDischarged ? '' : 'AND p.status = \'Admitted\''}
+      ${staffFilter ? "JOIN patient_staff ps ON ps.patient_id = p.id" : ""}
+      WHERE ${hospitalSQL}
       AND COALESCE(p.is_archived, false) = false
+      ${!includeDischarged ? "AND p.status = 'Admitted'" : ""}
+      ${staffFilter ? "AND ps.staff_id = $STAFF" : ""}
     `;
-     const queryParams = isStaff ? [hospitalId, staffId] : [hospitalId];
+
+    let params = [...hospitalParams];
+
+    // STAFF filter parameter
+    if (staffFilter) {
+      query = query.replace("$STAFF", "$" + (params.length + 1));
+      params.push(staffId);
+    }
+
+    // DATE filters
     if (startDate) {
-      query += ` AND p.admitted_date >= $${queryParams.length + 1}`;
-      queryParams.push(startDate);
+      query += ` AND p.admitted_date >= $${params.length + 1}`;
+      params.push(startDate);
     }
+
     if (endDate) {
-      query += ` AND p.admitted_date <= $${queryParams.length + 1}`;
-      queryParams.push(endDate);
+      query += ` AND p.admitted_date <= $${params.length + 1}`;
+      params.push(endDate);
     }
 
-    // Apply algorithm filter
+    // Algorithm filter
     if (algorithmFilter) {
-      if (algorithmFilter === 'Behavioral') query += ' AND p.is_behavioral = true';
-      if (algorithmFilter === 'Guardianship') query += ' AND p.is_guardianship = true';
-      if (algorithmFilter === 'LTC') query += ' AND p.is_ltc = true';
+      if (algorithmFilter === "Behavioral") query += " AND p.is_behavioral = true";
+      if (algorithmFilter === "Guardianship") query += " AND p.is_guardianship = true";
+      if (algorithmFilter === "LTC") query += " AND p.is_ltc = true";
     }
-   
 
-    const { rows } = await pool.query(query, queryParams);
+    const { rows } = await pool.query(query, params);
     const today = new Date();
 
     const summary = {
@@ -639,30 +700,31 @@ const algorithmFilter = req.query.algorithm || null;
     };
 
     for (const row of rows) {
-      const admittedDate = new Date(row.admitted_date);
-      const dischargeDate = row.discharge_date ? new Date(row.discharge_date) : today;
-      const los = Math.max(Math.ceil((dischargeDate - admittedDate) / (1000 * 60 * 60 * 24)), 0);
-      const costPerDay = nationalAvg;
+      const admitted = new Date(row.admitted_date);
+      const discharged = row.discharge_date ? new Date(row.discharge_date) : today;
+
+      const los = Math.max(Math.ceil((discharged - admitted) / 86400000), 0);
 
       if (row.is_behavioral) {
         summary.behavioral.totalDays += los;
         summary.behavioral.count++;
-        summary.behavioral.cost += los * costPerDay;
+        summary.behavioral.cost += los * nationalAvg;
       }
       if (row.is_guardianship) {
         summary.guardianship.totalDays += los;
         summary.guardianship.count++;
-        summary.guardianship.cost += los * costPerDay;
+        summary.guardianship.cost += los * nationalAvg;
       }
       if (row.is_ltc) {
         summary.ltc.totalDays += los;
         summary.ltc.count++;
-        summary.ltc.cost += los * costPerDay;
+        summary.ltc.cost += los * nationalAvg;
       }
     }
 
-    for (const type of Object.keys(summary)) {
-      const entry = summary[type];
+    // Add averages
+    for (const key of Object.keys(summary)) {
+      const entry = summary[key];
       entry.avgDays = entry.count ? Math.round(entry.totalDays / entry.count) : 0;
     }
 
@@ -670,63 +732,51 @@ const algorithmFilter = req.query.algorithm || null;
       ...summary,
       nationalAverage: Number(nationalAvg)
     });
-  } catch (error) {
-    console.error("Error generating LOS summary:", error);
+
+  } catch (err) {
+    console.error("❌ LOS Summary Error:", err);
     res.status(500).json({ error: "Failed to calculate LOS summary" });
   }
 };
+
+
+
 const getOpportunityDaysSummary = async (req, res) => {
-  const user = req.user;
-  const hospitalId = user.hospital_id;
-  const isStaff = user.is_staff;
-  const staffId = user.id;
-  const startDate = req.query.startDate ? new Date(req.query.startDate) : null;
-  const endDate = req.query.endDate ? new Date(req.query.endDate) : null;
-  const algorithmFilter = req.query.algorithm || null; 
-
-  const includeDischarged = req.query.includeDischarged === 'true';
-
-  const computeTaskDelay = (algoTasks) => {
-    if (algoTasks.length === 0) return 0;
-
-    const maxIdealDue = algoTasks
-      .filter(t => t.ideal_due_date)
-      .map(t => new Date(t.ideal_due_date))
-      .sort((a, b) => b - a)[0];
-
-    const now = new Date();
-
-    const maxCompletedAt = algoTasks
-      .map(t => {
-        if (t.completed_at) return new Date(t.completed_at);
-        if (
-          (!t.completed_at || t.status === 'Missed' || t.status === 'Pending') &&
-          new Date(t.ideal_due_date) < now
-        ) {
-          return now;
-        }
-        return null;
-      })
-      .filter(Boolean)
-      .sort((a, b) => b - a)[0];
-
-    if (!maxIdealDue || !maxCompletedAt) return 0;
-
-    const delay = Math.max(
-      Math.ceil((maxCompletedAt - maxIdealDue) / (1000 * 60 * 60 * 24)),
-      0
-    );
-
-    return delay;
-  };
-
   try {
-    const { rows: hospitalRows } = await pool.query(
+    const user = req.user;
+    if (!user?.is_approved) {
+      return res.status(403).json({ error: "Access denied: user not approved" });
+    }
+
+    const includeDischarged = req.query.includeDischarged === "true";
+    const startDate = req.query.startDate ? new Date(req.query.startDate) : null;
+    const endDate = req.query.endDate ? new Date(req.query.endDate) : null;
+    const algorithmFilter = req.query.algorithm || null;
+
+    // ---- Unified hospital filtering (same as LOS) ----
+    const { sql: hospitalSQL, params: hospitalParams, staffFilter } = getHospitalFilter(req);
+
+    // ---- Get national average using exact same logic as LOS ----
+    const hospitalIdQuery = `
+      SELECT DISTINCT p.hospital_id 
+      FROM patients p 
+      WHERE ${hospitalSQL}
+      LIMIT 1
+    `;
+
+    const hospitalIdResult = await pool.query(hospitalIdQuery, hospitalParams);
+    const hospitalId = hospitalIdResult.rows[0]?.hospital_id;
+
+    const costQuery = await pool.query(
       `SELECT daily_room_cost FROM hospitals WHERE id = $1`,
       [hospitalId]
     );
-    const nationalAvg = hospitalRows[0]?.daily_room_cost || 2883;
 
+    const nationalAvg = costQuery.rows[0]?.daily_room_cost || 2883;
+
+    // -------------------------------------------------
+    // FETCH PATIENTS — same logic as LengthOfStay
+    // -------------------------------------------------
     let patientQuery = `
       SELECT
         p.id,
@@ -738,66 +788,111 @@ const getOpportunityDaysSummary = async (req, res) => {
         p.is_ltc,
         p.status
       FROM patients p
-      ${isStaff ? 'JOIN patient_staff ps ON ps.patient_id = p.id' : ''}
-      WHERE p.hospital_id = $1
-      ${isStaff ? 'AND ps.staff_id = $2' : ''}
-      ${includeDischarged ? '' : "AND p.status = 'Admitted'"}
+      ${staffFilter ? "JOIN patient_staff ps ON ps.patient_id = p.id" : ""}
+      WHERE ${hospitalSQL}
       AND COALESCE(p.is_archived, false) = false
+      ${!includeDischarged ? "AND p.status = 'Admitted'" : ""}
+      ${staffFilter ? "AND ps.staff_id = $STAFF" : ""}
     `;
 
-       const patientParams = isStaff ? [hospitalId, staffId] : [hospitalId];
+    let params = [...hospitalParams];
+
+    // staff parameter
+    if (staffFilter) {
+      patientQuery = patientQuery.replace("$STAFF", "$" + (params.length + 1));
+      params.push(user.id);
+    }
+
+    // date filters
     if (startDate) {
-  patientQuery += ` AND p.admitted_date >= $${patientParams.length + 1}`;
-  patientParams.push(startDate);
-}
-if (endDate) {
-  patientQuery += ` AND p.admitted_date <= $${patientParams.length + 1}`;
-  patientParams.push(endDate);
-}
+      patientQuery += ` AND p.admitted_date >= $${params.length + 1}`;
+      params.push(startDate);
+    }
 
-  // Apply algorithm filter
-  if (algorithmFilter) {
-    if (algorithmFilter === 'Behavioral') patientQuery += ' AND p.is_behavioral = true';
-    if (algorithmFilter === 'Guardianship') patientQuery += ' AND p.is_guardianship = true';
-    if (algorithmFilter === 'LTC') patientQuery += ' AND p.is_ltc = true';
-  }
+    if (endDate) {
+      patientQuery += ` AND p.admitted_date <= $${params.length + 1}`;
+      params.push(endDate);
+    }
 
- 
-    const { rows: patients } = await pool.query(patientQuery, patientParams);
+    // algorithm filter
+    if (algorithmFilter) {
+      if (algorithmFilter === "Behavioral") patientQuery += " AND p.is_behavioral = true";
+      if (algorithmFilter === "Guardianship") patientQuery += " AND p.is_guardianship = true";
+      if (algorithmFilter === "LTC") patientQuery += " AND p.is_ltc = true";
+    }
 
+    const { rows: patients } = await pool.query(patientQuery, params);
+
+    // --------------------------------------------------
+    // SUMMARIES
+    // --------------------------------------------------
     const summary = {
       behavioral: { admissionDelay: 0, taskDelay: 0, totalDelay: 0, cost: 0, count: 0 },
       guardianship: { admissionDelay: 0, taskDelay: 0, totalDelay: 0, cost: 0, count: 0 },
       ltc: { admissionDelay: 0, taskDelay: 0, totalDelay: 0, cost: 0, count: 0 },
     };
 
-    for (const patient of patients) {
-      const { id, admitted_date, created_at, is_behavioral, is_guardianship, is_ltc } = patient;
+    // ---- TASK DELAY CALCULATOR ----
+    const computeTaskDelay = (tasks) => {
+      if (!tasks.length) return 0;
+
+      const now = new Date();
+
+      const idealMax = tasks
+        .filter(t => t.ideal_due_date)
+        .map(t => new Date(t.ideal_due_date))
+        .sort((a, b) => b - a)[0];
+
+      const compMax = tasks
+        .map(t => {
+          if (t.completed_at) return new Date(t.completed_at);
+
+          if (new Date(t.ideal_due_date) < now)
+            return now;
+
+          return null;
+        })
+        .filter(Boolean)
+        .sort((a, b) => b - a)[0];
+
+      if (!idealMax || !compMax) return 0;
+
+      return Math.max(
+        Math.ceil((compMax - idealMax) / (1000 * 60 * 60 * 24)),
+        0
+      );
+    };
+
+    // --------------------------------------------------
+    // PROCESS EACH PATIENT
+    // --------------------------------------------------
+    for (const p of patients) {
+      const admitted = new Date(p.admitted_date);
+      const created = new Date(p.created_at);
 
       const admissionDelay = Math.max(
-        Math.ceil((new Date(created_at) - new Date(admitted_date)) / (1000 * 60 * 60 * 24)),
+        Math.ceil((created - admitted) / 86400000),
         0
       );
 
       const { rows: tasks } = await pool.query(
-        `SELECT pt.ideal_due_date, pt.completed_at, pt.status, t.algorithm
-         FROM patient_tasks pt
-         JOIN tasks t ON pt.task_id = t.id
-         WHERE pt.patient_id = $1 AND pt.is_visible = true`,
-        [id]
+        `
+        SELECT pt.ideal_due_date, pt.completed_at, pt.status, t.algorithm
+        FROM patient_tasks pt
+        JOIN tasks t ON pt.task_id = t.id
+        WHERE pt.patient_id = $1 AND pt.is_visible = true
+        `,
+        [p.id]
       );
 
-      const behavioralTasks = tasks.filter(t => t.algorithm === 'Behavioral');
-      const guardianshipTasks = tasks.filter(t => t.algorithm === 'Guardianship');
-      const ltcTasks = tasks.filter(t => t.algorithm === 'LTC');
-
       const delays = {
-        Behavioral: computeTaskDelay(behavioralTasks),
-        Guardianship: computeTaskDelay(guardianshipTasks),
-        LTC: computeTaskDelay(ltcTasks),
+        Behavioral: computeTaskDelay(tasks.filter(t => t.algorithm === 'Behavioral')),
+        Guardianship: computeTaskDelay(tasks.filter(t => t.algorithm === 'Guardianship')),
+        LTC: computeTaskDelay(tasks.filter(t => t.algorithm === 'LTC')),
       };
 
-      if (is_behavioral) {
+      // ---- Assign to correct bucket ----
+      if (p.is_behavioral) {
         summary.behavioral.admissionDelay += admissionDelay;
         summary.behavioral.taskDelay += delays.Behavioral;
         summary.behavioral.totalDelay += admissionDelay + delays.Behavioral;
@@ -805,7 +900,7 @@ if (endDate) {
         summary.behavioral.count++;
       }
 
-      if (is_guardianship) {
+      if (p.is_guardianship) {
         summary.guardianship.admissionDelay += admissionDelay;
         summary.guardianship.taskDelay += delays.Guardianship;
         summary.guardianship.totalDelay += admissionDelay + delays.Guardianship;
@@ -813,7 +908,7 @@ if (endDate) {
         summary.guardianship.count++;
       }
 
-      if (is_ltc) {
+      if (p.is_ltc) {
         summary.ltc.admissionDelay += admissionDelay;
         summary.ltc.taskDelay += delays.LTC;
         summary.ltc.totalDelay += admissionDelay + delays.LTC;
@@ -822,404 +917,407 @@ if (endDate) {
       }
     }
 
+
     res.json({
       behavioral: summary.behavioral,
       guardianship: summary.guardianship,
       ltc: summary.ltc,
       nationalAverage: Number(nationalAvg),
     });
+
   } catch (error) {
-    console.error("❌ Opportunity Days Summary Error:", error);
+    console.error("❌ Opportunity Summary Error:", error);
     res.status(500).json({ error: "Failed to calculate Opportunity Days Summary" });
   }
 };
 
 const getStaffPerformanceReport = async (req, res) => {
-  const { start, end, staffId, taskName, includeDischarged } = req.query;
-  const hospitalId = req.user.hospital_id;
-  const startDate = DateTime.fromISO(start).toUTC().toISO();
-  const endDate = DateTime.fromISO(end).endOf("day").toUTC().toISO();
-  const dischargeFilter = includeDischarged === 'true' ? "AND COALESCE(p.is_archived, false) = false" : "AND p.status != 'Discharged'  AND COALESCE(p.is_archived, false) = false";
   try {
-    if (staffId && taskName) {
+    const user = req.user;
+    const { sql: hospitalSQL, params: hospitalParams, staffFilter } = getHospitalFilter(req);
+
+    const { start, end, staffId: staffQueryId, taskName, includeDischarged } = req.query;
+
+    const enforcedStaffId = staffFilter
+      ? user.id
+      : (staffQueryId ? Number(staffQueryId) : null);
+
+    const startDate = DateTime.fromISO(start).toUTC().toISO();
+    const endDate = DateTime.fromISO(end).endOf("day").toUTC().toISO();
+
+    const dischargeFilter =
+      includeDischarged === "true"
+        ? "AND COALESCE(p.is_archived, false) = false"
+        : "AND p.status != 'Discharged' AND COALESCE(p.is_archived, false) = false";
+
+    // =========================================================
+    // CASE 1 — STAFF + TASKNAME
+    // =========================================================
+    if (enforcedStaffId && taskName) {
+      const params = [
+        ...hospitalParams,
+        enforcedStaffId,
+        taskName,
+        startDate,
+        endDate
+      ];
+
+      const summaryQuery = `
+        SELECT
+          COUNT(DISTINCT pt.id) AS total_tasks,
+          COUNT(DISTINCT pt.id) FILTER (WHERE pt.status = 'Missed') AS missed_count,
+          COUNT(DISTINCT pt.id) FILTER (WHERE pt.status = 'Delayed Completed') AS delayed_count,
+          COUNT(DISTINCT pt.id) FILTER (WHERE COALESCE(pt.override_count, 0) > 0) AS overridden_count
+        FROM patient_tasks pt
+        JOIN tasks t ON pt.task_id = t.id
+        JOIN patients p ON pt.patient_id = p.id
+        JOIN patient_staff ps ON p.id = ps.patient_id
+        WHERE ${hospitalSQL}
+          AND ps.staff_id = $${hospitalParams.length + 1}
+          AND t.name = $${hospitalParams.length + 2}
+          AND pt.due_date BETWEEN $${hospitalParams.length + 3} AND $${hospitalParams.length + 4}
+          AND pt.is_visible = TRUE
+          ${dischargeFilter}
+      `;
+
+      const drilldownQuery = `
+        SELECT
+          t.name AS task_name,
+          p.last_name || ', ' || p.first_name AS patient_name,
+          pt.status,
+          COALESCE(pt.override_count,0) AS override_count,
+          (
+            SELECT sh.reason
+            FROM jsonb_to_recordset(pt.status_history)
+              AS sh(status TEXT, "timestamp" TIMESTAMPTZ, reason TEXT)
+            WHERE sh.status = 'Missed'
+            ORDER BY sh."timestamp" DESC LIMIT 1
+          ) AS missed_reason,
+          (
+            SELECT sh.reason
+            FROM jsonb_to_recordset(pt.status_history)
+              AS sh(status TEXT, "timestamp" TIMESTAMPTZ, reason TEXT)
+            WHERE sh.status IN ('Override','Overridden','Override Applied')
+              AND NULLIF(TRIM(sh.reason),'') IS NOT NULL
+            ORDER BY sh."timestamp" DESC LIMIT 1
+          ) AS override_reason,
+          (
+            SELECT sh."timestamp"
+            FROM jsonb_to_recordset(pt.status_history)
+              AS sh(status TEXT, "timestamp" TIMESTAMPTZ, reason TEXT)
+            WHERE sh.status IN ('Override','Overridden','Override Applied')
+            ORDER BY sh."timestamp" DESC LIMIT 1
+          ) AS last_override_at
+        FROM patient_tasks pt
+        JOIN tasks t ON pt.task_id = t.id
+        JOIN patients p ON pt.patient_id = p.id
+        JOIN patient_staff ps ON p.id = ps.patient_id
+        WHERE ${hospitalSQL}
+          AND ps.staff_id = $${hospitalParams.length + 1}
+          AND t.name = $${hospitalParams.length + 2}
+          AND pt.due_date BETWEEN $${hospitalParams.length + 3} AND $${hospitalParams.length + 4}
+          AND pt.is_visible = TRUE
+          ${dischargeFilter}
+          AND (
+            pt.status IN ('Missed','Delayed Completed')
+            OR (pt.status = 'Pending' AND COALESCE(pt.override_count,0) > 0)
+            OR (pt.status = 'Completed' AND COALESCE(pt.override_count,0) > 0)
+          )
+        ORDER BY patient_name
+      `;
+
+      const summary = await pool.query(summaryQuery, params);
+      const drilldown = await pool.query(drilldownQuery, params);
+
+      return res.json({
+        type: "staff-task",
+        data: summary.rows[0],
+        drilldown: drilldown.rows
+      });
+    }
+
+    // =========================================================
+// CASE 2 — ALGORITHM ONLY
+// =========================================================
+if (req.query.algorithm) {
+  const algorithm = req.query.algorithm;
+
+  const algoParams = [...hospitalParams];
+  const staffParamIndex = enforcedStaffId ? hospitalParams.length + 1 : null;
+
+  if (enforcedStaffId) algoParams.push(enforcedStaffId);
+
+  algoParams.push(startDate, endDate, algorithm);
+
+  const startIdx = hospitalParams.length + (enforcedStaffId ? 2 : 1);
+
   const summaryQuery = `
     SELECT
-      COUNT(DISTINCT pt.id) AS total_tasks,
-      COUNT(DISTINCT pt.id) FILTER (WHERE pt.status = 'Missed') AS missed_count,
-      COUNT(DISTINCT pt.id) FILTER (
-        WHERE pt.status = 'Delayed Completed')
-      AS delayed_count,
-   COUNT(DISTINCT pt.id) FILTER (WHERE COALESCE(pt.override_count, 0) > 0) AS overridden_count
+      t.algorithm,
+      COUNT(*) FILTER (WHERE pt.status = 'Missed') AS missed_count,
+      COUNT(*) FILTER (WHERE pt.status = 'Delayed Completed') AS delayed_count,
+      COUNT(*) FILTER (WHERE COALESCE(pt.override_count,0) > 0) AS overridden_count
     FROM patient_tasks pt
-    JOIN tasks t ON pt.task_id = t.id
-    JOIN patients p ON pt.patient_id = p.id
-    JOIN patient_staff ps ON p.id = ps.patient_id
-    WHERE ps.staff_id = $1
-      AND t.name = $2
-      AND p.hospital_id = $3
-      AND pt.due_date BETWEEN $4 AND $5
+      JOIN tasks t ON pt.task_id = t.id
+      JOIN patients p ON pt.patient_id = p.id
+      LEFT JOIN patient_staff ps ON p.id = ps.patient_id
+    WHERE ${hospitalSQL}
+      ${enforcedStaffId ? `AND ps.staff_id = $${staffParamIndex}` : ""}
+      AND pt.due_date BETWEEN $${startIdx} AND $${startIdx + 1}
+      AND t.algorithm = $${algoParams.length}
       AND pt.is_visible = TRUE
       ${dischargeFilter}
+    GROUP BY t.algorithm
   `;
 
-  const drilldownQuery = `
-    SELECT
-      t.name AS task_name,
-      p.last_name || ', ' || p.first_name AS patient_name,
-      pt.status,
-      COALESCE(pt.override_count,0) AS override_count,
+  const summaryResult = await pool.query(summaryQuery, algoParams);
 
-      (
-        SELECT sh.reason
-        FROM jsonb_to_recordset(pt.status_history)
-             AS sh(status TEXT, "timestamp" TIMESTAMPTZ, reason TEXT)
-        WHERE sh.status = 'Missed'
-        ORDER BY sh."timestamp" DESC
-        LIMIT 1
-      ) AS reason,
+  // DRILLDOWN (only missed / delayed / overridden)
+  const detailParams = [
+    algorithm,  // $1
+    startDate,  // $2
+    endDate,    // $3
+    ...hospitalParams  // $4, $5
+  ];
 
-      (
-        SELECT sh.reason
-        FROM jsonb_to_recordset(pt.status_history)
-             AS sh(status TEXT, "timestamp" TIMESTAMPTZ, reason TEXT)
-        WHERE sh.status IN ('Override','Overridden','Override Applied')
-              AND NULLIF(TRIM(sh.reason),'') IS NOT NULL
-        ORDER BY sh."timestamp" DESC
-        LIMIT 1
-      ) AS override_reason,
-
-      (
-        SELECT sh."timestamp"
-        FROM jsonb_to_recordset(pt.status_history)
-             AS sh(status TEXT, "timestamp" TIMESTAMPTZ, reason TEXT)
-        WHERE sh.status IN ('Override','Overridden','Override Applied')
-        ORDER BY sh."timestamp" DESC
-        LIMIT 1
-      ) AS last_override_at
-
-    FROM patient_tasks pt
-    JOIN tasks t ON pt.task_id = t.id
-    JOIN patients p ON pt.patient_id = p.id
-    JOIN patient_staff ps ON p.id = ps.patient_id
-   WHERE ps.staff_id = $1
-  AND t.name = $2
-  AND p.hospital_id = $3
-  AND pt.due_date BETWEEN $4 AND $5
-  AND pt.is_visible = TRUE
-  ${dischargeFilter}
-  AND (
-    pt.status IN ('Missed','Delayed Completed')
-    OR (pt.status = 'Pending' AND COALESCE(pt.override_count,0) > 0)
-    OR (pt.status = 'Completed' AND COALESCE(pt.override_count,0) > 0)
-  )
-
-    
-    ORDER BY patient_name
-  `;
-
-  const summaryResult = await pool.query(summaryQuery, [
-    staffId,
-    taskName,
-    hospitalId,
-    startDate,
-    endDate,
-  ]);
-
-  const drilldownResult = await pool.query(drilldownQuery, [
-    staffId,
-    taskName,
-    hospitalId,
-    startDate,
-    endDate,
-  ]);
-
-  return res.json({
-    type: 'staff-task',
-    data: summaryResult.rows[0],
-    drilldown: drilldownResult.rows,
-  });
-}
-
-else if (taskName) {
-  // 🔹 Task-specific view
-  const taskQuery = `
-    SELECT
-      t.name AS task_name,
-      COUNT(DISTINCT pt.id) AS total_tasks,
-      COUNT(DISTINCT pt.id) FILTER (WHERE pt.status = 'Missed') AS missed_count,
-      COUNT(DISTINCT pt.id) FILTER (WHERE pt.status = 'Delayed Completed') AS delayed_count,
-      COUNT(DISTINCT pt.id) FILTER (WHERE COALESCE(pt.override_count, 0) > 0) AS overridden_count,
-      JSON_AGG(DISTINCT u.name) FILTER (WHERE pt.status = 'Missed') AS responsible_staff
-    FROM patient_tasks pt
-    JOIN tasks t ON pt.task_id = t.id
-    JOIN patients p ON pt.patient_id = p.id
-    JOIN patient_staff ps ON p.id = ps.patient_id
-    JOIN users u ON ps.staff_id = u.id
-    WHERE p.hospital_id = $1
-      AND pt.due_date BETWEEN $2 AND $3
-      ${dischargeFilter}
-      AND pt.is_visible = TRUE
-      AND t.name = $4
-    GROUP BY t.name
-  `;
-
-  const taskResult = await pool.query(taskQuery, [
-    hospitalId,
-    startDate,
-    endDate,
-    taskName,
-  ]);
+  if (enforcedStaffId) detailParams.push(enforcedStaffId);
 
   const detailQuery = `
     SELECT
+      t.algorithm,
       t.name AS task_name,
       p.last_name || ', ' || p.first_name AS patient_name,
       ARRAY_AGG(DISTINCT u.name) AS staff_names,
-      pt.ideal_due_date,
       pt.status,
-      COALESCE(pt.override_count, 0) AS override_count,
+      COALESCE(pt.override_count,0) AS override_count,
       mr.reason AS missed_reason,
       orr.reason AS override_reason,
       orr.last_override_at
     FROM patient_tasks pt
-    JOIN tasks t ON pt.task_id = t.id
-    JOIN patients p ON pt.patient_id = p.id
-    LEFT JOIN patient_staff ps ON p.id = ps.patient_id
-    LEFT JOIN users u ON ps.staff_id = u.id
+      JOIN tasks t ON pt.task_id = t.id
+      JOIN patients p ON pt.patient_id = p.id
+      LEFT JOIN patient_staff ps ON p.id = ps.patient_id
+      LEFT JOIN users u ON ps.staff_id = u.id
 
-    -- Last missed reason
-    LEFT JOIN LATERAL (
-      SELECT sh.reason
-      FROM jsonb_to_recordset(pt.status_history)
-           AS sh(status TEXT, changed_at TIMESTAMPTZ, reason TEXT)
-      WHERE sh.status = 'Missed'
-      ORDER BY changed_at DESC
-      LIMIT 1
-    ) mr ON TRUE
+      LEFT JOIN LATERAL (
+        SELECT sh.reason
+        FROM jsonb_to_recordset(pt.status_history)
+            AS sh(status TEXT, changed_at TIMESTAMPTZ, reason TEXT)
+        WHERE sh.status = 'Missed'
+        ORDER BY changed_at DESC LIMIT 1
+      ) mr ON TRUE
 
+      LEFT JOIN LATERAL (
+        SELECT sh.reason, sh."timestamp" AS last_override_at
+        FROM jsonb_to_recordset(pt.status_history)
+            AS sh(status TEXT, "timestamp" TIMESTAMPTZ, reason TEXT)
+        WHERE sh.status IN ('Override','Overridden','Override Applied')
+          AND NULLIF(TRIM(sh.reason), '') IS NOT NULL
+        ORDER BY sh."timestamp" DESC LIMIT 1
+      ) orr ON TRUE
 
-    LEFT JOIN LATERAL (
-      SELECT sh.reason, sh."timestamp" AS last_override_at
-      FROM jsonb_to_recordset(pt.status_history)
-       AS sh(status TEXT, "timestamp" TIMESTAMPTZ, reason TEXT)
-
-      WHERE sh.status IN ('Override','Overridden','Override Applied')
-            AND NULLIF(TRIM(sh.reason), '') IS NOT NULL
-      ORDER BY sh."timestamp" DESC
-      LIMIT 1
-    ) orr ON TRUE
-
-    WHERE pt.is_visible = TRUE
+    WHERE t.algorithm = $1
+      AND pt.due_date BETWEEN $2 AND $3
+      AND pt.is_visible = TRUE
+      AND ${hospitalSQL.replace(/\$1/g, "$4").replace(/\$2/g, "$5")}
+      ${enforcedStaffId ? `AND ps.staff_id = $${detailParams.length}` : ""}
+      ${dischargeFilter}
       AND (
         pt.status IN ('Missed','Delayed Completed')
-        OR (pt.status = 'Pending' AND COALESCE(pt.override_count,0) > 0)
-        OR (pt.status = 'Completed' AND COALESCE(pt.override_count,0) > 0)
+        OR (COALESCE(pt.override_count,0) > 0)
       )
-      AND t.name = $1
-      AND pt.due_date BETWEEN $2 AND $3
-      AND p.hospital_id = $4
-      ${dischargeFilter}
 
     GROUP BY
-      p.id, t.name, pt.ideal_due_date, pt.status,
-      pt.override_count, mr.reason, orr.reason, orr.last_override_at
-    ORDER BY p.last_name ASC, p.first_name ASC
+      t.algorithm, t.name, p.id, pt.status, pt.override_count,
+      mr.reason, orr.reason, orr.last_override_at
+    ORDER BY t.name, p.last_name, p.first_name
   `;
 
-  const detailResult = await pool.query(detailQuery, [
-    taskName,
-    startDate,
-    endDate,
-    hospitalId,
-  ]);
+  const detailResult = await pool.query(detailQuery, detailParams);
 
   return res.json({
-    type: 'task',
-    data: taskResult.rows,       
-    drilldown: detailResult.rows 
+    type: "algorithm",
+    data: summaryResult.rows,
+    drilldown: detailResult.rows
   });
 }
 
-  else if (staffId) {
-  // 🔹 Summary for staff
-  const summaryQuery = `
-    SELECT
-      COUNT(*) AS total_tasks,
-      COUNT(*) FILTER (WHERE pt.status = 'Missed') AS missed_count,
-      COUNT(*) FILTER (
-        WHERE pt.status = 'Delayed Completed'
-      ) AS delayed_count,
-    COUNT(*) FILTER (WHERE COALESCE(pt.override_count, 0) > 0) AS overridden_count
-    FROM patient_tasks pt
-    JOIN patients p ON pt.patient_id = p.id
-    JOIN patient_staff ps ON p.id = ps.patient_id
-    WHERE ps.staff_id = $1
-      AND p.hospital_id = $2
-      AND pt.due_date BETWEEN $3 AND $4
-      AND pt.is_visible = TRUE
-      ${dischargeFilter}
-  `;
 
-  const drilldownQuery = `
-    SELECT
-      t.name AS task_name,
-      p.last_name || ', ' || p.first_name AS patient_name,
+    // =========================================================
+    // CASE 3 — STAFF ONLY
+    // =========================================================
+    if (enforcedStaffId) {
+      const params = [
+        ...hospitalParams,
+        enforcedStaffId,
+        startDate,
+        endDate
+      ];
+
+      const summaryQuery = `
+        SELECT
+          COUNT(*) AS total_tasks,
+          COUNT(*) FILTER (WHERE pt.status = 'Missed') AS missed_count,
+          COUNT(*) FILTER (WHERE pt.status = 'Delayed Completed') AS delayed_count,
+          COUNT(*) FILTER (WHERE COALESCE(pt.override_count, 0) > 0) AS overridden_count
+        FROM patient_tasks pt
+        JOIN patients p ON pt.patient_id = p.id
+        JOIN patient_staff ps ON p.id = ps.patient_id
+        WHERE ${hospitalSQL}
+          AND ps.staff_id = $${hospitalParams.length + 1}
+          AND pt.due_date BETWEEN $${hospitalParams.length + 2} AND $${hospitalParams.length + 3}
+          AND pt.is_visible = TRUE
+          ${dischargeFilter}
+      `;
+
+      const drilldownQuery = `
+        SELECT
+          t.name AS task_name,
+          p.last_name || ', ' || p.first_name AS patient_name,
           pt.status,
-    COALESCE(pt.override_count, 0) AS override_count,
+          COALESCE(pt.override_count, 0) AS override_count,
+          (
+            SELECT sh.reason
+            FROM jsonb_to_recordset(pt.status_history)
+              AS sh(status TEXT, "timestamp" TIMESTAMPTZ, reason TEXT)
+            WHERE sh.status = 'Missed'
+            ORDER BY sh."timestamp" DESC LIMIT 1
+          ) AS missed_reason,
+          (
+            SELECT sh.reason
+            FROM jsonb_to_recordset(pt.status_history)
+              AS sh(status TEXT, "timestamp" TIMESTAMPTZ, reason TEXT)
+            WHERE sh.status IN ('Override','Overridden','Override Applied')
+              AND NULLIF(TRIM(sh.reason), '') IS NOT NULL
+            ORDER BY sh."timestamp" DESC LIMIT 1
+          ) AS override_reason,
+          (
+            SELECT sh."timestamp"
+            FROM jsonb_to_recordset(pt.status_history)
+              AS sh(status TEXT, "timestamp" TIMESTAMPTZ, reason TEXT)
+            WHERE sh.status IN ('Override','Overridden','Override Applied')
+            ORDER BY sh."timestamp" DESC LIMIT 1
+          ) AS last_override_at
+        FROM patient_tasks pt
+        JOIN tasks t ON pt.task_id = t.id
+        JOIN patients p ON pt.patient_id = p.id
+        JOIN patient_staff ps ON p.id = ps.patient_id
+        WHERE ${hospitalSQL}
+          AND ps.staff_id = $${hospitalParams.length + 1}
+          AND pt.due_date BETWEEN $${hospitalParams.length + 2} AND $${hospitalParams.length + 3}
+          AND pt.is_visible = TRUE
+          ${dischargeFilter}
+          AND (
+            pt.status IN ('Missed','Delayed Completed')
+            OR (pt.status = 'Pending' AND COALESCE(pt.override_count,0) > 0)
+            OR (pt.status = 'Completed' AND COALESCE(pt.override_count,0) > 0)
+          )
+        ORDER BY t.name, patient_name
+      `;
 
+      const summary = await pool.query(summaryQuery, params);
+      const drilldown = await pool.query(drilldownQuery, params);
 
-    (
-      SELECT sh.reason
-      FROM jsonb_to_recordset(pt.status_history)
-          AS sh(status TEXT, "timestamp" TIMESTAMPTZ, reason TEXT)
-      WHERE sh.status = 'Missed'
-      ORDER BY sh."timestamp" DESC
-      LIMIT 1
-    ) AS reason,
+      return res.json({
+        type: "staff",
+        data: summary.rows[0],
+        drilldown: drilldown.rows
+      });
+    }
 
+    // =========================================================
+    // DEFAULT — FULL SUMMARY VIEW
+    // =========================================================
+    const params = [...hospitalParams, startDate, endDate];
 
-    (
-      SELECT sh.reason
-      FROM jsonb_to_recordset(pt.status_history)
-          AS sh(status TEXT, "timestamp" TIMESTAMPTZ, reason TEXT)
-      WHERE sh.status IN ('Override','Overridden','Override Applied')
-            AND NULLIF(TRIM(sh.reason), '') IS NOT NULL
-      ORDER BY sh."timestamp" DESC
-      LIMIT 1
-    ) AS override_reason,
-
-    (
-      SELECT sh."timestamp"
-      FROM jsonb_to_recordset(pt.status_history)
-          AS sh(status TEXT, "timestamp" TIMESTAMPTZ, reason TEXT)
-      WHERE sh.status IN ('Override','Overridden','Override Applied')
-      ORDER BY sh."timestamp" DESC
-      LIMIT 1
-    ) AS last_override_at
-    FROM patient_tasks pt
-    JOIN tasks t ON pt.task_id = t.id
-    JOIN patients p ON pt.patient_id = p.id
-    JOIN patient_staff ps ON p.id = ps.patient_id
-    WHERE ps.staff_id = $1
-      AND p.hospital_id = $2
-      AND pt.due_date BETWEEN $3 AND $4
-      AND pt.is_visible = TRUE
-      ${dischargeFilter}
-    AND (pt.status IN ('Missed','Delayed Completed')
-    OR (pt.status = 'Pending' AND COALESCE(pt.override_count,0) > 0)
-    OR (pt.status = 'Completed' AND COALESCE(pt.override_count,0) > 0)
-)
-
-    ORDER BY t.name, patient_name
-  `;
-
-  const summaryResult = await pool.query(summaryQuery, [staffId, hospitalId, startDate, endDate]);
-  const drilldownResult = await pool.query(drilldownQuery, [staffId, hospitalId, startDate, endDate]);
-
-  return res.json({
-    type: 'staff',
-    data: summaryResult.rows[0], // just one row for this staff
-    drilldown: drilldownResult.rows,
-  });
-}
-else {
-const topMissedTasksQuery = `
-  SELECT
-    t.name AS task_name,
-    COUNT(*) AS total_issues,
-    SUM(CASE WHEN pt.status = 'Missed' THEN 1 ELSE 0 END) AS missed_count,
-    SUM(CASE WHEN pt.status = 'Delayed Completed' THEN 1 ELSE 0 END) AS delayed_completed_count,
-    JSON_AGG(DISTINCT u.name) AS responsible_staff
-  FROM patient_tasks pt
-  JOIN tasks t ON pt.task_id = t.id
-  JOIN patients p ON pt.patient_id = p.id
-  JOIN patient_staff ps ON p.id = ps.patient_id
-  JOIN users u ON ps.staff_id = u.id
-  WHERE pt.status IN ('Missed', 'Delayed Completed')
-    AND p.hospital_id = $1
-    AND pt.due_date BETWEEN $2 AND $3
-    AND pt.is_visible = TRUE
-    ${dischargeFilter}
-  GROUP BY t.name
-  ORDER BY total_issues DESC
-  LIMIT 3;
-`;
-
-const topLaggingStaffQuery = `
-  SELECT
-    u.name AS staff_name,
-    COUNT(*) FILTER (WHERE pt.status = 'Missed') AS missed_count,
-    COUNT(*) FILTER (
-      WHERE pt.status IN ('Completed', 'Delayed Completed') AND pt.completed_at > pt.ideal_due_date
-    ) AS delayed_count
-  FROM users u
-  JOIN patient_staff ps ON u.id = ps.staff_id
-  JOIN patients p ON ps.patient_id = p.id
-  JOIN patient_tasks pt ON pt.patient_id = p.id
-  WHERE p.hospital_id = $1
-    AND pt.due_date BETWEEN $2 AND $3
-    AND pt.is_visible = TRUE
-    ${dischargeFilter}
-  GROUP BY u.name
-  ORDER BY missed_count DESC
-  LIMIT 3
-`;
-
-
-    // Default: Patient-level summary
     const patientQuery = `
       SELECT
         p.id AS patient_id,
-          p.last_name || ', ' || p.first_name AS patient_name,
+        p.last_name || ', ' || p.first_name AS patient_name,
         p.admitted_date,
         p.created_at,
         ARRAY_AGG(DISTINCT u.name) AS staff,
-   COUNT(DISTINCT pt.id) AS total_tasks,
-
-      COUNT(DISTINCT pt.id) FILTER (
-        WHERE pt.status = 'Missed'
-      ) AS missed,
-
-      COUNT(DISTINCT pt.id) FILTER (
-        WHERE pt.status = 'Pending'
-      ) AS pending,
-
-      COUNT(DISTINCT pt.id) FILTER (
-        WHERE pt.status = 'Completed' 
-      ) AS completed_on_time,
-
-      COUNT(DISTINCT pt.id) FILTER (
-        WHERE (pt.status = 'Delayed Completed')
-      ) AS delayed_completed,
-
-     COUNT(DISTINCT pt.id) FILTER (WHERE COALESCE(pt.override_count, 0) > 0) AS overridden,
-
-   COUNT(DISTINCT pt.id) FILTER (WHERE t.is_manual = TRUE) AS manual
+        COUNT(DISTINCT pt.id) AS total_tasks,
+        COUNT(DISTINCT pt.id) FILTER (WHERE pt.status = 'Missed') AS missed,
+        COUNT(DISTINCT pt.id) FILTER (WHERE pt.status = 'Pending') AS pending,
+        COUNT(DISTINCT pt.id) FILTER (WHERE pt.status = 'Completed') AS completed_on_time,
+        COUNT(DISTINCT pt.id) FILTER (WHERE pt.status = 'Delayed Completed') AS delayed_completed,
+        COUNT(DISTINCT pt.id) FILTER (WHERE COALESCE(pt.override_count, 0) > 0) AS overridden,
+        COUNT(DISTINCT pt.id) FILTER (WHERE t.is_manual = TRUE) AS manual
       FROM patient_tasks pt
       JOIN patients p ON pt.patient_id = p.id
       JOIN tasks t ON pt.task_id = t.id
       LEFT JOIN patient_staff ps ON p.id = ps.patient_id
       LEFT JOIN users u ON ps.staff_id = u.id
-      WHERE p.hospital_id = $1
-        AND pt.due_date BETWEEN $2 AND $3
+      WHERE ${hospitalSQL}
+        AND pt.due_date BETWEEN $${hospitalParams.length + 1} AND $${hospitalParams.length + 2}
         AND pt.is_visible = TRUE
         ${dischargeFilter}
-    GROUP BY p.id, p.first_name, p.last_name, p.admitted_date, p.created_at
-     ORDER BY p.last_name ASC, p.first_name ASC;
+      GROUP BY p.id, p.first_name, p.last_name, p.admitted_date, p.created_at
+      ORDER BY p.last_name ASC, p.first_name ASC;
     `;
 
-    const result = await pool.query(patientQuery, [hospitalId, startDate, endDate]);
-const topTasksResult = await pool.query(topMissedTasksQuery, [hospitalId, startDate, endDate]);
-const topStaffResult = await pool.query(topLaggingStaffQuery, [hospitalId, startDate, endDate]);
+    const summaryResult = await pool.query(patientQuery, params);
 
-    return res.json({ type: 'summary', data: result.rows, topMissedTasks: topTasksResult.rows,
-  topLaggingStaff: topStaffResult.rows, });
-}
+    const topTasksQuery = `
+      SELECT
+        t.name AS task_name,
+        COUNT(*) AS total_issues,
+        SUM(CASE WHEN pt.status = 'Missed' THEN 1 ELSE 0 END) AS missed_count,
+        SUM(CASE WHEN pt.status = 'Delayed Completed' THEN 1 ELSE 0 END) AS delayed_completed_count,
+        JSON_AGG(DISTINCT u.name) AS responsible_staff
+      FROM patient_tasks pt
+      JOIN tasks t ON pt.task_id = t.id
+      JOIN patients p ON pt.patient_id = p.id
+      LEFT JOIN patient_staff ps ON p.id = ps.patient_id
+      LEFT JOIN users u ON ps.staff_id = u.id
+      WHERE ${hospitalSQL}
+        AND pt.status IN ('Missed', 'Delayed Completed')
+        AND pt.due_date BETWEEN $${hospitalParams.length + 1} AND $${hospitalParams.length + 2}
+        AND pt.is_visible = TRUE
+        ${dischargeFilter}
+      GROUP BY t.name
+      ORDER BY total_issues DESC
+      LIMIT 3;
+    `;
 
+    const topStaffQuery = `
+      SELECT
+        u.name AS staff_name,
+        COUNT(*) FILTER (WHERE pt.status = 'Missed') AS missed_count,
+        COUNT(*) FILTER (
+          WHERE pt.status IN ('Completed', 'Delayed Completed')
+            AND pt.completed_at > pt.ideal_due_date
+        ) AS delayed_count
+      FROM users u
+      JOIN patient_staff ps ON u.id = ps.staff_id
+      JOIN patients p ON ps.patient_id = p.id
+      JOIN patient_tasks pt ON pt.patient_id = p.id
+      WHERE ${hospitalSQL}
+        AND pt.due_date BETWEEN $${hospitalParams.length + 1} AND $${hospitalParams.length + 2}
+        AND pt.is_visible = TRUE
+        ${dischargeFilter}
+      GROUP BY u.name
+      ORDER BY missed_count DESC
+      LIMIT 3
+    `;
+
+    const topTasksResult = await pool.query(topTasksQuery, params);
+    const topStaffResult = await pool.query(topStaffQuery, params);
+
+    return res.json({
+      type: "summary",
+      data: summaryResult.rows,
+      topMissedTasks: topTasksResult.rows,
+      topLaggingStaff: topStaffResult.rows
+    });
   } catch (err) {
-    console.error("30-Day Delay Report Error:", err);
-    res.status(500).json({ error: "Failed to generate 30-Day Delay Report." });
+    console.error("Staff Performance Report Error:", err);
+    return res
+      .status(500)
+      .json({ error: "Failed to generate Staff Performance Report." });
   }
 };
+
 
   module.exports = { getDailyReport, getPriorityReport,getTransitionalCareReport ,getHistoricalTimelineReport,getProjectedTimelineReport,getLengthOfStaySummary,getOpportunityDaysSummary, getStaffPerformanceReport};

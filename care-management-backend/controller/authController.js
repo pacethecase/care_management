@@ -9,7 +9,7 @@ const dayjs = require("dayjs");
 const JWT_SECRET = process.env.JWT_SECRET;
 const BASE_URL = process.env.BASE_URL;
 
-// Email setup using Gmail
+
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
@@ -18,83 +18,138 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-const signup = async (req, res) => {
-  const { name, email, password, isAdmin, isStaff, hospital_id } = req.body;
 
-  if (!name || !email || !password) {
-    return res.status(400).json({ error: 'Missing required fields' });
-  }
-  if (!hospital_id) {
-    return res.status(400).json({ error: "Hospital ID is required." });
-  }
+const signup = async (req, res) => {
+  const {
+    name,
+    email,
+    password,
+    isAdmin,
+    isStaff,
+    is_super_admin,
+    organization_id,
+    hospital_id
+  } = req.body;
+
+  if (!name || !email || !password)
+    return res.status(400).json({ error: "Missing required fields" });
+
+  const normalizedEmail = email.toLowerCase();
 
   try {
-    const normalizedEmail = email.toLowerCase();
+    // Normalize booleans correctly
+    const superAdmin = Boolean(is_super_admin);
+    let admin = Boolean(isAdmin);
+    let staff = Boolean(isStaff);
 
-    const { rowCount: hospitalExists } = await pool.query(
-      'SELECT 1 FROM hospitals WHERE id = $1',
-      [hospital_id]
-    );
-    if (hospitalExists === 0) {
-      return res.status(400).json({ error: 'Invalid hospital ID' });
+    let finalOrgId = organization_id || null;
+    let finalHospitalId = hospital_id || null;
+
+    // -------------------------------
+    // SUPER ADMIN
+    // -------------------------------
+    if (superAdmin) {
+      if (!organization_id) {
+        return res.status(400).json({ error: "Organization ID required for super admin" });
+      }
+
+      // Super admin CANNOT be admin or staff
+      admin = false;
+      staff = false;
+
+      // Super admins do NOT belong to a hospital
+      finalHospitalId = null;
+    }
+
+    // -------------------------------
+    // NON SUPER ADMINS → Admin or Staff
+    // -------------------------------
+    if (!superAdmin) {
+
+      if (!hospital_id) {
+        return res.status(400).json({ error: "Hospital ID is required" });
+      }
+
+      // Make sure hospital exists
+      const h = await pool.query(
+        "SELECT organization_id FROM hospitals WHERE id = $1",
+        [hospital_id]
+      );
+
+      if (h.rowCount === 0)
+        return res.status(400).json({ error: "Invalid hospital ID" });
+
+      // Assign org based on hospital
+      finalOrgId = h.rows[0].organization_id;
+
+      // If admin: is_admin=true, is_staff=false
+      if (admin) {
+        staff = false;
+      }
+
+      // If staff: is_staff=true, is_admin=false
+      if (staff) {
+        admin = false;
+      }
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-
     const result = await pool.query(
-      `INSERT INTO users (name, email, password, is_admin, is_staff, is_verified, hospital_id)
-       VALUES ($1, $2, $3, $4, $5, false, $6)
-       RETURNING id, email, name, is_admin, is_staff, is_verified, hospital_id`,
-      [name, normalizedEmail, hashedPassword, isAdmin, isStaff, hospital_id]
+      `INSERT INTO users 
+        (name, email, password, is_admin, is_staff, is_super_admin, has_global_access, organization_id, hospital_id)
+       VALUES ($1,$2,$3,$4,$5,$6,false,$7,$8)
+       RETURNING id, name, email, is_admin, is_staff, is_super_admin, organization_id, hospital_id`,
+      [name, normalizedEmail, hashedPassword, admin, staff, superAdmin, finalOrgId, finalHospitalId]
     );
 
     const user = result.rows[0];
-
-
-    const token = jwt.sign({
-      id: user.id,
-      name: user.name,       
-      email: user.email,
-      is_admin: user.is_admin,
-      is_staff: user.is_staff,
-      hospital_id: user.hospital_id,
-      is_approved:user.is_approved,
-      is_super_admin:user.is_super_admin,
-      has_global_access:user.has_global_access
-    }, JWT_SECRET, { expiresIn: '1d' });
+    const token = jwt.sign(
+      {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        is_admin: user.is_admin,
+        is_staff: user.is_staff,
+        hospital_id: user.hospital_id,
+        organization_id: user.organization_id,
+        is_super_admin: user.is_super_admin,
+        has_global_access: false,
+      },
+      JWT_SECRET,
+      { expiresIn: "1d" }
+    );
 
     const verifyUrl = `${BASE_URL}/auth/verify?token=${token}`;
 
-    // ✅ Send verification email
     await transporter.sendMail({
       from: `"Pace The Case Support" <${process.env.EMAIL_USERNAME}>`,
       to: normalizedEmail,
       subject: "Confirm Your Email for Pace The Case",
       html: `
         <p>Hi ${name},</p>
-        <p>Thank you for signing up for <strong>Pace The Case</strong>.</p>
-        <p>Please verify your email by clicking below:</p>
-        <p><a href="${verifyUrl}" style="padding:10px 20px;background:#1e90ff;color:white;text-decoration:none;border-radius:5px;">Verify My Email</a></p>
+        <p>Thank you for signing up!</p>
+        <p>Please verify your email:</p>
+        <a href="${verifyUrl}" style="padding:10px 20px;background:#1e90ff;color:white;border-radius:5px;">
+          Verify My Email
+        </a>
       `,
     });
 
     res.status(201).json({
-      message: 'User created. Check your email to verify.',
-      token,
+      message: "Signup successful! Check your email to verify.",
       user,
+      token,
     });
 
   } catch (err) {
     console.error("Signup error:", err);
-    if (err.code === '23505') {
-      return res.status(400).json({ error: 'Email already exists' });
-    }
-    res.status(500).json({ error: 'Signup failed' });
+    if (err.code === "23505")
+      return res.status(400).json({ error: "Email already exists" });
+    res.status(500).json({ error: "Signup failed" });
   }
 };
 
-  
 
 // VERIFY
 const verify = async (req, res) => {
@@ -134,6 +189,7 @@ const login = async (req, res) => {
           is_staff: user.is_staff,
           hospital_id: user.hospital_id,
           is_approved:user.is_approved,
+          organization_id: user.organization_id,  
           is_super_admin:user.is_super_admin,
           has_global_access:user.has_global_access
         },
@@ -144,10 +200,11 @@ const login = async (req, res) => {
       // ✅ Set the token as httpOnly cookie
       res.cookie("token", token, {
         httpOnly: true,
-       secure: true,
+        secure: true,
         sameSite: "None",
-        maxAge: 24 * 60 * 60 * 1000, // 1 day
+        maxAge: 24 * 60 * 60 * 1000, 
       });
+
       
   
       res.json({
@@ -184,11 +241,12 @@ const login = async (req, res) => {
     try {
       const { id } = req.user;
       const result = await pool.query(
-        'SELECT id, name, email, is_admin, is_staff,hospital_id , is_verified,is_approved,is_super_admin,has_global_access FROM users WHERE id = $1',
+        'SELECT id, name, email,is_admin, is_staff, is_super_admin,hospital_id, organization_id,is_verified, is_approved,has_global_access FROM users WHERE id = $1;',
         [id]
       );
   
-      if (!result.rows.length) return res.status(404).json({ error: 'User not found' });
+      if (!result.rows.length) return res.status(401).json({ error: 'Not authenticated' });
+
       res.json({ user: result.rows[0] });
     } catch (err) {
       console.error('Error fetching current user:', err);

@@ -18,18 +18,24 @@ const initialState: HospitalState = {
 
 export const loadHospitals = createAsyncThunk<
   Hospital[],
-  void,
+  string | undefined,
   { rejectValue: string }
->("hospital/loadHospitals", async (_, { rejectWithValue }) => {
+>("hospital/loadHospitals", async (orgId, { rejectWithValue }) => {
   try {
-    const { data } = await axios.get(`${BASE_URL}/hospitals`, {
+    const url = orgId
+      ? `${BASE_URL}/hospitals?organization_id=${orgId}`
+      : `${BASE_URL}/hospitals`;
+
+    const { data } = await axios.get(url, {
       withCredentials: true,
     });
+
     return data as Hospital[];
   } catch (err: any) {
     return rejectWithValue(err.response?.data?.error || "Failed to load hospitals");
   }
 });
+
 
 
 export const updateDailyRoomCost = createAsyncThunk<

@@ -9,6 +9,8 @@ import algorithmReducer from "../slices/algorithmSlice";
 import notificationReducer from "../slices/notificationSlice";
 import hospitalReducer from "../slices/hospitalSlice";
 import adminReducer from "../slices/adminSlice";
+import organizationReducer from "../slices/organizationSlice";
+import publicReducer from "../slices/publicSlice";
 
 export const store = configureStore({
   reducer: {
@@ -21,6 +23,8 @@ export const store = configureStore({
     notifications: notificationReducer,
     hospitals: hospitalReducer, 
     admin:adminReducer,
+    organizations:organizationReducer,
+    public: publicReducer,
   },
 });
 

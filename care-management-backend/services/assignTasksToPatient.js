@@ -74,7 +74,7 @@ const dueLocal = DateTime.fromJSDate(admittedDate, { zone: timezone })
   console.log(`✔ Assigned new task '${name}' for ${dueDate.toDateString()}`);
 };
 
-    // Use selectedAlgorithms (not addedAlgorithms) for dynamic task visibility logic
+
     if (selectedAlgorithms.includes("Behavioral")) {
       assignTask("Behavioral Management Contract Created", 2, patient.is_behavioral);
       assignTask("Behavioral Management Medication Assessment", 1, patient.is_behavioral);

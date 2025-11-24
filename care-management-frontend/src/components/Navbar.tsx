@@ -6,7 +6,7 @@ import { logoutAndClearAll } from '../redux/actions/logoutAndClearAll';
 import NotificationPanel from './NotificationPanel';
 import type { AppDispatch } from '../redux/store';
 import { RootState } from "../redux/store";
-import type { Notification } from "../redux/types"; // ✅ assuming types centralized
+import type { Notification } from "../redux/types";
 
 const Navbar: React.FC = () => {
   const [isDropdownOpen, setDropdownOpen] = useState(false);
@@ -17,10 +17,10 @@ const Navbar: React.FC = () => {
 
   const { user } = useSelector((state: RootState) => state.user);
   const { items: notifications } = useSelector((state: RootState) => state.notifications);
-console.log(user);
+
   const handleLogout = async () => {
     try {
-     await dispatch(logoutAndClearAll("manual"));
+      await dispatch(logoutAndClearAll("manual"));
       navigate('/');
     } catch (err) {
       console.error('Logout error:', err);
@@ -29,33 +29,56 @@ console.log(user);
 
   const unreadCount = notifications.filter((n: Notification) => !n.read).length;
 
+  // Title text
+  const navbarTitle = user?.has_global_access
+    ? "Case Management: System Dashboard"
+    : user?.is_super_admin
+    ? "Case Management: Org Portal"
+    : user?.is_admin
+    ? "Case Management: Admin Portal"
+    : user?.is_staff
+    ? "Case Management: Staff Portal"
+    : "Case Management";
+
+
+
+  const showTabs = true;
+  const canSeeDashboard = user?.has_global_access || user?.is_admin || user?.is_super_admin; 
+  const canSeeHome = !user?.has_global_access;
+  const canSeePatients = !user?.has_global_access;
+  const canSeeReports = !user?.has_global_access;
+
+  const canSeeTasks = user?.is_staff === true; 
+
+
   return (
     <header className="shadow-sm">
-      {/* Top Logo Strip */}
       <div className="bg-white py-3 px-6 flex items-center justify-between">
         <img src="/logo.png" alt="Pace The Case Logo" loading="lazy" className="h-30 w-auto" />
       </div>
 
-      {/* Navbar */}
       <nav className="navbar">
-        
-      <h1 className="text-lg font-semibold tracking-wide">
-        {user?.is_admin
-          ? "Case Management: Leadership Portal"
-          : user?.is_staff
-          ? "Case Management: Staff Portal"
-          : "Case Management"}
-      </h1>
+        <h1 className="text-lg font-semibold tracking-wide">{navbarTitle}</h1>
 
         <div className="flex space-x-4 items-center">
-          <div className="hidden sm:flex space-x-4">
-              <Link to="/homepage" className="tab transition">Home</Link>
-              <Link to="/patients" className="tab transition">Patients</Link>
-              {user?.is_staff && <Link to="/tasks" className="tab transition">Tasks</Link>}
-              <Link to="/reports" className="tab transition">Reports</Link>
-          </div>
-          {/* Notifications */}
-          {user && (
+          {showTabs && (
+            <div className="hidden sm:flex space-x-4">
+  
+            
+
+              {/* GLOBAL ADMIN sees ONLY dashboard */}
+              {canSeeHome && <Link to="/homepage" className="tab transition">Home</Link>}
+              {canSeePatients && <Link to="/patients" className="tab transition">Patients</Link>}
+              {canSeeReports && <Link to="/reports" className="tab transition">Reports</Link>}
+
+              {/* STAFF ONLY */}
+              {canSeeTasks && <Link to="/tasks" className="tab transition">Tasks</Link>}
+              {canSeeDashboard && <Link to="/dashboard" className="tab transition">Dashboard</Link>}
+            </div>
+          )}
+
+          {/* NOTIFICATIONS (not for global admin) */}
+          {user && !user?.has_global_access && (
             <div className="relative">
               <button
                 onClick={() => setShowNotifications((prev) => !prev)}
@@ -77,40 +100,38 @@ console.log(user);
             </div>
           )}
 
-
-          {/* Profile */}
+          {/* USER DROPDOWN */}
           <div className="relative">
             <button onClick={() => setDropdownOpen(!isDropdownOpen)} className="focus:outline-none">
               <FiUser className="w-5 h-5" />
             </button>
 
             {isDropdownOpen && (
-            <div className="absolute right-0 mt-2 w-48 bg-white  text-black rounded p-3  shadow-lg z-50">
-              {/* Mobile Nav Links */}
-              <div className="block sm:hidden   bg-[var(--prussian-blue)] hover:bg-gray-100">
-                <Link to="/homepage" className="block px-4 py-2">Home</Link>
-                <Link to="/patients" className="block px-4 py-2">Patients</Link>
-                {user?.is_staff && <Link to="/tasks" className="block px-4 py-2">Tasks</Link>}
-                {user?.is_admin && <Link to="/reports" className="block px-4 py-2">Reports</Link>}
-                <hr className="my-1" />
+              <div className="absolute right-0 mt-2 w-48 bg-white text-black rounded p-3 shadow-lg z-50">
+
+                {/* MOBILE MENU FOR NON-GLOBAL USERS */}
+                {!user?.has_global_access && (
+                  <div className="block sm:hidden">
+
+                    <Link to="/dashboard" className="block px-4 py-2">Dashboard</Link>
+                    <Link to="/homepage" className="block px-4 py-2">Home</Link>
+                    <Link to="/patients" className="block px-4 py-2">Patients</Link>
+                    <Link to="/reports" className="block px-4 py-2">Reports</Link>
+                    {user?.is_staff && <Link to="/tasks" className="block px-4 py-2">Tasks</Link>}
+
+                    <hr className="my-1" />
+                  </div>
+                )}
+
+                <Link to="/edit-profile" className="block px-4 bg-[var(--prussian-blue)]  py-2 hover:bg-gray-100">Edit Profile</Link>
+                <button
+                  onClick={handleLogout}
+                  className="block w-full text-left px-4 py-2 hover:bg-gray-100"
+                >
+                  Logout
+                </button>
               </div>
-
-              {/* Always shown */}
-              <Link to="/edit-profile" className="block px-4 bg-[var(--prussian-blue)]  py-2 hover:bg-gray-100">Edit Profile</Link>
-              {user?.is_super_admin && (
-                <Link to="/admin" className="block px-4 bg-[var(--prussian-blue)] py-2 hover:bg-gray-100">
-                  Admin
-                </Link>
-              )}
-              <button
-                onClick={handleLogout}
-                className="block w-full text-left px-4 py-2 hover:bg-gray-100"
-              >
-                Logout
-              </button>
-            </div>
-          )}
-
+            )}
           </div>
         </div>
       </nav>

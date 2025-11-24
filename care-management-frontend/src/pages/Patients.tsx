@@ -126,7 +126,7 @@ const Patients = () => {
               </div>
               <div className="flex items-center gap-2">
                 <span className="inline-block w-4 h-4 rounded-full bg-green-600"></span>
-                <span>Completed</span>
+                <span>Up-To-Date</span>
               </div>
             </div>
           </div>

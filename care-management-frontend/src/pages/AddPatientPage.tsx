@@ -169,15 +169,20 @@ const AddPatientPage = () => {
     } catch (err: any) {
       console.error("❌ Submit failed:", err);
 
-      if (err?.status === 409 && err?.data?.existingPatient) {
-        toast.error(
-          `🚫 Duplicate patient found`,
-          {
-            position: "top-right",
-            autoClose: 8000,
-          }
-        );
-      } else {
+    if (err?.status === 409 && err?.data?.existingPatient) {
+      const existing = err.data.existingPatient;
+      const statusText = existing.status
+        ? `This patient is currently marked as "${existing.status.toUpperCase()}".`
+        : "Status not available.";
+
+      toast.error(
+        `🚫 Duplicate patient found: ${existing.first_name} ${existing.last_name} (MRN: ${existing.mrn}). ${statusText}`,
+        {
+          position: "top-right",
+          autoClose: 8000,
+        }
+      );
+    } else {
         toast.error(err?.message || "❌ Failed to add patient.", {
           position: "top-right",
           autoClose: 5000,

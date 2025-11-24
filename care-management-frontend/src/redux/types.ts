@@ -1,5 +1,12 @@
 // redux/types.ts
 
+
+export interface Organization {
+  id: number;
+  name: string;
+  created_at?: string;
+}
+
 export interface Patient {
     created_at_local: string;
     id: number;
@@ -39,6 +46,7 @@ export interface Patient {
     updated_at?:string;
     archived_at?:string | null;
     archived_reason?:string | null;
+    hospital_id?:number;
   }
   
   export interface UserInfo {
@@ -50,6 +58,7 @@ export interface Patient {
     is_super_admin:boolean;
     has_global_access:boolean;
     hospital_id:number;
+    organization_id:number;
     is_approved:boolean;
     token?: string;
   }
@@ -130,11 +139,13 @@ export interface AlgorithmPatientCount {
     count: number;
   }
   
-  // types.ts or wherever you define types
+
 export interface Hospital {
   id: number;
   name: string;
-  daily_room_cost: number; 
+  daily_room_cost: number;
+  organization_id: number | null;   
+  created_at?: string;
 }
 
 export interface PatientTask {
@@ -175,8 +186,10 @@ export interface UnapprovedUser {
   email: string;
   is_admin: boolean;
   is_staff: boolean;
-   is_approved: boolean; 
+  is_super_admin:boolean;
+  is_approved: boolean; 
   hospital_id?: number;
+  organization_id?: number;
 }
 
   

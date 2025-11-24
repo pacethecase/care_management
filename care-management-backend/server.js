@@ -11,6 +11,8 @@ const algorithmRoutes = require("./routes/algorithmRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
 const hospitalRoutes = require("./routes/hospitalRoutes");
 const adminRoutes = require("./routes/adminRoutes");
+const organizationRoutes = require("./routes/organizationRoutes");
+const publicRoutes = require("./routes/publicRoutes");
 const cookieParser = require("cookie-parser");
 const http = require('http');
 const socketIo = require('socket.io');
@@ -110,7 +112,8 @@ app.use("/algorithms", algorithmRoutes);
 app.use('/notifications', notificationRoutes);
 app.use("/hospitals", hospitalRoutes);
 app.use("/admin", adminRoutes);
-
+app.use("/organizations", organizationRoutes);
+app.use("/public", publicRoutes);
 // Start server
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
