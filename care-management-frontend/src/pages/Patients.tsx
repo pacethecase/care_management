@@ -13,6 +13,7 @@ import { fetchAdmins } from '../redux/slices/userSlice';
 import { RootState } from '../redux/store';
 import type { AppDispatch } from '../redux/store';
 import BlueLoader from '../components/BlueLoader';
+import { loadHospitals } from '../redux/slices/hospitalSlice';
 const Patients = () => {
   const dispatch = useDispatch<AppDispatch>();
   const navigate = useNavigate();
@@ -21,39 +22,45 @@ const Patients = () => {
     (state: RootState) => state.patients
   );
   const { user, admins, adminLoading } = useSelector((state: RootState) => state.user);
-
+  const { hospitals } = useSelector((s: RootState) => s.hospitals);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedPatientId, setSelectedPatientId] = useState<number | null>(null);
   const [selectedAdminId, setSelectedAdminId] = useState<number | ''>('');
 
   const displayedPatients = searchTerm.trim() ? searchResults : patients;
+const [hospitalId, setHospitalId] = useState<string | "">("");
 
-  // Fetch admins only once if user is admin
   useEffect(() => {
-    if (user?.is_admin) {
-      dispatch(fetchAdmins());
+    // Wait until user is fully loaded
+    if (user && user.is_super_admin) {
+      dispatch(loadHospitals());
     }
-  }, [dispatch, user?.is_admin]);
+  }, [dispatch, user?.is_super_admin]);
 
+useEffect(() => {
+  if (!user?.is_staff) {
+   dispatch(fetchAdmins({ hospitalId: hospitalId || undefined }));
 
- useEffect(() => {
+  }
+}, [dispatch, user?.is_staff, hospitalId]);
+
+useEffect(() => {
   const delay = setTimeout(() => {
     const trimmed = searchTerm.trim();
 
     if (trimmed.length > 0) {
-      dispatch(searchPatients({ query: trimmed, status: 'active' }));
-    } 
-    else if (user?.is_admin && selectedAdminId !== '') {
+      dispatch(searchPatients({ query: trimmed, status: 'active', hospitalId: hospitalId || undefined ,adminId: selectedAdminId !== '' ? Number(selectedAdminId) : undefined }));
+    }
+    else if (!user?.is_staff && selectedAdminId !== '') {
       dispatch(fetchPatientsByAdmin(Number(selectedAdminId)));
-    } 
+    }
     else {
-      dispatch(fetchPatients());
+      dispatch(fetchPatients({ hospitalId: hospitalId || undefined }));
     }
   }, 300);
 
   return () => clearTimeout(delay);
-}, [searchTerm, selectedAdminId, dispatch, user]);
-
+}, [searchTerm, selectedAdminId, hospitalId, dispatch, user]);
 
 
 
@@ -84,8 +91,26 @@ const Patients = () => {
             className="input w-full"
           />
 
-          {user?.is_admin && (
+          {!user?.is_staff && (
             <>
+            {user?.is_super_admin && (
+                <>
+                  <label className="font-semibold">Filter by Hospital:</label>
+                  <select
+                    className="input w-full"
+                    value={hospitalId}
+                    onChange={(e) => setHospitalId(e.target.value)}
+                  >
+                    <option value="">All Hospitals</option>
+                    {hospitals.map((h) => (
+                      <option key={h.id} value={h.id}>
+                        {h.name}
+                      </option>
+                    ))}
+                  </select>
+                </>
+              )}
+                          
               <label htmlFor="adminFilter" className="font-semibold">
                 Filter by Leader:
               </label>
@@ -136,7 +161,7 @@ const Patients = () => {
 
 
           {/* Admin Buttons */}
-          {user?.is_admin && (
+          {!user?.is_staff && (
             <div className="w-full lg:w-1/3 bg-white border border-[var(--border-muted)] shadow-sm rounded-xl p-6 h-fit">
               <div className="flex flex-col gap-3">
                 <button className="btn w-full" onClick={() => navigate('/discharged')}>
@@ -145,9 +170,11 @@ const Patients = () => {
                  <button className="btn w-full" onClick={() => navigate('/archived')}>
                   View Archived Patients
                 </button>
+                {!user?.is_super_admin && (
                 <button className="btn w-full" onClick={() => navigate('/add-patient')}>
                   + Add Patient
                 </button>
+                )}
               </div>
             </div>
           )}

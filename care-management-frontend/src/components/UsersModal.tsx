@@ -27,7 +27,7 @@ const UsersModal = ({ onClose }: { onClose: () => void }) => {
   const [filterHospital, setFilterHospital] = useState("");
 
   useEffect(() => {
-    dispatch(fetchAllUsers());
+    dispatch(fetchAllUsers({}));
     dispatch(fetchUnapprovedUsers());
     dispatch(loadHospitals());
     dispatch(fetchOrganizations());

@@ -74,6 +74,7 @@ switch (patient.task_status) {
   ].filter(Boolean);
 
   const handleDischarge = () => {
+    if (!user?.is_admin) return;
     const note = prompt("Enter discharge note:");
     if (!note) return;
 
@@ -89,6 +90,7 @@ switch (patient.task_status) {
   };
 
   const handleReactivate = (id: number) => {
+    if (!user?.is_admin) return;
     if (!window.confirm("Are you sure you want to reactivate this patient?")) return;
 
     dispatch(reactivatePatient(id))
@@ -103,9 +105,9 @@ switch (patient.task_status) {
       });
   };
 
-// 👇 NEW: Archive handler (simpler)
+
 const handleArchive = async () => {
-  if (!user?.is_super_admin) return;
+  if (!user?.is_admin) return;
   const fullName = `${patient.first_name} ${patient.last_name}`;
   const reason =
     window.prompt(
@@ -115,7 +117,7 @@ const handleArchive = async () => {
   try {
     await dispatch(archiveDischargedPatient({ patientId: patient.id, reason })).unwrap();
     toast.success(`Archived ${fullName}`);
-    dispatch(fetchDischargedPatients()); // refresh discharged list
+    dispatch(fetchDischargedPatients()); 
   } catch (err: any) {
     toast.error(err || "Failed to archive patient");
   }
@@ -128,7 +130,7 @@ const handleArchive = async () => {
       onClick={onClick}
     >
     
-    {!showDischargeInfo && !showArchivedInfo && (
+    {!showDischargeInfo && !showArchivedInfo && !user?.is_super_admin && !user?.has_global_access &&(
         <div className="absolute top-2 right-2 flex gap-3 text-lg">
           <FaEdit
             className="text-blue-600 cursor-pointer"
@@ -138,9 +140,10 @@ const handleArchive = async () => {
               handleEdit();
             }}
           />
+          
 
         
-          {(user?.is_admin || user?.is_super_admin) && (
+      {user?.is_admin &&(
             <FaUserSlash
               className="text-red-500 cursor-pointer"
               title="Discharge patient"
@@ -149,31 +152,44 @@ const handleArchive = async () => {
                 handleDischarge();
               }}
             />
-          )}
+      )}
+
         </div>
       )}
 
-      {user?.is_super_admin && showDischargeInfo && (
-        <div className="absolute top-2 right-2 flex gap-3 text-sm">
-          <button className="btn mt-4" onClick={() => handleReactivate(patient.id)}>
-            Reactivate Patient
-          </button>
-          {onViewReport && (
-            <button className="btn mt-4" onClick={() => onViewReport(patient.id)}>
-              View Historical Report
-            </button>
-          )}
-           <button
-            className="btn mt-4"
-            onClick={handleArchive}
-            title="Archive (hide from Discharged & all reports)"
-          >
-            Archive
-          </button>
-        </div>
-      )}
+      {(user?.is_admin || user?.is_super_admin) && showDischargeInfo && (
+          <div className="absolute top-2 right-2 flex gap-3 text-sm">
+            {user?.is_admin && !user?.is_super_admin && (
+              <>
+                <button
+                  className="btn mt-4"
+                  onClick={() => handleReactivate(patient.id)}
+                >
+                  Reactivate Patient
+                </button>
 
-      {user?.is_super_admin && showArchivedInfo && (
+                <button
+                  className="btn mt-4"
+                  onClick={handleArchive}
+                  title="Archive (hide from Discharged & all reports)"
+                >
+                  Archive
+                </button>
+              </>
+            )}
+            {onViewReport && (
+              <button
+                className="btn mt-4"
+                onClick={() => onViewReport(patient.id)}
+              >
+                View Historical Report
+              </button>
+            )}
+
+          </div>
+        )}
+
+      {(user?.is_admin || user?.is_super_admin) && showArchivedInfo && (
         <div className="absolute top-2 right-2 flex gap-3 text-sm">
           {onViewReport && (
             <button
@@ -201,6 +217,11 @@ const handleArchive = async () => {
           <span className="font-semibold">Workflow Map:</span>{" "}
           {algorithms.length > 0 ? algorithms.join(", ") : "Not Provided"}
         </p>
+        {user?.is_super_admin && (
+          <div>
+          <span className="font-semibold">Hospital:</span> {patient.hospital_id || "N/A"}
+          </div>
+        )}
       </div>
 
       {/* Discharge Info */}
@@ -228,7 +249,7 @@ const handleArchive = async () => {
       )}
 
 
-      {/* CTA */}
+
       {!showDischargeInfo && !showArchivedInfo && (
         <div className="mt-4 flex justify-center">
         <Link

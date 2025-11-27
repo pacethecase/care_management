@@ -38,7 +38,7 @@ const DischargeBarriers = () => {
     return <div className="text-red-600">{String(error)}</div>;
 
   if (!patientCounts || patientCounts.length === 0) {
-      return null; // show nothing
+      return null; 
     }
 
 

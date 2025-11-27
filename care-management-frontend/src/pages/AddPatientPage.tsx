@@ -71,9 +71,9 @@ const AddPatientPage = () => {
     created_at: '', 
   });
 
-  useEffect(() => {
-    dispatch(fetchStaffs());
-  }, [dispatch]);
+useEffect(() => {
+ dispatch(fetchStaffs({}));
+}, [dispatch]);
 
   useEffect(() => {
   const now = dayjs().format("YYYY-MM-DDTHH:mm");
@@ -196,7 +196,6 @@ const AddPatientPage = () => {
 
  const staffOptions = useMemo(() => {
   return staffs
-    .filter((s) => s.is_approved) 
     .map((s) => ({ value: s.id, label: s.name }));
 }, [staffs]);
 

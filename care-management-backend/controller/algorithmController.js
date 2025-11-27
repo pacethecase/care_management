@@ -103,7 +103,7 @@ const getPatientCountsByAlgorithm = async (req, res) => {
        STAFF — ONLY ASSIGNED PATIENTS
     --------------------------------------------------------- */
     const query = `
-      SELECT 'Behavioral', COUNT(*)
+      SELECT 'Behavioral' AS algorithm, COUNT(*) AS count
       FROM patients p
       JOIN patient_staff ps ON p.id = ps.patient_id
       WHERE p.is_behavioral = TRUE 

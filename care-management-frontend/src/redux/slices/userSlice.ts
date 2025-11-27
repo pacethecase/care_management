@@ -108,20 +108,31 @@ export const fetchCurrentUser = createAsyncThunk(
     }
   }
 );
-
-export const fetchStaffs = createAsyncThunk(
+export const fetchStaffs = createAsyncThunk<
+  any,
+  { hospitalId?: string } | void
+>(
   "user/fetchStaffs",
-  async (_, { rejectWithValue }) => {
+  async (
+    arg,
+    { rejectWithValue }
+  ) => {
+    const { hospitalId } = arg || {};
+
     try {
       const response = await axios.get(`${BASE_URL}/users/staffs`, {
-        withCredentials: true,
+        params: hospitalId ? { hospitalId } : {},
+        withCredentials: true
       });
-      return response.data as UserInfo[];
+      return response.data;
     } catch (error: any) {
-      return rejectWithValue(error.response?.data?.error || "Failed to fetch staffs");
+      return rejectWithValue(
+        error.response?.data?.error || "Failed to fetch staffs"
+      );
     }
   }
 );
+
 
 export const logoutUser = createAsyncThunk(
   "user/logoutUser",
@@ -153,23 +164,45 @@ export const updateUserProfile = createAsyncThunk(
     }
   }
 );
-export const fetchAdmins = createAsyncThunk(
+export const fetchAdmins = createAsyncThunk<
+  any,
+  { hospitalId?: string } | void
+>(
   'users/fetchAdmins',
-  async (_, { rejectWithValue }) => {
+  async (
+    arg,
+    { rejectWithValue }
+  ) => {
+    const { hospitalId } = arg || {};
+
     try {
-      const res = await axios.get(`${BASE_URL}/users/admins`, { withCredentials: true });
+      const res = await axios.get(`${BASE_URL}/users/admins`, {
+        params: hospitalId ? { hospitalId } : {},
+        withCredentials: true
+      });
       return res.data;
     } catch (err: any) {
-      return rejectWithValue(err.response?.data?.error || 'Failed to fetch admins');
+      return rejectWithValue(
+        err.response?.data?.error || 'Failed to fetch admins'
+      );
     }
   }
 );
 
-export const fetchAllUsers = createAsyncThunk(
+export const fetchAllUsers = createAsyncThunk<
+  any,
+  { hospitalId?: string } | void
+>(
   "admin/fetchAllUsers",
-  async (_, { rejectWithValue }) => {
+  async (
+    arg,
+    { rejectWithValue }
+  ) => {
+    const { hospitalId } = arg || {};
+
     try {
       const res = await axios.get(`${BASE_URL}/users/all`, {
+        params: hospitalId ? { hospitalId } : {},
         withCredentials: true,
       });
       return res.data;
@@ -178,6 +211,7 @@ export const fetchAllUsers = createAsyncThunk(
     }
   }
 );
+
 
 export const fetchStarRating = createAsyncThunk(
   "user/fetchStarRating",

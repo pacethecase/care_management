@@ -32,7 +32,7 @@ const Dashboard = () => {
     if (!user) return;
     dispatch(fetchOrganizations());
     dispatch(loadHospitals());
-    dispatch(fetchAllUsers());
+    dispatch(fetchAllUsers({}));
   }, [dispatch, user]);
 
  let filteredOrganizations = organizations;

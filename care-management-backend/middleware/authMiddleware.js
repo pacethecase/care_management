@@ -118,10 +118,21 @@ const requireEditAccess = async (req, res, next) => {
 };
 
 
+const blockNonClinicalUsers = (req, res, next) => {
+  if (req.user?.has_global_access || req.user?.is_super_admin) {
+    return res.status(403).json({
+      error: "Access denied: This role cannot operate on patient tasks.",
+    });
+  }
+
+  next();
+};
+
 
 module.exports = {
   verifyToken,
   requireAdmin,
   requireStaff,
   requireEditAccess,
+  blockNonClinicalUsers
 };

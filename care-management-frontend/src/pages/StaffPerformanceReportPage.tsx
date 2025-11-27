@@ -54,9 +54,10 @@ const staffList = selectedHospitalId
   }, [dispatch, user?.is_super_admin]);
 
 
-  useEffect(() => {
-    dispatch(fetchStaffs());
-  }, [dispatch]);
+ useEffect(() => {
+  dispatch(fetchStaffs({ hospitalId: selectedHospitalId || undefined }));
+}, [dispatch, selectedHospitalId]);
+
 
   useEffect(() => {
     dispatch(
