@@ -83,20 +83,22 @@ export const loadMissedTasks = createAsyncThunk(
   }
 );
 
-export const startTask = createAsyncThunk(
+export const startTask = createAsyncThunk<
+  { taskId: number; version: number },
+  { taskId: number; version: number },
+  { rejectValue: string }
+>(
   "tasks/startTask",
-  async (taskId: number, { rejectWithValue }) => {
+  async ({ taskId, version }, { rejectWithValue }) => {
     try {
-      await axios.post(
+      const res = await axios.post(
         `${BASE_URL}/tasks/${taskId}/start`,
-        {},
+        { version },
         { withCredentials: true }
       );
-      return taskId;
+      return res.data; 
     } catch (err: any) {
-      const message =
-        err.response?.data?.error || "Failed to start task";
-      return rejectWithValue(message);
+      return rejectWithValue(err.response?.data?.error || "Failed to start task");
     }
   }
 );
@@ -107,11 +109,13 @@ export const completeTask = createAsyncThunk(
   async (
     {
       taskId,
+      version,
       court_date,
       reason,
       missed_reason, 
     }: {
       taskId: number;
+      version:number;
       court_date?: string;
       reason?: string;
       missed_reason?: string; 
@@ -119,10 +123,10 @@ export const completeTask = createAsyncThunk(
     { rejectWithValue }
   ) => {
     try {
-      const payload: any = {};
+      const payload: any = {version};
       if (court_date) payload.court_date = court_date;
       if (reason) payload.reason = reason;
-      if (missed_reason) payload.missed_reason = missed_reason; // ✅ SEND IT
+      if (missed_reason) payload.missed_reason = missed_reason;
 
       const res = await axios.post(
         `${BASE_URL}/tasks/${taskId}/complete`,
@@ -143,13 +147,13 @@ export const completeTask = createAsyncThunk(
 export const markTaskAsMissed = createAsyncThunk(
   "tasks/markTaskAsMissed",
   async (
-    { taskId, reason }: { taskId: number; reason: string },
+    { taskId, version, reason }: { taskId: number; version: number; reason: string },
     { rejectWithValue }
   ) => {
     try {
       await axios.post(
         `${BASE_URL}/tasks/${taskId}/missed`,
-        { missed_reason: reason },
+        { missed_reason: reason, version },
         { withCredentials: true }
       );
       return taskId;
@@ -164,13 +168,15 @@ export const markTaskAsMissed = createAsyncThunk(
 export const followUpTask = createAsyncThunk(
   "tasks/followUpTask",
   async (
-    { taskId, followUpReason }: { taskId: number; followUpReason: string },
+    { taskId,  version, followUpReason }: { taskId: number; version: number; followUpReason: string },
     { rejectWithValue }
   ) => {
     try {
       await axios.post(
         `${BASE_URL}/tasks/${taskId}/follow-up`,
-        { followUpReason },
+        { followUpReason,
+          version, 
+         },
         { withCredentials: true }
       );
       return taskId;
@@ -181,40 +187,57 @@ export const followUpTask = createAsyncThunk(
     }
   }
 );
+
 export const updateTaskNoteMeta = createAsyncThunk<
   any,
-  { taskId: number; data: {
-    task_note?: string;
-    include_note_in_report?: boolean;
-    contact_info?: string;
-  }},
-  { rejectValue: string }
+  {
+    taskId: number;
+    version: number;
+    data: {
+      task_note?: string;
+      include_note_in_report?: boolean;
+      contact_info?: string;
+      force?: boolean;   
+    };
+  },
+  { rejectValue: any }
 >(
   'tasks/updateTaskNoteMeta',
-  async ({ taskId, data }, { rejectWithValue }) => {
+  async ({ taskId, version, data }, { rejectWithValue }) => {
     try {
       const res = await axios.patch(
         `${BASE_URL}/tasks/patient_tasks/${taskId}/note`,
-        data,
+        {
+          ...data,
+          version 
+        },
         { withCredentials: true }
       );
       return res.data.task;
     } catch (err: any) {
-      return rejectWithValue(err.response?.data?.error || 'Failed to update task note');
+      if (err.response) {
+        return rejectWithValue({
+          status: err.response.status,
+          ...err.response.data
+        });
+      }
+
+      return rejectWithValue({ status: 500, message: 'Unknown error' });
     }
   }
 );
 
+
 export const acknowledgeTask = createAsyncThunk(
   "tasks/acknowledgeTask",
   async (
-    { taskId, reason }: { taskId: number; reason?: string },
+    { taskId,version, reason }: { taskId: number; version:number;reason?: string },
     { rejectWithValue }
   ) => {
     try {
       const res = await axios.patch(
         `${BASE_URL}/tasks/${taskId}/acknowledge`,
-        { reason },
+        { reason,version },
         { withCredentials: true }
       );
       return res.data;
@@ -279,15 +302,15 @@ export const fetchAllTaskNames = createAsyncThunk<
 
 export const overrideTask = createAsyncThunk<
   { message: string; task: any },
-  { patientTaskId: number; override_date: string; reason: string },
+  { patientTaskId: number;version: number; override_date: string; reason: string },
   { rejectValue: string }
 >(
   "tasks/overrideTask",
-  async ({ patientTaskId, override_date, reason }, { rejectWithValue }) => {
+  async ({ patientTaskId,version, override_date, reason }, { rejectWithValue }) => {
     try {
       const res = await axios.post(
         `${BASE_URL}/tasks/${patientTaskId}/override`,
-        { override_date, reason },
+        { override_date,version, reason },
         { withCredentials: true }
       );
       return res.data;
@@ -356,19 +379,12 @@ const taskSlice = createSlice({
   extraReducers: (builder) => {
     builder
     .addCase(startTask.pending, (state) => {
-  state.loading = true;
-  state.error = null;
-})
-      .addCase(startTask.fulfilled, (state, action) => {
-        state.loading = false;
-
-        const taskId = action.payload;
-        const taskIndex = state.patientTasks.findIndex(t => t.patient_task_id === taskId);
-        if (taskIndex !== -1) {
-          state.patientTasks[taskIndex].status = "In Progress";
-          state.patientTasks[taskIndex].started_at = new Date().toISOString();
-        }
+        state.loading = true;
+        state.error = null;
       })
+      .addCase(startTask.fulfilled, (state) => {
+      state.loading = false;
+    })
       .addCase(startTask.rejected, (state, action) => {
         state.loading = false;
         state.error = typeof action.payload === "string"

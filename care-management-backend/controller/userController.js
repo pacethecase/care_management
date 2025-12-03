@@ -178,6 +178,7 @@ const getStaffs = async (req, res) => {
     has_global_access,
     is_super_admin,
     is_admin,
+    is_staff,
     organization_id,
     hospital_id
   } = req.user;
@@ -244,7 +245,7 @@ const getStaffs = async (req, res) => {
     }
 
     // LOCAL ADMIN
-    else if (is_admin) {
+    else if (is_admin || is_staff) {
       query = `
         SELECT id, name, email, hospital_id
         FROM users
@@ -256,7 +257,6 @@ const getStaffs = async (req, res) => {
       `;
       params = [hospital_id];
     }
-
     else return res.status(403).json({ error: "Access denied" });
 
     const { rows } = await pool.query(query, params);

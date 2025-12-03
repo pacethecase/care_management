@@ -47,6 +47,7 @@ export interface Patient {
     archived_at?:string | null;
     archived_reason?:string | null;
     hospital_id?:number;
+    version:number
   }
   
   export interface UserInfo {
@@ -108,11 +109,13 @@ export interface Note {
     override_count: number; 
     override_count_max: number;
     admin_override_approval?: boolean;
+    version:number;
    status_history?: {
   status: string;
   timestamp: string;
   staff_id: number;
   reason?: string;
+ 
 }[];
 
 

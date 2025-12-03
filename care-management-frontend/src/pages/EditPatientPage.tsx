@@ -160,24 +160,18 @@ const EditPatientPage = () => {
         })),
       };
 
-      await dispatch(updatePatient({ id: Number(patientId), data: updatedForm })).unwrap();
+      await dispatch(updatePatient({ id: Number(patientId), data: updatedForm , version: patient!.version})).unwrap();
 
 
 
       toast.success("✅ Patient updated successfully");
       navigate("/patients");
     } catch (err: any) {
-      const errorMsg = err?.data?.error;
-      if (errorMsg?.includes("already updated")) {
-        toast.error(
-          "⚠️ Someone else already updated this patient. Please refresh and try again."
-        );
-      } else if (errorMsg?.includes("Reason is required")) {
-        toast.error("Reason is required for this update.");
-      } else {
-        toast.error("❌ Failed to update patient.");
-      }
-      console.error("Update failed:", err);
+      const message =typeof err === "string" ? err
+                  : err?.error || "Failed to edit patient";
+      
+      toast.error("❌ " + message);
+
     }
   };
 

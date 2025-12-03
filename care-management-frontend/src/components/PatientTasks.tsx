@@ -58,7 +58,7 @@ const [activeTab, setActiveTab] = useState<"Tasks" | "Notes">("Tasks");
 
   const { notes } = useSelector((state: RootState) => state.notes);
   const [editNoteId, setEditNoteId] = useState<number | null>(null);
-const [editText, setEditText] = useState("");
+  const [editText, setEditText] = useState("");
   const { user } = useSelector((state: RootState) => state.user);
   const { taskError } = useSelector((state: RootState) => state.tasks);
 
@@ -100,25 +100,26 @@ const [editText, setEditText] = useState("");
         }
       }, [expandedTaskId, noteDrafts, patientTasks]);
   
+    const handleStart = async (taskId: number, version: number) => {
+      try {
+        await dispatch(startTask({ taskId, version })).unwrap();
 
-        const handleStart = async (taskId: number) => {
-          try {
-            await dispatch(startTask(taskId)).unwrap();
-            toast.success("Task started");
-          } catch (err: any) {
-            const message =
-              typeof err === "string"
-                ? err
-                : err?.response?.data?.error || "Failed to start task";
-            toast.error("❌ " + message);
-          } finally {
-            dispatch(loadPatientTasks(Number(patientId)));
-          }
-        };
+        toast.success("✅ Task started");
+        dispatch(loadPatientTasks(Number(patientId)));
+
+      } catch (err: any) {
+        const message =
+          typeof err === "string"
+            ? err
+            : err?.error || "Failed to start task";
+
+        toast.error("❌ " + message);
+      }
+    };
 
 
 
-  const handleAcknowledge = async (taskId: number) => {
+ const handleAcknowledge = async (taskId: number, version: number) => {
   try {
     const reason = prompt("📝 Please enter a reason to acknowledge this task:");
     if (!reason || reason.trim() === "") {
@@ -126,15 +127,16 @@ const [editText, setEditText] = useState("");
       return;
     }
 
-    await dispatch(acknowledgeTask({ taskId, reason })).unwrap();
+    await dispatch(acknowledgeTask({ taskId,version, reason })).unwrap();
     toast.success("✅ Task acknowledged");
     dispatch(loadPatientTasks(Number(patientId)));
   } catch (err: any) {
-    const message =
-      typeof err === "string"
-        ? err
-        : err?.response?.data?.error || "❌ Failed to acknowledge task";
-    toast.error(message);
+      const message =
+          typeof err === "string"
+            ? err
+            : err?.error || "Failed to Acknowledge task";
+
+        toast.error("❌ " + message);
   }
 };
 
@@ -144,7 +146,7 @@ const handleEditCourtDate = async (type: "guardianship" | "ltc") => {
   if (!newDate) return;
 
   try {
-    await dispatch(updateCourtDate({ patientId: Number(patientId), type, newDate })).unwrap();
+    await dispatch(updateCourtDate({ patientId: Number(patientId), type, newDate,version:patient!.version })).unwrap();
     toast.success("✅ Court date updated");
     dispatch(fetchPatientById(Number(patientId)));
   } catch (err: any) {
@@ -153,7 +155,7 @@ const handleEditCourtDate = async (type: "guardianship" | "ltc") => {
 };
 
 
-const handleOverride = async (taskId: number) => {
+const handleOverride = async (taskId: number, version: number) => {
   const selected = overrideDates[taskId];
   if (!selected) {
     toast.error("❌ Please choose an override date first.");
@@ -168,7 +170,7 @@ const handleOverride = async (taskId: number) => {
 
   try {
     const res = await dispatch(
-      overrideTask({   patientTaskId:taskId  , override_date: selected, reason })
+      overrideTask({ patientTaskId: taskId, version, override_date: selected, reason })
     ).unwrap();
 
     // ✅ choose toast style based on message
@@ -207,6 +209,7 @@ const handleOverride = async (taskId: number) => {
 
 const handleComplete = async (
   taskId: number,
+  version: number,
   courtTask: boolean
 ) => {
   let courtDate: string | undefined = undefined;
@@ -231,6 +234,7 @@ const handleComplete = async (
     await dispatch(
       completeTask({
         taskId,
+        version,
         reason,
         court_date: courtDate,
       })
@@ -239,11 +243,7 @@ const handleComplete = async (
     toast.success("✅ Task completed");
 
   } catch (err: any) {
-    const errorMsg =
-      err?.response?.data?.error ||
-      err?.message ||
-      err?.toString();
-
+    const errorMsg = typeof err === "string" ? err : "Failed to complete task";
     if (errorMsg.toLowerCase().includes("missed")) {
       missedReason = prompt("📝 This task was missed earlier. Please enter a missed reason:")?.trim();
       if (!missedReason) {
@@ -255,7 +255,8 @@ const handleComplete = async (
         await dispatch(
           completeTask({
             taskId,
-            reason, // ✅ still using original reason
+            version,   
+            reason, 
             missed_reason: missedReason,
             court_date: courtDate,
 
@@ -281,7 +282,7 @@ const handleComplete = async (
 
 
   
-const handleMissed = async (taskId: number) => {
+const handleMissed = async (taskId: number, version: number) => {
   const reason = prompt("Enter missed reason:");
   if (!reason || reason.trim() === "") {
     toast.error("❌ Missed reason is required");
@@ -289,7 +290,7 @@ const handleMissed = async (taskId: number) => {
   }
 
   try {
-    await dispatch(markTaskAsMissed({ taskId, reason })).unwrap();
+    await dispatch(markTaskAsMissed({ taskId, version, reason })).unwrap();
     toast.success("✅ Task marked as missed");
     dispatch(loadPatientTasks(Number(patientId)));
   } catch (err: any) {
@@ -302,16 +303,16 @@ const handleMissed = async (taskId: number) => {
 };
 
 
-  const addNote = () => {
+const addNote = () => {
     if (!newNote.trim()) return toast.error("Note cannot be empty!");
     dispatch(addPatientNote({ patientId: Number(patientId), staff_id: user!.id!, note_text: newNote }))
       .then(() => {
         setNewNote("");
         toast.success("✅ Note added");
       });
-  };
+};
 
-  const handleFollowUp = async (taskId: number) => {
+  const handleFollowUp = async (taskId: number, version: number) => {
     const reason = prompt("Please enter a reason for follow-up:");
   
     if (!reason || reason.trim() === "") {
@@ -321,14 +322,17 @@ const handleMissed = async (taskId: number) => {
   
     try {
       // Dispatch the follow-up task with the provided reason
-      await dispatch(followUpTask({ taskId, followUpReason: reason })).unwrap();
+      await dispatch(followUpTask({ taskId, version, followUpReason: reason })).unwrap();
       toast.success("Follow-up task scheduled!");
     if (patientId) {
       dispatch(loadPatientTasks(Number(patientId)));
     }
   } catch (err: any) {
-    const errorMsg = err?.message || "❌ Failed to schedule follow-up";
-    toast.error(errorMsg);
+      const message =
+        typeof err === "string"
+          ? err
+          : err?.response?.data?.error || "❌ Failed to follow up task";
+      toast.error(message);
   }
   };
   
@@ -424,19 +428,27 @@ const renderTaskCard = (task: Task) => {
       },
     }));
   };
+const handleSaveMeta = async (taskId: number, version: number, data: any) => {
+  try {
+    await dispatch(updateTaskNoteMeta({ taskId, version, data })).unwrap();
 
-  const handleSaveMeta = (taskId: number, data: any) => {
-    dispatch(updateTaskNoteMeta({ taskId, data }))
-      .unwrap()
-      .then(() => {
-        toast.success("Task note updated");
-        setExpandedTaskId(null);
-      })
-      .catch(() => toast.error("Failed to update task note"));
-  };
+    toast.success("✅ Task note updated");
+    setExpandedTaskId(null);
 
+  } catch (err: any) {
+    const message =
+      typeof err === "string"
+        ? err
+        : err?.error || "❌ Failed to update task note";
+
+    toast.error(message);
+  }
+};
+
+  
   const borderColor =
     algoColorMap[task.algorithm as keyof typeof algoColorMap] || "var(--border-muted)";
+
 
   return (
     <div
@@ -590,101 +602,103 @@ const renderTaskCard = (task: Task) => {
             </div>
           )}
       </div>
+{(user?.is_admin || user?.is_staff) && (
+      <div className="flex gap-2 flex-wrap mb-2">
+        {!task.is_non_blocking &&
+                task.status !== "Completed" &&
+                task.status !== "Delayed Completed" && (
+                  <div className="flex gap-2 flex-wrap mb-2">
+                    {overrideDates[task.patient_task_id] ? (
+              <>
+                {task.override_count >= task.override_count_max ? (
+                  <button
+                    className="btn btn-xs btn-outline bg-red-500 text-white"
+                  onClick={() => handleOverride(task.patient_task_id, task.version)}
+                  >
+                    Request Admin Approval
+                  </button>
+                ) : (
+                  <button
+                    className="btn btn-xs btn-outline bg-yellow-500 text-white"
+                    onClick={() => handleOverride(task.patient_task_id, task.version)}
+                  >
+                    Override Task
+                  </button>
+                )}
+              </>
+            ) : (
 
-    <div className="flex gap-2 flex-wrap mb-2">
-      {!task.is_non_blocking &&
-        task.status !== "Completed" &&
-        task.status !== "Delayed Completed" && (
-          <div className="flex gap-2 flex-wrap mb-2">
-            {overrideDates[task.patient_task_id] ? (
-      <>
-        {task.override_count >= task.override_count_max ? (
-          <button
-            className="btn btn-xs btn-outline bg-red-500 text-white"
-            onClick={() => handleOverride(task.patient_task_id)}
-          >
-            Request Admin Approval
-          </button>
-        ) : (
-          <button
-            className="btn btn-xs btn-outline bg-yellow-500 text-white"
-            onClick={() => handleOverride(task.patient_task_id)}
-          >
-            Override Task
-          </button>
-        )}
-      </>
-    ) : (
+            <>
+              {task.status !== "In Progress" && task.status !== "Missed" && (
+                <button
+                  className="btn btn-xs"
+                  onClick={() => handleStart(task.patient_task_id, task.version)}
 
-          <>
-            {task.status !== "In Progress" && task.status !== "Missed" && (
-              <button
-                className="btn btn-xs"
-                onClick={() => handleStart(task.patient_task_id)}
-              >
-                Start
-              </button>
-            )}
-            <button
-              className="btn btn-xs btn-outline"
-              onClick={() => handleComplete(task.patient_task_id, task.is_court_date ?? false)}
-            >
-              Complete
-            </button>
-            <button
-              className="btn btn-xs bg-red-600 text-white"
-              onClick={() => handleMissed(task.patient_task_id)}
-            >
-              Missed
-            </button>
-            {task.is_repeating && task.due_in_days_after_dependency != null && (
+                >
+                  Start
+                </button>
+              )}
               <button
                 className="btn btn-xs btn-outline"
-                onClick={() => handleFollowUp(task.patient_task_id)}
+                onClick={() => handleComplete(task.patient_task_id, task.version, task.is_court_date ?? false)}
               >
-                Follow Up
+                Complete
               </button>
-            )}
-          </>
-        )}
-      </div>
-    )}
+              <button
+                className="btn btn-xs bg-red-600 text-white"
+                onClick={() => handleMissed(task.patient_task_id,task.version)}
+              >
+                Missed
+              </button>
+              {task.is_repeating && task.due_in_days_after_dependency != null && (
+                <button
+                  className="btn btn-xs btn-outline"
+                  onClick={() => handleFollowUp(task.patient_task_id, task.version)}
+                >
+                  Follow Up
+                </button>
+              )}
+            </>
+          )}
+        </div>
+      )}
 
- {task.is_non_blocking && (
-  <>
-    {task.status !== "Acknowledged" && (
-      <>
-        <button
-          className="btn btn-xs bg-blue-500 text-white"
-          onClick={() => handleAcknowledge(task.patient_task_id)}
-        >
-          Acknowledge
-        </button>
+  {task.is_non_blocking && (
+    <>
+      {task.status !== "Acknowledged" && (
+        <>
+          <button
+            className="btn btn-xs bg-blue-500 text-white"
+            onClick={() => handleAcknowledge(task.patient_task_id, task.version)}
+          >
+            Acknowledge
+          </button>
 
+          <button
+            className="btn btn-xs btn-outline"
+            onClick={() => handleFollowUp(task.patient_task_id,task.version)}
+          >
+            Follow Up
+          </button>
+        </>
+      )}
+
+      {task.status === "Acknowledged" && (
         <button
           className="btn btn-xs btn-outline"
-          onClick={() => handleFollowUp(task.patient_task_id)}
+          onClick={() => handleFollowUp(task.patient_task_id,task.version)}
         >
           Follow Up
         </button>
-      </>
-    )}
+      )}
+    </>
+  )}
 
-    {task.status === "Acknowledged" && (
-      <button
-        className="btn btn-xs btn-outline"
-        onClick={() => handleFollowUp(task.patient_task_id)}
-      >
-        Follow Up
-      </button>
-    )}
-  </>
+    
+      </div>
+
 )}
-
-  
-</div>
-
-
+{(user?.is_admin || user?.is_staff) && (
       <div className="text-xs">
         <button
           className="underline text-black"
@@ -696,6 +710,7 @@ const renderTaskCard = (task: Task) => {
         </button>
       </div>
 
+        )}
       {task.task_note && <p className="text-sm mt-1">{task.task_note}</p>}
       {task.contact_info && <p className="text-sm">{task.contact_info}</p>}
 
@@ -727,7 +742,7 @@ const renderTaskCard = (task: Task) => {
 
           <button
             className="btn btn-xs"
-            onClick={() => handleSaveMeta(task.patient_task_id, draft)}
+            onClick={() => handleSaveMeta(task.patient_task_id, task.version, draft)}
           >
             💾 Save
           </button>
@@ -957,6 +972,7 @@ if (patientLoading || taskLoading || !patient) {
         {DateTime.fromISO(patient.ltc_court_datetime, { zone: 'utc' })
           .setZone("local") 
           .toFormat('MMM d, yyyy, h:mm a')}
+          {(user?.is_admin || user?.is_staff) && (
         <button
           onClick={() => handleEditCourtDate("ltc")}
           className="ml-4 hover:underline text-sm inline-flex items-center gap-1"
@@ -965,6 +981,7 @@ if (patientLoading || taskLoading || !patient) {
           <Pencil size={14} />
           Edit
         </button>
+        )}
       </>
     ) : (
       "Not Set"
@@ -975,7 +992,7 @@ if (patientLoading || taskLoading || !patient) {
           </div>
         </div>
 
-      <div className="flex justify-center mb-6 gap-4">
+  <div className="flex justify-center mb-6 gap-4">
   <button
     className={`btn ${activeTab === "Tasks" ? "btn-active" : ""}`}
     onClick={() => setActiveTab("Tasks")}
@@ -988,10 +1005,11 @@ if (patientLoading || taskLoading || !patient) {
   >
     Notes
   </button>
+  {(user?.is_admin || user?.is_staff) &&(
     <button className="btn btn-primary" onClick={() => setShowCreateModal(true)}>
      Create Task
   </button>
- 
+  )}
 </div>
 {showCreateModal && (
   <CreateTaskModal

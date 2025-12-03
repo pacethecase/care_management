@@ -78,32 +78,36 @@ switch (patient.task_status) {
     const note = prompt("Enter discharge note:");
     if (!note) return;
 
-    dispatch(dischargePatient({ patientId: patient.id, dischargeNote: note }))
+    dispatch(dischargePatient({ patientId: patient.id,version:patient.version, dischargeNote: note }))
       .unwrap()
       .then((res) => {
         toast.success(res.message);
-        dispatch(fetchPatients());
       })
       .catch((err) => {
         toast.error(err?.error || "Failed to discharge patient");
       });
   };
 
-  const handleReactivate = (id: number) => {
-    if (!user?.is_admin) return;
-    if (!window.confirm("Are you sure you want to reactivate this patient?")) return;
+ const handleReactivate = (patientId: number, version: number) => {
+  if (!user?.is_admin) return;
+  if (!window.confirm("Are you sure you want to reactivate this patient?")) return;
 
-    dispatch(reactivatePatient(id))
-      .unwrap()
-      .then(() => {
-        toast.success("Patient reactivated!");
-        dispatch(fetchDischargedPatients());
-        dispatch(fetchPatients());
-      })
-      .catch((err) => {
+  dispatch(reactivatePatient({ patientId, version }))
+    .unwrap()
+    .then(() => {
+      toast.success("Patient reactivated!");
+      dispatch(fetchDischargedPatients());
+      dispatch(fetchPatients());
+    })
+    .catch((err) => {
+      if (typeof err === "string" && err.includes("refresh")) {
+        toast.error("Record was updated by someone else. Reloading...");
+      } else {
         toast.error(err || "Failed to reactivate patient.");
-      });
-  };
+      }
+    });
+};
+
 
 
 const handleArchive = async () => {
@@ -115,7 +119,7 @@ const handleArchive = async () => {
     ) || undefined;
 
   try {
-    await dispatch(archiveDischargedPatient({ patientId: patient.id, reason })).unwrap();
+    await dispatch(archiveDischargedPatient({ patientId: patient.id, reason,version:patient.version })).unwrap();
     toast.success(`Archived ${fullName}`);
     dispatch(fetchDischargedPatients()); 
   } catch (err: any) {
@@ -163,7 +167,7 @@ const handleArchive = async () => {
               <>
                 <button
                   className="btn mt-4"
-                  onClick={() => handleReactivate(patient.id)}
+                  onClick={() => handleReactivate(patient.id,patient.version)}
                 >
                   Reactivate Patient
                 </button>

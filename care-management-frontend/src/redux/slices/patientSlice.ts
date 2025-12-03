@@ -89,9 +89,9 @@ export const fetchPatientById = createAsyncThunk(
 
 export const dischargePatient = createAsyncThunk(
   'patients/dischargePatient',
-  async ({ patientId, dischargeNote }: { patientId: number; dischargeNote: string }, { rejectWithValue }) => {
+  async ({ patientId,version,dischargeNote }: { patientId: number; version:number; dischargeNote: string }, { rejectWithValue }) => {
     try {
-      const response = await axios.post(`${BASE_URL}/patients/${patientId}/discharge`, { dischargeNote }, {
+      const response = await axios.post(`${BASE_URL}/patients/${patientId}/discharge`, { dischargeNote,version }, {
         withCredentials: true,
       });
       return { patientId, message: response.data.message };
@@ -100,21 +100,28 @@ export const dischargePatient = createAsyncThunk(
     }
   }
 );
-
 export const reactivatePatient = createAsyncThunk<
   { patientId: number },
-  number,
+  { patientId: number; version: number },
   { rejectValue: string }
->('patients/reactivatePatient', async (patientId, { rejectWithValue }) => {
-  try {
-    await axios.patch(`${BASE_URL}/patients/${patientId}/reactivate`, {}, {
-      withCredentials: true,
-    });
-    return { patientId };
-  } catch (err: any) {
-    return rejectWithValue(err.response?.data?.error || 'Failed to reactivate patient');
+>(
+  'patients/reactivatePatient',
+  async ({ patientId, version }, { rejectWithValue }) => {
+    try {
+      await axios.patch(
+        `${BASE_URL}/patients/${patientId}/reactivate`,
+        { version },
+        { withCredentials: true }
+      );
+
+      return { patientId };
+    } catch (err: any) {
+      return rejectWithValue(
+        err.response?.data?.error || 'Failed to reactivate patient'
+      );
+    }
   }
-});
+);
 
 export const fetchDischargedPatients = createAsyncThunk<
   { count: number; patients: Patient[] },
@@ -142,13 +149,15 @@ export const updatePatient = createAsyncThunk(
     {
       id,
       data,
+      version,
     }: {
       id: number | string;
       data: { [key: string]: any; assignedStaffIds: { staff_id: string; access_level: 'view' | 'edit' }[] };
+      version: number;
     },
     { rejectWithValue }) => {
     try {
-      const res = await axios.patch(`${BASE_URL}/patients/${id}/update`, data, {
+      const res = await axios.patch(`${BASE_URL}/patients/${id}/update`, {...data,version}, {
         withCredentials: true,
       });
       return res.data.patient || { id, ...data }; 
@@ -225,7 +234,8 @@ export const updateCourtDate = createAsyncThunk(
       patientId,
       type,
       newDate,
-    }: { patientId: number; type: "guardianship" | "ltc"; newDate: string },
+      version
+    }: { patientId: number; type: "guardianship" | "ltc"; newDate: string ; version:number},
     { rejectWithValue }
   ) => {
     try {
@@ -234,6 +244,7 @@ export const updateCourtDate = createAsyncThunk(
         {
           type,
           newDate,
+          version,
         },
         {
           withCredentials: true,
@@ -250,11 +261,11 @@ export const updateCourtDate = createAsyncThunk(
 
 export const archiveDischargedPatient = createAsyncThunk<
   { patientId: number },                               
-  { patientId: number; reason?: string },             
+  { patientId: number; reason?: string;version:number },             
   { rejectValue: string }
->("patients/archiveDischargedPatient", async ({ patientId, reason }, { rejectWithValue }) => {
+>("patients/archiveDischargedPatient", async ({ patientId, reason,version }, { rejectWithValue }) => {
   try {
-    await axios.post(`${BASE_URL}/patients/${patientId}/archive`, { reason }, { withCredentials: true });
+    await axios.post(`${BASE_URL}/patients/${patientId}/archive`, { reason,version }, { withCredentials: true });
     return { patientId };
   } catch (e: any) {
     return rejectWithValue(e?.response?.data?.error || "Failed to archive patient");
@@ -333,19 +344,13 @@ const patientsSlice = createSlice({
         state.error = action.payload as string;
       })
 
-      .addCase(dischargePatient.fulfilled, (state, action) => {
-        state.patients = state.patients.map((patient) =>
-          patient.id === action.payload.patientId
-            ? {
-                ...patient,
-                status: 'Discharged',
-                discharge_note: 'Added',
-                discharge_date: new Date().toISOString(),
-              }
-            : patient
+          .addCase(dischargePatient.fulfilled, (state, action) => {
+        state.patients = state.patients.filter(
+          p => p.id !== action.payload.patientId
         );
         state.loading = false;
       })
+
      .addCase(fetchDischargedPatients.fulfilled, (state, action) => {
         state.dischargedPatients = action.payload.patients || [];
         state.dischargedCount = action.payload.count || 0;

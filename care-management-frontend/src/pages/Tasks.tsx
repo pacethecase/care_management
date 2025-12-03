@@ -63,23 +63,26 @@ const matchedPatientIds = useMemo(() => {
     setReasonInputs((prev) => ({ ...prev, [taskId]: value }));
   };
 
-  const handleStart = async (taskId: number) => {
+  const handleStart = async (taskId: number, version:number) => {
     try {
-      await dispatch(startTask(taskId)).unwrap();
+      await dispatch(startTask({taskId, version})).unwrap();
       toast.success("✅ Task started");
       refreshTasks();
-    } catch (err: any) {
-      toast.error("❌ " + (typeof err === "string" ? err : "Failed to start task"));
-    }
-  };
+    }catch (err: any) {
+        const message =
+          typeof err === "string"
+            ? err
+            : err?.error || "Failed to start task";
+
+        toast.error("❌ " + message);
+      }
+    };
 
 
-
-
-  const handleComplete = async (taskId: number, courtTask: boolean) => {
+  const handleComplete = async (taskId: number, version: number,courtTask: boolean) => {
       let courtDate: string | undefined = undefined;
       let reason: string | undefined = undefined;
-  let missedReason: string | undefined = undefined; 
+      let missedReason: string | undefined = undefined; 
     try {
      
   
@@ -97,7 +100,7 @@ const matchedPatientIds = useMemo(() => {
       return;
     }
 
-    await dispatch(completeTask({ taskId, reason, court_date: courtDate })).unwrap();
+    await dispatch(completeTask({ taskId, version,reason, court_date: courtDate })).unwrap();
     toast.success("✅ Task completed");
     refreshTasks();
     }catch (err: any) {
@@ -114,6 +117,7 @@ const matchedPatientIds = useMemo(() => {
         await dispatch(
           completeTask({
             taskId,
+            version,
             reason,
             missed_reason: missedReason,
             court_date: courtDate,
@@ -136,7 +140,7 @@ const matchedPatientIds = useMemo(() => {
 
 
 
-  const handleFollowUp = async (taskId: number) => {
+  const handleFollowUp = async (taskId: number,version:number) => {
     const reason = prompt("Please enter a reason for follow-up:");
     if (!reason || reason.trim() === "") {
       toast.error("❌ Follow-up reason is required");
@@ -144,7 +148,7 @@ const matchedPatientIds = useMemo(() => {
     }
 
     try {
-      await dispatch(followUpTask({ taskId, followUpReason: reason })).unwrap();
+      await dispatch(followUpTask({ taskId, version,followUpReason: reason })).unwrap();
       toast.success("Follow-up task scheduled!");
       refreshTasks();
     } catch {
@@ -152,7 +156,7 @@ const matchedPatientIds = useMemo(() => {
     }
   };
 
-  const handleMissed = async (taskId: number) => {
+  const handleMissed = async (taskId: number, version:number) => {
     const reason = reasonInputs[taskId];
     if (!reason || reason.trim() === "") {
       toast.error("❌ Missed reason is required");
@@ -160,7 +164,7 @@ const matchedPatientIds = useMemo(() => {
     }
 
     try {
-      await dispatch(markTaskAsMissed({ taskId, reason })).unwrap();
+      await dispatch(markTaskAsMissed({ taskId,version, reason })).unwrap();
       toast.success("✅ Task marked as missed");
       refreshTasks();
     } catch {
@@ -263,7 +267,7 @@ const filteredMissedTasks = useMemo(() => {
                     onChange={(e) => handleReasonChange(task.patient_task_id, e.target.value)}
                   />
                   <button
-                    onClick={() => handleMissed(task.patient_task_id)}
+                    onClick={() => handleMissed(task.patient_task_id,task.version)}
                     className="mt-2 btn btn-primary"
                   >
                     Submit Reason
@@ -292,19 +296,19 @@ const filteredMissedTasks = useMemo(() => {
                   </p>
                   <div className="mt-3 flex flex-col md:flex-row gap-2">
                     {task.status === "Pending" && (
-                      <button onClick={() => handleStart(task.patient_task_id)} className="btn">
+                      <button onClick={() => handleStart(task.patient_task_id,task.version)} className="btn">
                         Start
                       </button>
                     )}
                     {task.is_repeating && task.due_in_days_after_dependency != null && (
-                      <button onClick={() => handleFollowUp(task.patient_task_id)} className="btn btn-outline">
+                      <button onClick={() => handleFollowUp(task.patient_task_id,task.version)} className="btn btn-outline">
                         Follow Up
                       </button>
                     )}
                     <button
                       className="btn btn-xs btn-outline"
                       onClick={() =>
-                        handleComplete(task.patient_task_id , task.is_court_date ?? false)
+                        handleComplete(task.patient_task_id ,task.version, task.is_court_date ?? false)
                       }
                     >
                       Complete
@@ -315,7 +319,7 @@ const filteredMissedTasks = useMemo(() => {
                       onChange={(e) => handleReasonChange(task.patient_task_id, e.target.value)}
                     />
                     <button
-                      onClick={() => handleMissed(task.patient_task_id)}
+                      onClick={() => handleMissed(task.patient_task_id,task.version)}
                       className="btn bg-red-600 text-white"
                     >
                       Mark Missed

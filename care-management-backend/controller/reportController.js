@@ -484,6 +484,8 @@ if (!req.user?.is_approved) {
       const result = await pool.query(`
         SELECT 
           pt.id AS patient_task_id,
+          pt.version,
+          pt.updated_at,
           pt.task_id,
           t.name AS task_name,
           t.algorithm,

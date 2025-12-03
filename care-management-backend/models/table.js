@@ -109,11 +109,12 @@ const createTables = async () => {
           added_by_user_id INTEGER REFERENCES users(id),
           selected_algorithms TEXT[] DEFAULT '{}',
           hospital_id INTEGER NOT NULL REFERENCES hospitals(id),
-         updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
           is_archived BOOLEAN NOT NULL DEFAULT FALSE,
           archived_at TIMESTAMPTZ,
           archived_by_user_id INTEGER,
-          archived_reason TEXT
+          archived_reason TEXT,
+          version INTEGER  NOT NULL DEFAULT 0
       );
 
 
@@ -161,7 +162,9 @@ const createTables = async () => {
           override_count INT DEFAULT 0,         
           override_count_max INT DEFAULT 2,              
           admin_override_approval BOOLEAN DEFAULT FALSE,          
-          is_visible BOOLEAN DEFAULT TRUE
+          is_visible BOOLEAN DEFAULT TRUE,
+          updated_at TIMESTAMP  WITH TIME ZONE  DEFAULT CURRENT_TIMESTAMP,
+          version INTEGER  NOT NULL DEFAULT 0
           );
 
         CREATE TABLE IF NOT EXISTS notes (
