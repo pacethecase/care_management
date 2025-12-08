@@ -39,6 +39,20 @@ interface FormData {
   created_at: string; 
  
 }
+function calculateAge(dob: string) {
+  const [year, month, day] = dob.split("-").map(Number);
+  const today = new Date();
+
+  let age = today.getFullYear() - year;
+
+  const hasBirthdayPassed =
+    today.getMonth() + 1 > month ||
+    (today.getMonth() + 1 === month && today.getDate() >= day);
+
+  if (!hasBirthdayPassed) age--;
+
+  return age;
+}
 
 const AddPatientPage = () => {
   const dispatch = useDispatch<AppDispatch>();
@@ -84,22 +98,19 @@ useEffect(() => {
 }, []);
 
 
-  useEffect(() => {
-    if (formData.birth_date) {
-      const birthDate = new Date(formData.birth_date);
-      if (!isNaN(birthDate.getTime())) {
-        const today = new Date();
-        const calculatedAge = Math.floor(
-          (today.getTime() - birthDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000)
-        );
-        setFormData((prev) => ({
-          ...prev,
-          age: calculatedAge >= 0 ? calculatedAge : 0,
-          is_geriatric_psych_available: calculatedAge > 65 ? prev.is_geriatric_psych_available : false,
-        }));
-      }
-    }
-  }, [formData.birth_date]);
+useEffect(() => {
+  if (formData.birth_date) {
+    const calculatedAge = calculateAge(formData.birth_date);
+
+    setFormData((prev) => ({
+      ...prev,
+      age: calculatedAge >= 0 ? calculatedAge : 0,
+      is_geriatric_psych_available:
+        calculatedAge > 65 ? prev.is_geriatric_psych_available : false,
+    }));
+  }
+}, [formData.birth_date]);
+
 
   const handleChange = (
     e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>

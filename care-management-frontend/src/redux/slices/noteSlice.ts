@@ -20,11 +20,10 @@ const initialState: NoteState = {
   error: null,
 };
 
-// ✅ Fetch Notes for a Patient
 export const fetchPatientNotes = createAsyncThunk<
-  Note[],                         // Return type
-  number,                         // patientId
-  { rejectValue: string }         // Reject value
+  Note[],                         
+  number,                         
+  { rejectValue: string }        
 >(
   "notes/fetchPatientNotes",
   async (patientId, { rejectWithValue }) => {
@@ -39,7 +38,7 @@ export const fetchPatientNotes = createAsyncThunk<
   }
 );
 
-// ✅ Add Note to Patient
+
 export const addPatientNote = createAsyncThunk<
   Note,
   { patientId: number; staff_id: number; note_text: string },

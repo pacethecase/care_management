@@ -153,6 +153,10 @@ useEffect(() => {
                 <span className="inline-block w-4 h-4 rounded-full bg-green-600"></span>
                 <span>Up-To-Date</span>
               </div>
+              <div className="flex items-center gap-2">
+                <span className="inline-block w-4 h-4 rounded-full bg-yellow-400"></span>
+                <span>Consideration</span>
+              </div>
             </div>
           </div>
 

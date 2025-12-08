@@ -212,7 +212,7 @@ const addPatient = async (req, res) => {
       FROM patients
       WHERE LOWER(first_name) = LOWER($1)
         AND LOWER(last_name) = LOWER($2)
-        AND birth_date::date = $3::date
+        AND TO_CHAR(birth_date, 'YYYY-MM-DD') = $3
         AND mrn = $4
         AND hospital_id = $5
       `,
@@ -422,7 +422,7 @@ const getPatientById = async (req, res) => {
         p.id,
         p.first_name,
         p.last_name,
-        p.birth_date,
+        TO_CHAR(p.birth_date, 'YYYY-MM-DD') AS birth_date,
         p.age,
         p.room_no,
         p.medical_info,

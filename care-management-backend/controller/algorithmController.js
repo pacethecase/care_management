@@ -192,7 +192,7 @@ const getPatientsByAlgorithm = async (req, res) => {
 
       const query = `
         SELECT 
-          p.id, p.first_name, p.last_name, p.birth_date, p.room_no,
+          p.id, p.first_name, p.last_name,  TO_CHAR(p.birth_date, 'YYYY-MM-DD') AS birth_date, p.room_no,
           p.created_at, p.admitted_date, p.hospital_id,
           h.name AS hospital_name
         FROM patients p
@@ -214,7 +214,7 @@ const getPatientsByAlgorithm = async (req, res) => {
     if (is_admin) {
       const query = `
         SELECT 
-          p.id, p.first_name, p.last_name, p.birth_date, p.room_no,
+          p.id, p.first_name, p.last_name,  TO_CHAR(p.birth_date, 'YYYY-MM-DD') AS birth_date, p.room_no,
           p.created_at, p.admitted_date, p.hospital_id,
           h.name AS hospital_name
         FROM patients p
@@ -234,7 +234,7 @@ const getPatientsByAlgorithm = async (req, res) => {
     --------------------------------------------------------- */
     const query = `
       SELECT 
-        p.id, p.first_name, p.last_name, p.birth_date, p.room_no,
+        p.id, p.first_name, p.last_name, TO_CHAR(p.birth_date, 'YYYY-MM-DD') AS birth_date,p.room_no,
         p.created_at, p.admitted_date, p.hospital_id,
         h.name AS hospital_name
       FROM patients p

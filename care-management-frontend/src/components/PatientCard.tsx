@@ -24,6 +24,21 @@ interface PatientCardProps {
   onViewReport?: (id: number) => void;
 }
 
+function calculateAge(dob: string) {
+  const [year, month, day] = dob.split("-").map(Number);
+  const today = new Date();
+
+  let age = today.getFullYear() - year;
+
+  const hasBirthdayPassed =
+    today.getMonth() + 1 > month ||
+    (today.getMonth() + 1 === month && today.getDate() >= day);
+
+  if (!hasBirthdayPassed) age--;
+
+  return age;
+}
+
 const PatientCard: React.FC<PatientCardProps> = ({
   patient,
   user,
@@ -41,13 +56,8 @@ const PatientCard: React.FC<PatientCardProps> = ({
     navigate(`/patients/${patient.id}/edit`);
   };
 
-  const birthDate = new Date(patient.birth_date);
-  const today = new Date();
-  let age = today.getFullYear() - birthDate.getFullYear();
-  const isBirthdayPassed =
-    today.getMonth() > birthDate.getMonth() ||
-    (today.getMonth() === birthDate.getMonth() && today.getDate() >= birthDate.getDate());
-  if (!isBirthdayPassed) age--;
+  const age = calculateAge(patient.birth_date);
+
 
 
 let taskButtonColor = "";

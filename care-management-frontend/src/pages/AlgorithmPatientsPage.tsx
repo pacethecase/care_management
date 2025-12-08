@@ -43,7 +43,7 @@ const PatientCard = React.memo(
 
       <div className="text-sm text-gray-600 mt-3">
         <p>Room: {patient.room_no}</p>
-        <p>DOB: {new Date(patient.birth_date).toLocaleDateString()}</p>
+        <p>DOB: {patient.birth_date}</p>
 
         <p>
           Admitted On:{" "}

@@ -95,48 +95,65 @@ const initialState: ReportState = {
       drilldown: []
   },
 };
-export interface ReportParams {
-  date: string;
-  adminId?: number;
-}
 
-
-export const fetchDailyReport = createAsyncThunk<any[], ReportParams, { rejectValue: string }>(
+export const fetchDailyReport = createAsyncThunk<
+  any[],
+  { date: string; adminId?: number; hospitalId?: number },
+  { rejectValue: string }
+>(
   "reports/fetchDailyReport",
-  async ({ date, adminId }, { rejectWithValue }) => {
+  async ({ date, adminId, hospitalId }, { rejectWithValue }) => {
     try {
-      const queryParams = new URLSearchParams({ date });
-      if (adminId) queryParams.append("adminId", String(adminId));
+      const queryParams = new URLSearchParams();
+      queryParams.append("date", date);
 
-      const response = await axios.get(`${BASE_URL}/reports/daily-report?${queryParams.toString()}`, {
-        withCredentials: true,
-      });
+      if (adminId) queryParams.append("adminId", String(adminId));
+      if (hospitalId) queryParams.append("hospitalId", String(hospitalId)); 
+
+      const response = await axios.get(
+        `${BASE_URL}/reports/daily-report?${queryParams.toString()}`,
+        { withCredentials: true }
+      );
+
       return response.data;
     } catch (error: any) {
-      return rejectWithValue(error.response?.data || "Failed to fetch daily report");
+      return rejectWithValue(
+        error.response?.data || "Failed to fetch daily report"
+      );
     }
   }
 );
 
-export const fetchPriorityReport = createAsyncThunk<any[], ReportParams, { rejectValue: string }>(
+export const fetchPriorityReport = createAsyncThunk<
+  any[],
+  { date: string; adminId?: number; hospitalId?: number },
+  { rejectValue: string }
+>(
   "reports/fetchPriorityReport",
-  async ({ date, adminId }, { rejectWithValue }) => {
+  async ({ date, adminId, hospitalId }, { rejectWithValue }) => {
     try {
-      const queryParams = new URLSearchParams({ date });
-      if (adminId) queryParams.append("adminId", String(adminId));
+      const queryParams = new URLSearchParams();
+      queryParams.append("date", date);
 
-      const response = await axios.get(`${BASE_URL}/reports/daily-priority-report?${queryParams.toString()}`, {
-        withCredentials: true,
-      });
+      if (adminId) queryParams.append("adminId", String(adminId));
+      if (hospitalId) queryParams.append("hospitalId", String(hospitalId));
+
+      const response = await axios.get(
+        `${BASE_URL}/reports/daily-priority-report?${queryParams.toString()}`,
+        { withCredentials: true }
+      );
+
       return response.data;
     } catch (error: any) {
-      return rejectWithValue(error.response?.data || "Failed to fetch priority report");
+      return rejectWithValue(
+        error.response?.data || "Failed to fetch priority report"
+      );
     }
   }
 );
 
 export const fetchTransitionalReport = createAsyncThunk<
-  any, // or a proper `TransitionalReport` type
+  any,
   { patientId: number; start_date?: string; end_date?: string },
   { rejectValue: string }
 >(
@@ -152,14 +169,17 @@ export const fetchTransitionalReport = createAsyncThunk<
       );
       return response.data;
     } catch (error: any) {
-      return rejectWithValue(error.response?.data || "Failed to fetch transitional report");
+      return rejectWithValue(
+        error.response?.data || "Failed to fetch transitional report"
+      );
     }
   }
 );
 
 
+
 export const fetchHistoricalTimelineReport = createAsyncThunk<
-  any, // or a proper `HistoricalTimelineReport` type
+  any, 
   { patientId: number; start_date?: string; end_date?: string },
   { rejectValue: string }
 >(

@@ -18,6 +18,22 @@ interface StaffAccess {
   access_level: 'view' | 'edit';
 }
 
+function calculateAge(dob: string) {
+  const [year, month, day] = dob.split("-").map(Number);
+  const today = new Date();
+
+  let age = today.getFullYear() - year;
+
+  const hasBirthdayPassed =
+    today.getMonth() + 1 > month ||
+    (today.getMonth() + 1 === month && today.getDate() >= day);
+
+  if (!hasBirthdayPassed) age--;
+
+  return age;
+}
+
+
 const EditPatientPage = () => {
   const dispatch = useDispatch<AppDispatch>();
   const navigate = useNavigate();
@@ -62,9 +78,8 @@ const EditPatientPage = () => {
 
   useEffect(() => {
     if (patient) {
-      const birthDate = new Date(patient.birth_date);
-      const today = new Date();
-      const calculatedAge = Math.floor((today.getTime() - birthDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
+      const calculatedAge = calculateAge(patient.birth_date);
+
       const assignedStaffIds: StaffAccess[] =
         patient.assigned_staff?.map((s: any) => ({
           id: String(s.id),
@@ -74,7 +89,7 @@ const EditPatientPage = () => {
       setFormData({
         first_name: patient.first_name || '',
         last_name: patient.last_name || '',
-        birth_date: new Date(patient.birth_date).toISOString().split("T")[0],
+        birth_date: patient.birth_date,
         age: calculatedAge >= 0 ? calculatedAge.toString() : '',
         roomNo: patient.room_no || '',
         mrn: patient.mrn || '',
@@ -103,9 +118,7 @@ const EditPatientPage = () => {
 
   useEffect(() => {
     if (formData.birth_date) {
-      const birthDate = new Date(formData.birth_date);
-      const today = new Date();
-      const calculatedAge = Math.floor((today.getTime() - birthDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
+      const calculatedAge = calculateAge(formData.birth_date);
       setFormData((prev: any) => ({
         ...prev,
         age: calculatedAge >= 0 ? calculatedAge.toString() : '',
