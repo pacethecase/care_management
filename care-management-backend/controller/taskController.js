@@ -342,11 +342,12 @@ const completeTask = async (req, res) => {
     let finalStatus = "Completed";
 
     if (task.due_date || task.ideal_due_date) {
-      const dueCutoffUTC = DateTime.fromJSDate(
-        task.ideal_due_date || task.due_date
+    const dueCutoffUTC = DateTime.fromJSDate(
+        task.ideal_due_date || task.due_date,
+        { zone: "utc" }         
       )
-        .setZone(timezone)
-        .set({ hour: 23, minute: 59, second: 0, millisecond: 0 })
+        .setZone(timezone)     
+        .endOf("day")          
         .toUTC()
         .toJSDate();
 

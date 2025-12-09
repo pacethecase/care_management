@@ -76,8 +76,9 @@ const requireEditAccess = async (req, res, next) => {
       return next();
     }
 
-    let patientId = req.params.patientId;
-    const taskId = req.params.taskId || req.params.id;
+    let patientId = req.params.patientId || req.params.id;
+    const taskId = req.params.taskId || null;
+
 
     // 🧠 If route is task-based, find patientId via patient_tasks
     if (!patientId && taskId) {
@@ -100,6 +101,10 @@ const requireEditAccess = async (req, res, next) => {
       `SELECT access_level FROM patient_staff WHERE patient_id = $1 AND staff_id = $2`,
       [patientId, user.id]
     );
+    console.log("DEBUG patientId:", patientId);
+console.log("DEBUG user.id:", user.id);
+console.log("DEBUG accessRows:", accessRows);
+
 
     if (accessRows.length === 0) {
       return res.status(403).json({ error: "Access denied: not assigned to this patient." });
