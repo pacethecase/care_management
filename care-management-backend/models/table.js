@@ -108,6 +108,7 @@ const createTables = async () => {
           created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
           added_by_user_id INTEGER REFERENCES users(id),
           selected_algorithms TEXT[] DEFAULT '{}',
+          ever_selected_algorithms TEXT[] DEFAULT '{}',
           hospital_id INTEGER NOT NULL REFERENCES hospitals(id),
           updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
           is_archived BOOLEAN NOT NULL DEFAULT FALSE,

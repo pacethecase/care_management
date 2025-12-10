@@ -244,14 +244,14 @@ const addPatient = async (req, res) => {
         is_behavioral, is_restrained, is_geriatric_psych_available, is_behavioral_team,
         is_ltc, is_ltc_medical, is_ltc_financial,
         is_guardianship, is_guardianship_financial, is_guardianship_person, is_guardianship_emergency,
-        admitted_date, added_by_user_id, hospital_id, created_at, selected_algorithms
+        admitted_date, added_by_user_id, hospital_id, created_at, selected_algorithms,ever_selected_algorithms
       )
       VALUES (
         $1, $2, $3, $4, $5, $6, $7,
         $8, $9, $10, $11,
         $12, $13, $14,
         $15, $16, $17, $18,
-        $19, $20, $21, $22, $23
+        $19, $20, $21, $22, $23, $24
       )
       RETURNING *`,
       [
@@ -260,7 +260,7 @@ const addPatient = async (req, res) => {
         is_ltc, is_ltc_medical, is_ltc_financial,
         is_guardianship, is_guardianship_financial, is_guardianship_person, is_guardianship_emergency,
         admittedDateUTC, added_by_user_id, hospital_id, createdAtUTC,
-        selectedAlgorithms
+        selectedAlgorithms,selectedAlgorithms
       ]
     );
 
@@ -321,8 +321,13 @@ const addPatient = async (req, res) => {
       );
     }
 
-
-      await assignTasksToPatient(newPatient.id, timezone, selectedAlgorithms);
+      await assignTasksToPatient(
+        newPatient.id,
+        timezone,
+        [],
+        selectedAlgorithms,  
+        []                    
+      );
 
       if (normalizedStaff.length > 0) {
         const io = req.app.get("io");
@@ -901,16 +906,13 @@ const getDischargedPatients = async (req, res) => {
   }
 };
 
-
 const updatePatient = async (req, res) => {
   if (!req.user?.is_approved) {
     return res.status(403).json({ error: "Access denied: User not approved." });
   }
 
   if (req.user.has_global_access || req.user.is_super_admin) {
-    return res.status(403).json({
-      error: "Access denied: You cannot modify patient records.",
-    });
+    return res.status(403).json({ error: "Access denied: You cannot modify patient records." });
   }
 
   if (!req.user.is_admin && !req.user.is_staff) {
@@ -920,7 +922,7 @@ const updatePatient = async (req, res) => {
   }
 
   const timezone = req.headers["x-timezone"] || "America/New_York";
-  const patientId = req.params.patientId;
+  const patientId = parseInt(req.params.patientId, 10);
 
   const {
     first_name,
@@ -928,76 +930,36 @@ const updatePatient = async (req, res) => {
     birth_date,
     age,
     roomNo,
-    admitted_date,
     mrn,
     medical_info,
+    admitted_date,
     assignedStaffIds = [],
     selected_algorithms = [],
     reason,
-    version,
+    updated_at
   } = req.body;
 
-  const client = await pool.connect();
-
   try {
-    await client.query("BEGIN");
+    // --- Fetch Patient
+    const { rows } = await pool.query(`SELECT * FROM patients WHERE id=$1`, [patientId]);
+    if (!rows.length) return res.status(404).json({ error: "Patient not found." });
 
-    const { rows } = await client.query(
-      `SELECT * FROM patients WHERE id = $1 FOR UPDATE`,
-      [patientId]
-    );
+    const patient = rows[0];
 
-    if (version == null) {
-      await client.query("ROLLBACK");
-      return res.status(400).json({ error: "Missing version." });
+    if (patient.hospital_id !== req.user.hospital_id) {
+      return res.status(403).json({ error: "Access denied: Patient belongs to another hospital." });
     }
 
-    if (!rows.length) {
-      await client.query("ROLLBACK");
-      return res.status(404).json({ error: "Patient not found." });
+    // --- Optimistic Locking
+    if (!updated_at) return res.status(400).json({ error: "Missing updated_at timestamp." });
+
+    if (patient.updated_at?.toISOString() !== new Date(updated_at).toISOString()) {
+      return res.status(409).json({ error: "This patient was already updated by someone else." });
     }
 
-    const existing = rows[0];
-
-    if (existing.hospital_id !== req.user.hospital_id) {
-      await client.query("ROLLBACK");
-      return res.status(403).json({
-        error: "Access denied: Patient belongs to another hospital.",
-      });
-    }
-
-    if (req.user.is_staff) {
-      const { rows: assigned } = await client.query(
-        `SELECT 1 FROM patient_staff WHERE patient_id = $1 AND staff_id = $2`,
-        [patientId, req.user.id]
-      );
-
-      if (!assigned.length) {
-        await client.query("ROLLBACK");
-        return res.status(403).json({
-          error: "Access denied: You are not assigned to this patient.",
-        });
-      }
-    }
-
-    if (existing.version !== Number(version)) {
-      await client.query("ROLLBACK");
-      return res.status(409).json({
-        error: "Patient was updated by another user. Please refresh."
-      });
-    }
-
-    const isAdmin = req.user.is_admin;
-
-    if (!assignedStaffIds.length) {
-      await client.query("ROLLBACK");
-      return res.status(400).json({
-        error: "At least one staff member must be assigned to the patient.",
-      });
-    }
-
+    // --- Normalize Staff Input
     const normalize = (arr) =>
-      arr.map((s) => {
+      arr.map(s => {
         if (typeof s === "string") {
           try { return JSON.parse(s); } catch { return null; }
         }
@@ -1006,19 +968,26 @@ const updatePatient = async (req, res) => {
 
     const normalizedStaff = normalize(assignedStaffIds);
 
-    const hasEditAccess = normalizedStaff.some(
-      (s) => ["edit"].includes(String(s.access_level).toLowerCase())
+    if (!normalizedStaff.length) {
+      return res.status(400).json({ error: "At least one staff member must be assigned." });
+    }
+
+    // --- Enforce Access Level
+    const hasEditAccess = normalizedStaff.some(s =>
+      ["edit", "full"].includes(String(s.access_level).toLowerCase())
     );
 
     if (!hasEditAccess) {
-      await client.query("ROLLBACK");
       return res.status(400).json({
-        error: "At least one staff member must have edit access.",
+        error: "At least one assigned staff member must have edit or full access.",
       });
     }
 
-    const { rows: currentStaff } = await client.query(
-      `SELECT staff_id FROM patient_staff WHERE patient_id = $1`,
+    const isAdmin = req.user.is_admin;
+
+    // --- Staff Comparison
+    const { rows: currentStaff } = await pool.query(
+      `SELECT staff_id FROM patient_staff WHERE patient_id=$1`,
       [patientId]
     );
 
@@ -1026,99 +995,169 @@ const updatePatient = async (req, res) => {
     const newIds = normalizedStaff.map(s => String(s.staff_id ?? s.id)).sort();
     const staffChanged = currentIds.join() !== newIds.join();
 
+    const addedStaff = newIds.filter(id => !currentIds.includes(id));
+    const removedStaff = currentIds.filter(id => !newIds.includes(id));
+
     if (!isAdmin && staffChanged && !reason?.trim()) {
-      await client.query("ROLLBACK");
-      return res.status(400).json({
-        error: "Reason required when changing staff assignments.",
-      });
+      return res.status(400).json({ error: "Reason is required when changing staff assignments." });
     }
 
-    const flagUpdates = {
-      is_behavioral: selected_algorithms.includes("Behavioral"),
-      is_ltc: selected_algorithms.includes("LTC"),
-      is_guardianship: selected_algorithms.includes("Guardianship"),
+    // --- Old Algorithms
+    const oldAlgorithms = [];
+    if (patient.is_behavioral) oldAlgorithms.push("Behavioral");
+    if (patient.is_guardianship) oldAlgorithms.push("Guardianship");
+    if (patient.is_ltc) oldAlgorithms.push("LTC");
+
+    // --- New Algorithms
+    const newAlgorithms = selected_algorithms;
+
+    const addedAlgorithms = newAlgorithms.filter(a => !oldAlgorithms.includes(a));
+    const removedAlgorithms = oldAlgorithms.filter(a => !newAlgorithms.includes(a));
+
+    // ✅ EVER SELECTED (HISTORY PRESERVED)
+    const prevEver = patient.ever_selected_algorithms || [];
+    const mergedEver = Array.from(new Set([...prevEver, ...newAlgorithms]));
+
+    // --- Algorithm Flags
+    const flags = {
+      is_behavioral: newAlgorithms.includes("Behavioral"),
+      is_guardianship: newAlgorithms.includes("Guardianship"),
+      is_ltc: newAlgorithms.includes("LTC"),
     };
 
-    const admittedDateUTC = admitted_date
-      ? DateTime.fromISO(admitted_date, { zone: timezone }).toUTC().toISO()
-      : null;
-
-    const changes = {};
-    const diff = (k, o, n) => o !== n && (changes[k] = { old: o, new: n });
-
-    diff("first_name", existing.first_name, first_name);
-    diff("last_name", existing.last_name, last_name);
-    diff("birth_date", existing.birth_date?.toISOString(), birth_date);
-    diff("age", existing.age, age);
-    diff("room_no", existing.room_no, roomNo);
-    diff("mrn", existing.mrn, mrn);
-    diff("medical_info", existing.medical_info, medical_info);
-    diff("admitted_date", existing.admitted_date?.toISOString(), admitted_date);
-    diff("is_behavioral", existing.is_behavioral, flagUpdates.is_behavioral);
-    diff("is_ltc", existing.is_ltc, flagUpdates.is_ltc);
-    diff("is_guardianship", existing.is_guardianship, flagUpdates.is_guardianship);
-
-    const updateRes = await client.query(
+    // ✅ PATIENT UPDATE WITH HISTORY
+    await pool.query(
       `UPDATE patients SET
-        first_name=$1,last_name=$2,birth_date=$3,age=$4,room_no=$5,mrn=$6,
-        medical_info=$7,selected_algorithms=$8,is_behavioral=$9,
-        is_restrained=$10,is_geriatric_psych_available=$11,is_behavioral_team=$12,
-        is_ltc=$13,is_ltc_medical=$14,is_ltc_financial=$15,
-        is_guardianship=$16,is_guardianship_financial=$17,
-        is_guardianship_person=$18,is_guardianship_emergency=$19,
-        admitted_date=$20,version = version + 1, updated_at = NOW()
-      WHERE id = $21 AND hospital_id = $23 AND version = $22`,
+        first_name=$1,last_name=$2,birth_date=$3,age=$4,
+        room_no=$5,mrn=$6,medical_info=$7,
+        selected_algorithms=$8,
+        ever_selected_algorithms=$9,
+        is_behavioral=$10,is_restrained=$11,
+        is_geriatric_psych_available=$12,is_behavioral_team=$13,
+        is_ltc=$14,is_ltc_medical=$15,is_ltc_financial=$16,
+        is_guardianship=$17,is_guardianship_financial=$18,
+        is_guardianship_person=$19,is_guardianship_emergency=$20,
+        admitted_date=$21,updated_at=NOW()
+       WHERE id=$22`,
       [
         first_name, last_name, birth_date, age, roomNo, mrn, medical_info,
-        selected_algorithms, flagUpdates.is_behavioral,
-        req.body.is_restrained, req.body.is_geriatric_psych_available,
-        req.body.is_behavioral_team, flagUpdates.is_ltc, req.body.is_ltc_medical,
-        req.body.is_ltc_financial, flagUpdates.is_guardianship,
-        req.body.is_guardianship_financial, req.body.is_guardianship_person,
-        req.body.is_guardianship_emergency, admittedDateUTC,
-        patientId, version, req.user.hospital_id
+
+        selected_algorithms,    
+        mergedEver,             
+
+        flags.is_behavioral,
+        req.body.is_restrained,
+        req.body.is_geriatric_psych_available,
+        req.body.is_behavioral_team,
+        flags.is_ltc,
+        req.body.is_ltc_medical,
+        req.body.is_ltc_financial,
+        flags.is_guardianship,
+        req.body.is_guardianship_financial,
+        req.body.is_guardianship_person,
+        req.body.is_guardianship_emergency,
+        admitted_date,
+        patientId
       ]
     );
 
-    if (updateRes.rowCount === 0) {
-      await client.query("ROLLBACK");
-      return res.status(409).json({
-        error: "Patient was modified by someone else. Please refresh."
-      });
-    }
-
-    await client.query(`DELETE FROM patient_staff WHERE patient_id=$1`, [patientId]);
+    // --- Replace Staff Assignments
+    await pool.query(`DELETE FROM patient_staff WHERE patient_id=$1`, [patientId]);
 
     for (const s of normalizedStaff) {
-      await client.query(
+      await pool.query(
         `INSERT INTO patient_staff (patient_id, staff_id, access_level)
          VALUES ($1,$2,$3)`,
         [patientId, parseInt(s.staff_id ?? s.id), s.access_level || "view"]
       );
     }
 
-    await assignTasksToPatient(patientId, timezone, selected_algorithms);
-
-    await client.query(
-      `INSERT INTO patient_update_logs (patient_id, user_id, reason, changes, created_at)
-       VALUES ($1,$2,$3,$4,NOW())`,
-      [patientId, req.user.id, reason || "N/A", JSON.stringify(changes)]
+    // --- Run Task Update Engine
+    await assignTasksToPatient(
+      patientId,
+      timezone,
+      [],
+      addedAlgorithms,
+      removedAlgorithms
     );
 
-    await client.query("COMMIT");
+    // --- Log Changes
+    await pool.query(
+      `INSERT INTO patient_update_logs (patient_id,user_id,reason,changes,created_at)
+       VALUES ($1,$2,$3,$4,NOW())`,
+      [
+        patientId,
+        req.user.id,
+        reason || "N/A",
+        JSON.stringify({ staffChanged, addedAlgorithms, removedAlgorithms })
+      ]
+    );
+
+    // --- Notifications (unchanged)
+    const io = req.app.get("io");
+    const { rows: admins } = await pool.query(
+      `SELECT id FROM users WHERE hospital_id=$1 AND (is_admin=true OR is_super_admin=true)`,
+      [req.user.hospital_id]
+    );
+
+    const updater = req.user.name || req.user.email || "User";
+    const message = `Patient ${first_name} ${last_name} updated by ${updater}`;
+
+    for (const admin of admins) {
+      const { rows: [notif] } = await pool.query(
+        `INSERT INTO notifications (user_id,patient_id,title,message,type)
+         VALUES ($1,$2,'Patient Updated',$3,'audit') RETURNING *`,
+        [admin.id, patientId, message]
+      );
+      io?.to?.(`user-${admin.id}`)?.emit("notification", notif);
+    }
+
+    for (const sid of addedStaff) {
+      const { rows: [notif] } = await pool.query(
+        `INSERT INTO notifications (user_id,patient_id,title,message,type)
+         VALUES ($1,$2,'New Assignment',$3,'assignment') RETURNING *`,
+        [sid, patientId, message]
+      );
+      io?.to?.(`user-${sid}`)?.emit("notification", notif);
+    }
+
+    for (const sid of removedStaff) {
+      const { rows: [notif] } = await pool.query(
+        `INSERT INTO notifications (user_id,patient_id,title,message,type)
+         VALUES ($1,$2,'Unassigned',$3,'unassignment') RETURNING *`,
+        [sid, patientId, message]
+      );
+      io?.to?.(`user-${sid}`)?.emit("notification", notif);
+    }
+
+    // --- Return
+    const { rows: [updatedPatient] } = await pool.query(
+      `SELECT p.*, json_agg(
+          json_build_object(
+            'id', u.id,
+            'name', u.name,
+            'access_level', ps.access_level
+          )
+        ) AS assigned_staff
+       FROM patients p
+       LEFT JOIN patient_staff ps ON ps.patient_id = p.id
+       LEFT JOIN users u ON u.id = ps.staff_id
+       WHERE p.id = $1
+       GROUP BY p.id`,
+      [patientId]
+    );
 
     return res.status(200).json({
       message: "Patient updated successfully",
+      patient: updatedPatient
     });
 
   } catch (err) {
-    await client.query("ROLLBACK");
     console.error("❌ Error updating patient:", err);
     return res.status(500).json({ error: "Internal Server Error" });
-  } finally {
-    client.release();
   }
 };
+
 
 
 
