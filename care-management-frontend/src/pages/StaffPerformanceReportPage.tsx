@@ -173,7 +173,7 @@ const staffList = selectedHospitalId
             </div>
 
             <div className="p-5 bg-white rounded-xl shadow-sm border-l-8 border-orange-400">
-              <h2 className="text-lg font-bold text-orange-500">Top Lagging Staff</h2>
+              <h2 className="text-lg font-bold text-orange-500">Staff Performance</h2>
               <ul className="mt-2 list-disc list-inside text-gray-700">
                 {(Array.isArray(topLaggingStaff) ? topLaggingStaff : []).map((s: any) => (
                   <li key={s.staff_name ?? Math.random()}>

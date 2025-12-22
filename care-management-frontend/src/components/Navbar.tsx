@@ -35,7 +35,7 @@ const Navbar: React.FC = () => {
     : user?.is_super_admin
     ? "Case Management: Org Portal"
     : user?.is_admin
-    ? "Case Management: Admin Portal"
+    ? "Case Management: Leadership Portal"
     : user?.is_staff
     ? "Case Management: Staff Portal"
     : "Case Management";
