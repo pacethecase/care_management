@@ -157,6 +157,15 @@ useEffect(() => {
       });
       return;
     }
+    if (formData.is_ltc && !formData.is_ltc_medical && !formData.is_ltc_financial) {
+      toast.error("LTC selected — please choose at least one: Financial or Medical.");
+      return;
+    }
+
+    if (formData.is_guardianship && !formData.is_guardianship_financial && !formData.is_guardianship_person) {
+      toast.error("Guardianship selected — please choose at least one: Financial or Person.");
+      return;
+    }
 
     try {
       setIsSubmitting(true);

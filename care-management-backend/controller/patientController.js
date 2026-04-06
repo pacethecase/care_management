@@ -171,7 +171,7 @@ const addPatient = async (req, res) => {
     }
 
 
-    if (!first_name || !last_name || !birth_date || !roomNo || !age || !mrn) {
+    if (!first_name || !last_name || !birth_date || !roomNo || !mrn) {
       return res.status(400).json({ message: "Missing required fields" });
     }
     if (!assignedStaffIds || assignedStaffIds.length === 0) {
@@ -237,7 +237,15 @@ const addPatient = async (req, res) => {
     const createdAtUTC = created_at
       ? DateTime.fromISO(created_at, { zone: timezone }).toUTC().toISO()
       : DateTime.now().setZone(timezone).toUTC().toISO();
+    // ADD after the hasEditAccess check, before the duplicate check:
 
+    if (is_ltc && !is_ltc_medical && !is_ltc_financial) {
+      return res.status(400).json({ error: "LTC selected — please choose at least one: Financial or Medical." });
+    }
+
+    if (is_guardianship && !is_guardianship_financial && !is_guardianship_person) {
+      return res.status(400).json({ error: "Guardianship selected — please choose at least one: Financial or Person." });
+    }
     const result = await pool.query(
       `INSERT INTO patients (
         first_name, last_name, birth_date, age, room_no, mrn, medical_info,
