@@ -1,9 +1,10 @@
 const express = require("express");
-const router = express.Router();
-const { getHospitals,updateDailyRoomCost } = require("../controller/hospitalController");
+const router  = express.Router();
 const { verifyToken } = require("../middleware/authMiddleware");
-
-router.get("/",verifyToken, getHospitals);          // GET /hospitals
-router.patch("/:id/rate", verifyToken, updateDailyRoomCost);
-
+const { getHospitals, updateDailyRoomCost, updateHospitalTimezone } = require("../controller/hospitalController");
+ 
+router.get("/",              verifyToken, getHospitals);
+router.patch("/:id/rate",    verifyToken, updateDailyRoomCost);
+router.patch("/:id/timezone",verifyToken, updateHospitalTimezone);
+ 
 module.exports = router;

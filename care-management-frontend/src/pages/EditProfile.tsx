@@ -1,21 +1,23 @@
+// src/pages/EditProfile.tsx
 import React, { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import { Eye, EyeOff } from "lucide-react";
-import { RootState } from "../redux/store";
+import { RootState, AppDispatch } from "../redux/store";
 import { updateUserProfile } from "../redux/slices/userSlice";
-import type { AppDispatch } from '../redux/store';
-import Footer from "../components/Footer";
 import Navbar from "../components/Navbar";
+import Footer from "../components/Footer";
+import BlueLoader from "../components/BlueLoader";
 
 const EditProfile = () => {
   const dispatch = useDispatch<AppDispatch>();
   const navigate = useNavigate();
-  const { user, loading, authLoaded } = useSelector((state: RootState) => state.user);
+
+  const { user, loading, authLoaded } = useSelector((s: RootState) => s.user);
 
   const [formData, setFormData] = useState({
-    name: user?.name || "",
+    name:     user?.name || "",
     password: "",
   });
   const [showPassword, setShowPassword] = useState(false);
@@ -28,14 +30,11 @@ const EditProfile = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await dispatch(
-        updateUserProfile({
-          id: user!.id,
-          name: formData.name.trim(),
-          password: formData.password || undefined,
-        })
-      ).unwrap();
-
+      await dispatch(updateUserProfile({
+        id:       user!.id,
+        name:     formData.name.trim(),
+        password: formData.password || undefined,
+      })).unwrap();
       toast.success("Profile updated successfully!");
       navigate("/homepage");
     } catch (err: any) {
@@ -43,30 +42,27 @@ const EditProfile = () => {
     }
   };
 
-  if (!authLoaded) return <div className="p-4">Loading profile...</div>;
-  if (!user) return <div className="p-4 text-red-600">User not found</div>;
+  if (!authLoaded) return <BlueLoader />;
+  if (!user) return <p className="p-4 text-red-600">User not found</p>;
 
   return (
     <div className="flex flex-col min-h-screen bg-[var(--bg-light)] text-[var(--text-dark)]">
       <Navbar />
-      <div className="bg-hospital-neutral p-6">
+
+      <div className="bg-hospital-neutral p-6 flex-grow">
         <div className="card max-w-md mx-auto">
           <h2 className="text-xl font-bold mb-4">Edit Profile</h2>
+
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Name Field */}
             <div>
               <label className="block mb-1 font-medium">Name</label>
               <input
-                type="text"
-                name="name"
+                type="text" name="name" required
                 className="w-full border p-2 rounded"
-                value={formData.name}
-                onChange={handleChange}
-                required
+                value={formData.name} onChange={handleChange}
               />
             </div>
 
-            {/* Password Field */}
             <div>
               <label className="block mb-1 font-medium">Change Password</label>
               <div className="relative">
@@ -75,13 +71,12 @@ const EditProfile = () => {
                   name="password"
                   className="w-full border p-2 rounded pr-10"
                   placeholder="Leave blank to keep existing"
-                  value={formData.password}
-                  onChange={handleChange}
+                  value={formData.password} onChange={handleChange}
                 />
                 <button
                   type="button"
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500"
-                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500"
+                  onClick={() => setShowPassword(p => !p)}
                 >
                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
@@ -89,8 +84,7 @@ const EditProfile = () => {
             </div>
 
             <button
-              type="submit"
-              className="btn w-full"
+              type="submit" className="btn w-full"
               disabled={!formData.name.trim() || loading}
             >
               {loading ? "Saving..." : "Save Changes"}
@@ -98,10 +92,10 @@ const EditProfile = () => {
           </form>
         </div>
       </div>
+
       <Footer />
     </div>
   );
 };
-
 
 export default EditProfile;

@@ -21,13 +21,19 @@ export const store = configureStore({
     reports: reportReducer,
     algorithms: algorithmReducer,
     notifications: notificationReducer,
-    hospitals: hospitalReducer, 
-    admin:adminReducer,
-    organizations:organizationReducer,
+    hospitals: hospitalReducer,
+    admin: adminReducer,
+    organizations: organizationReducer,
     public: publicReducer,
   },
+
+  middleware: (getDefaultMiddleware) =>
+    getDefaultMiddleware({
+      serializableCheck: {
+        ignoredActions: ["persist/PERSIST", "persist/REHYDRATE"],
+      },
+    }),
 });
 
-// ✅ Use these in your components for proper typing
 export type RootState = ReturnType<typeof store.getState>;
 export type AppDispatch = typeof store.dispatch;

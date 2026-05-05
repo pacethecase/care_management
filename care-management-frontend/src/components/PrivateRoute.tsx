@@ -3,33 +3,26 @@ import React, { ReactNode } from "react";
 import { useSelector } from "react-redux";
 import { Navigate } from "react-router-dom";
 import { RootState } from "../redux/store";
+import type { UserRole } from "../redux/types";
 
 interface PrivateRouteProps {
   children: ReactNode;
-  allowedRoles?: ("global" | "super_admin" | "admin" | "staff")[];
+  allowedRoles?: UserRole[];
 }
 
 const PrivateRoute: React.FC<PrivateRouteProps> = ({ children, allowedRoles }) => {
   const { user, authLoaded } = useSelector((state: RootState) => state.user);
 
   if (!authLoaded) return <p>Loading session...</p>;
-
   if (!user) return <Navigate to="/" replace />;
 
-  if (!allowedRoles) {
-    return children;
-  }
+  if (!allowedRoles || allowedRoles.length === 0) return <>{children}</>;
 
-  const roleChecks = {
-    global: user.has_global_access,
-    super_admin: user.is_super_admin,
-    admin: user.is_admin,
-    staff: user.is_staff,
-  };
+  const hasAccess =
+    (user.role === 'administration' && user.has_global_access) ||
+    allowedRoles.includes(user.role);
 
-  const hasAccess = allowedRoles.some((role) => roleChecks[role]);
-
-  if (hasAccess) return children;
+  if (hasAccess) return <>{children}</>;
 
   return <Navigate to="/homepage" replace />;
 };

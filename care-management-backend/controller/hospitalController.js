@@ -1,115 +1,156 @@
+// controller/hospitalController.js
 const pool = require("../models/db");
+const { DateTime } = require("luxon");
+
+const isValidTimezone = (tz) => DateTime.now().setZone(tz).isValid;
 
 const getHospitals = async (req, res) => {
-  const { has_global_access, is_super_admin, is_admin, organization_id, hospital_id } = req.user;
+  const { role, organization_id, hospital_id, has_global_access } = req.user;
 
   try {
-    let query = "";
+    let query  = "";
     let params = [];
 
-    // 🌍 GLOBAL ADMIN → gets all hospitals
-    if (has_global_access) {
+    if (role === 'administration' && has_global_access) {
       query = `
-        SELECT id, name, daily_room_cost, organization_id
+        SELECT id, name, daily_room_cost, organization_id, timezone
         FROM hospitals
-        ORDER BY name;
+        ORDER BY name
       `;
-    }
-
-    // 🏢 SUPER ADMIN → gets all hospitals in their organization
-    else if (is_super_admin) {
+    } else if (role === 'super_admin') {
       query = `
-        SELECT id, name, daily_room_cost, organization_id
+        SELECT id, name, daily_room_cost, organization_id, timezone
         FROM hospitals
         WHERE organization_id = $1
-        ORDER BY name;
+        ORDER BY name
       `;
       params = [organization_id];
-    }
-
-    // 🏥 HOSPITAL ADMIN → gets only THEIR hospital
-    else if (is_admin) {
+    } else if (role === 'admin' || role === 'staff') {
       query = `
-        SELECT id, name, daily_room_cost, organization_id
+        SELECT id, name, daily_room_cost, organization_id, timezone
         FROM hospitals
         WHERE id = $1
-        ORDER BY name;
+        ORDER BY name
       `;
       params = [hospital_id];
-    }
-
-    // 👨‍⚕️ STAFF → forbidden
-    else {
+    } else {
       return res.status(403).json({ error: "Unauthorized to access hospitals." });
     }
 
     const { rows } = await pool.query(query, params);
     return res.status(200).json(rows);
 
-  } catch (error) {
-    console.error("❌ Error fetching hospitals:", error);
+  } catch (err) {
+    console.error("Error fetching hospitals:", err);
     return res.status(500).json({ error: "Failed to load hospitals" });
   }
 };
 
-/**
- * UPDATE DAILY ROOM COST
- */
-const updateDailyRoomCost = async (req, res) => {
-  const user = req.user;
-  const hospitalId = Number(req.params.id);
-  const { daily_room_cost } = req.body;
 
-  if (isNaN(hospitalId) || isNaN(daily_room_cost)) {
-    return res.status(400).json({ error: "Invalid input." });
-  }
+const updateDailyRoomCost = async (req, res) => {
+  const { role, organization_id, hospital_id, has_global_access } = req.user;
+  const hospitalId    = Number(req.params.id);
+  const daily_room_cost = Number(req.body.daily_room_cost);
+
+  if (isNaN(hospitalId))
+    return res.status(400).json({ error: "Invalid hospital ID." });
+  if (isNaN(daily_room_cost) || daily_room_cost < 0)
+    return res.status(400).json({ error: "Invalid daily room cost." });
 
   try {
-    // 🌍 GLOBAL ADMIN CAN EDIT ANY HOSPITAL
-    if (user.has_global_access) {
+    if (role === 'administration' && has_global_access) {
       await pool.query(
         `UPDATE hospitals SET daily_room_cost = $1 WHERE id = $2`,
         [daily_room_cost, hospitalId]
       );
-      return res.json({ message: "Rate updated (global admin)." });
+      return res.json({ message: "Rate updated." });
     }
 
-    // 🏢 SUPER ADMIN CAN EDIT ANY HOSPITAL IN THEIR ORGANIZATION
-    if (user.is_super_admin) {
+    if (role === 'super_admin') {
       const { rows } = await pool.query(
         `SELECT id FROM hospitals WHERE id = $1 AND organization_id = $2`,
-        [hospitalId, user.organization_id]
+        [hospitalId, organization_id]
       );
-
-      if (rows.length === 0) {
-        return res.status(403).json({ error: "Hospital not part of your organization." });
-      }
+      if (rows.length === 0)
+        return res.status(403).json({ error: "Hospital not in your organization." });
 
       await pool.query(
         `UPDATE hospitals SET daily_room_cost = $1 WHERE id = $2`,
         [daily_room_cost, hospitalId]
       );
-      return res.json({ message: "Rate updated (super admin)." });
+      return res.json({ message: "Rate updated." });
     }
 
-    // 🏥 ADMIN CAN EDIT ONLY THEIR OWN HOSPITAL
-    if (user.is_admin) {
-      if (user.hospital_id !== hospitalId) {
+    if (role === 'admin') {
+      if (hospital_id !== hospitalId)
         return res.status(403).json({ error: "Unauthorized for this hospital." });
-      }
 
       await pool.query(
         `UPDATE hospitals SET daily_room_cost = $1 WHERE id = $2`,
         [daily_room_cost, hospitalId]
       );
-      return res.json({ message: "Rate updated (hospital admin)." });
+      return res.json({ message: "Rate updated." });
     }
 
-    // 👨‍⚕️ STAFF CANNOT UPDATE
-    return res.status(403).json({ error: "Unauthorized: staff cannot modify rates." });
+    return res.status(403).json({ error: "Staff cannot modify room rates." });
 
   } catch (err) {
-    console.error("❌ Error updating hospital rate:", err);
+    console.error("Error updating hospital rate:", err);
+    return res.status(500).json({ error: "Internal Server Error" });
+  }
+};
+
+const updateHospitalTimezone = async (req, res) => {
+  const { role, organization_id, hospital_id, has_global_access } = req.user;
+  const hospitalId = Number(req.params.id);
+  const { timezone } = req.body;
+
+  if (isNaN(hospitalId))
+    return res.status(400).json({ error: "Invalid hospital ID." });
+  if (!timezone || typeof timezone !== "string")
+    return res.status(400).json({ error: "Timezone is required." });
+  if (!isValidTimezone(timezone))
+    return res.status(400).json({ error: "Invalid IANA timezone string." });
+
+  try {
+    if (role === 'administration' && has_global_access) {
+      await pool.query(
+        `UPDATE hospitals SET timezone = $1 WHERE id = $2`,
+        [timezone, hospitalId]
+      );
+      return res.json({ message: "Timezone updated." });
+    }
+
+    if (role === 'super_admin') {
+      const { rows } = await pool.query(
+        `SELECT id FROM hospitals WHERE id = $1 AND organization_id = $2`,
+        [hospitalId, organization_id]
+      );
+      if (rows.length === 0)
+        return res.status(403).json({ error: "Hospital not in your organization." });
+
+      await pool.query(
+        `UPDATE hospitals SET timezone = $1 WHERE id = $2`,
+        [timezone, hospitalId]
+      );
+      return res.json({ message: "Timezone updated." });
+    }
+
+    if (role === 'admin') {
+      if (hospital_id !== hospitalId)
+        return res.status(403).json({ error: "Unauthorized for this hospital." });
+
+      await pool.query(
+        `UPDATE hospitals SET timezone = $1 WHERE id = $2`,
+        [timezone, hospitalId]
+      );
+      return res.json({ message: "Timezone updated." });
+    }
+
+    return res.status(403).json({ error: "Staff cannot modify timezone." });
+
+  } catch (err) {
+    console.error("Error updating hospital timezone:", err);
     return res.status(500).json({ error: "Internal Server Error" });
   }
 };
@@ -117,4 +158,5 @@ const updateDailyRoomCost = async (req, res) => {
 module.exports = {
   getHospitals,
   updateDailyRoomCost,
+  updateHospitalTimezone,
 };

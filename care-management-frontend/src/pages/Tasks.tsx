@@ -1,52 +1,38 @@
-import React, { useEffect, useState, useMemo } from 'react';
-import { useSelector, useDispatch } from 'react-redux';
+// src/pages/Tasks.tsx
+import { useEffect, useState, useMemo } from "react";
+import { useSelector, useDispatch } from "react-redux";
 import {
-  loadPriorityTasks,
-  loadMissedTasks,
-  startTask,
-  completeTask,
-  markTaskAsMissed,
-  followUpTask,
-} from '../redux/slices/taskSlice';
-import { fetchPatients } from '../redux/slices/patientSlice';
-import { RootState } from "../redux/store";
-import {
-  Flag,
-  AlertTriangle,
-  CalendarDays,
-  ClipboardCheck,
-} from 'lucide-react';
-import Navbar from '../components/Navbar';
-import Footer from '../components/Footer';
-import { toast } from 'react-toastify';
-import type { AppDispatch } from '../redux/store';
+  loadPriorityTasks, loadMissedTasks,
+  startTask, completeTask, markTaskAsMissed, followUpTask,
+} from "../redux/slices/taskSlice";
+import { fetchPatients } from "../redux/slices/patientSlice";
+import { RootState, AppDispatch } from "../redux/store";
+import { Flag, AlertTriangle, CalendarDays, ClipboardCheck } from "lucide-react";
+import Navbar from "../components/Navbar";
+import Footer from "../components/Footer";
+import BlueLoader from "../components/BlueLoader";
+import { toast } from "react-toastify";
 import { showCourtDatePopup } from "../utils/showCourtDatePopup";
+import { useHospitalTimezone } from "../hooks/timezone";
 
 const Tasks = () => {
   const dispatch = useDispatch<AppDispatch>();
-  const { user } = useSelector((state: RootState) => state.user);
-  const { priorityTasks, missedTasks } = useSelector((state: RootState) => state.tasks);
-  const { patients } = useSelector((state: RootState) => state.patients);
- const [searchTerm, setSearchTerm] = useState('');
+  const { user }         = useSelector((s: RootState) => s.user);
+  const { priorityTasks, missedTasks, loading } = useSelector((s: RootState) => s.tasks);
+  const { patients }     = useSelector((s: RootState) => s.patients);
+
+  const { formatDueDate } = useHospitalTimezone();
+
+  const [searchTerm,    setSearchTerm]    = useState("");
   const [selectedPatient, setSelectedPatient] = useState<number | null>(null);
-  const [tab, setTab] = useState<'priority' | 'missed'>('missed');
-  const [reasonInputs, setReasonInputs] = useState<Record<number, string>>({});
-
-
-const matchedPatientIds = useMemo(() => {
-  if (!searchTerm.trim()) return null;
-  const lower = searchTerm.toLowerCase();
-  return patients
-    .filter((p) =>
-      `${p.first_name} ${p.last_name}`.toLowerCase().includes(lower)
-    )
-    .map((p) => p.id);
-}, [patients, searchTerm]);
+  const [tab,           setTab]           = useState<"priority" | "missed">("missed");
+  const [reasonInputs,  setReasonInputs]  = useState<Record<number, string>>({});
 
   useEffect(() => {
     if (user) {
       dispatch(fetchPatients());
-      refreshTasks();
+      dispatch(loadPriorityTasks(selectedPatient));
+      dispatch(loadMissedTasks(selectedPatient));
     }
   }, [dispatch, user, selectedPatient]);
 
@@ -55,279 +41,192 @@ const matchedPatientIds = useMemo(() => {
     dispatch(loadMissedTasks(selectedPatient));
   };
 
-  const handlePatientChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setSelectedPatient(Number(e.target.value));
-  };
-
-  const handleReasonChange = (taskId: number, value: string) => {
-    setReasonInputs((prev) => ({ ...prev, [taskId]: value }));
-  };
-
-  const handleStart = async (taskId: number, version:number) => {
+  const handleStart = async (taskId: number, version: number) => {
     try {
-      await dispatch(startTask({taskId, version})).unwrap();
-      toast.success("✅ Task started");
+      await dispatch(startTask({ taskId, version })).unwrap();
+      toast.success("Task started");
       refreshTasks();
-    }catch (err: any) {
-        const message =
-          typeof err === "string"
-            ? err
-            : err?.error || "Failed to start task";
+    } catch (err: any) {
+      toast.error(typeof err === "string" ? err : err?.error || "Failed to start task");
+    }
+  };
 
-        toast.error("❌ " + message);
-      }
-    };
-
-
-  const handleComplete = async (taskId: number, version: number,courtTask: boolean) => {
-      let courtDate: string | undefined = undefined;
-      let reason: string | undefined = undefined;
-      let missedReason: string | undefined = undefined; 
+  const handleComplete = async (taskId: number, version: number, courtTask: boolean) => {
+    let courtDate: string | undefined;
+    if (courtTask) {
+      courtDate = (await showCourtDatePopup()) || undefined;
+      if (!courtDate) { toast.error("Court date is required."); return; }
+    }
+    const reason = prompt("Please enter a reason to complete this task:")?.trim();
+    if (!reason) { toast.error("Completion reason is required."); return; }
     try {
-     
-  
-      if (courtTask) {
-         courtDate = (await showCourtDatePopup()) || undefined;
-        if (!courtDate) {
-          toast.error("Court date is required.");
-          return;
-        }
+      await dispatch(completeTask({ taskId, version, reason, court_date: courtDate })).unwrap();
+      toast.success("Task completed");
+      refreshTasks();
+    } catch (err: any) {
+      const msg = typeof err === "string" ? err : err?.error || "";
+      if (msg.toLowerCase().includes("missed")) {
+        const missedReason = prompt("This task was missed. Please enter a missed reason:")?.trim();
+        if (!missedReason) { toast.error("Missed reason is required."); return; }
+        try {
+          await dispatch(completeTask({ taskId, version, reason, missed_reason: missedReason, court_date: courtDate })).unwrap();
+          toast.success("Task completed");
+          refreshTasks();
+        } catch { toast.error("Failed to complete task."); }
+      } else {
+        toast.error(msg || "Failed to complete task.");
       }
-  
-        reason = prompt("📝 Please enter a reason to complete this task:")?.trim();
-    if (!reason) {
-      toast.error("❌ Completion reason is required.");
-      return;
     }
+  };
 
-    await dispatch(completeTask({ taskId, version,reason, court_date: courtDate })).unwrap();
-    toast.success("✅ Task completed");
-    refreshTasks();
-    }catch (err: any) {
-    const msg = err?.response?.data?.error || err?.message || err?.toString();
-
-    if (msg.toLowerCase().includes("missed") || msg.includes("provide a reason")) {
-      missedReason = prompt("📝 This task was missed earlier. Please enter a missed reason:")?.trim();
-      if (!missedReason) {
-        toast.error("❌ Missed reason is required.");
-        return;
-      }
-
-      try {
-        await dispatch(
-          completeTask({
-            taskId,
-            version,
-            reason,
-            missed_reason: missedReason,
-            court_date: courtDate,
-          })
-        ).unwrap();
-        toast.success("✅ Task completed after missed reason");
-        refreshTasks();
-      } catch {
-        toast.error("❌ Failed to complete after both reasons.");
-      }
-    } else {
-      toast.error("❌ " + msg);
-    }
-  }
-};
-  
-    
-    
-  
-
-
-
-  const handleFollowUp = async (taskId: number,version:number) => {
+  const handleFollowUp = async (taskId: number, version: number) => {
     const reason = prompt("Please enter a reason for follow-up:");
-    if (!reason || reason.trim() === "") {
-      toast.error("❌ Follow-up reason is required");
-      return;
-    }
-
+    if (!reason?.trim()) { toast.error("Follow-up reason is required."); return; }
     try {
-      await dispatch(followUpTask({ taskId, version,followUpReason: reason })).unwrap();
-      toast.success("Follow-up task scheduled!");
+      await dispatch(followUpTask({ taskId, version, followUpReason: reason })).unwrap();
+      toast.success("Follow-up scheduled!");
       refreshTasks();
-    } catch {
-      toast.error("❌ Failed to schedule follow-up");
-    }
+    } catch { toast.error("Failed to schedule follow-up."); }
   };
 
-  const handleMissed = async (taskId: number, version:number) => {
+  const handleMissed = async (taskId: number, version: number) => {
     const reason = reasonInputs[taskId];
-    if (!reason || reason.trim() === "") {
-      toast.error("❌ Missed reason is required");
-      return;
-    }
-
+    if (!reason?.trim()) { toast.error("Missed reason is required."); return; }
     try {
-      await dispatch(markTaskAsMissed({ taskId,version, reason })).unwrap();
-      toast.success("✅ Task marked as missed");
+      await dispatch(markTaskAsMissed({ taskId, version, reason })).unwrap();
+      toast.success("Task marked as missed");
       refreshTasks();
-    } catch {
-      toast.error("❌ Failed to mark task as missed");
-    }
+    } catch { toast.error("Failed to mark task as missed."); }
   };
 
-const filteredPriorityTasks = useMemo(() => {
-  let filtered = priorityTasks.filter(
-    (task) => task.status !== 'Completed' && !task.is_non_blocking
-  );
-  if (matchedPatientIds) {
-    filtered = filtered.filter((task) =>
-      matchedPatientIds.includes(task.patient_id)
-    );
-  }
-  return filtered;
-}, [priorityTasks, matchedPatientIds]);
+  const matchedPatientIds = useMemo(() => {
+    if (!searchTerm.trim()) return null;
+    const lower = searchTerm.toLowerCase();
+    return patients
+      .filter(p => `${p.first_name} ${p.last_name}`.toLowerCase().includes(lower))
+      .map(p => p.id);
+  }, [patients, searchTerm]);
 
-const filteredMissedTasks = useMemo(() => {
-  if (!searchTerm.trim()) return missedTasks;
+  const filteredPriorityTasks = useMemo(() => {
+    let list = priorityTasks.filter(t => t.status !== "Completed" && !t.is_non_blocking);
+    if (matchedPatientIds) list = list.filter(t => matchedPatientIds.includes(t.patient_id));
+    return list;
+  }, [priorityTasks, matchedPatientIds]);
 
-  const lower = searchTerm.toLowerCase();
-  return missedTasks.filter((task) =>
-    task.patient_name?.toLowerCase().includes(lower)
-  );
-}, [missedTasks, searchTerm]);
+  const filteredMissedTasks = useMemo(() => {
+    if (!searchTerm.trim()) return missedTasks;
+    const lower = searchTerm.toLowerCase();
+    return missedTasks.filter(t => t.patient_name?.toLowerCase().includes(lower));
+  }, [missedTasks, searchTerm]);
+
+  if (loading && !priorityTasks.length && !missedTasks.length) return <BlueLoader />;
 
   return (
     <div className="min-h-screen flex flex-col bg-hospital-neutral">
       <Navbar />
       <main className="flex-1 p-6 max-w-4xl mx-auto max-h-[calc(100vh-120px)] overflow-y-auto">
-      <div className="flex justify-end items-center gap-4 mb-6">
-  <input
-    value={searchTerm}
-    onChange={(e) => setSearchTerm(e.target.value)}
-    placeholder="Search by name or MRN"
-    className="p-2 border rounded w-64"
-  />
 
-  <select
-    className="p-2 border rounded w-48"
-    onChange={handlePatientChange}
-    value={selectedPatient || ''}
-  >
-    <option value="">-- Select Patient --</option>
-    {patients
-      .slice()
-     .sort((a, b) => {
-        const lastA = a.last_name?.toLowerCase() || '';
-        const lastB = b.last_name?.toLowerCase() || '';
-        if (lastA !== lastB) return lastA.localeCompare(lastB);
-
-        const firstA = a.first_name?.toLowerCase() || '';
-        const firstB = b.first_name?.toLowerCase() || '';
-        return firstA.localeCompare(firstB);
-      })
-      .map((patient) => (
-        <option key={patient.id} value={patient.id}>
-          {patient.last_name}, {patient.first_name} – MRN {patient.mrn || "N/A"}
-        </option>
-      ))}
-  </select>
-</div>
-
-
-        <div className="flex gap-4 mb-6 justify-center">
-          <button
-            onClick={() => setTab('missed')}
-            className={`px-4 py-2 rounded ${tab === 'missed' ? 'bg-red-100 text-red-700' : 'bg-white'}`}
+        {/* Search + patient filter */}
+        <div className="flex justify-end items-center gap-4 mb-6">
+          <input
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Search by name"
+            className="p-2 border rounded w-64"
+          />
+          <select
+            className="p-2 border rounded w-48"
+            onChange={(e) => setSelectedPatient(Number(e.target.value) || null)}
+            value={selectedPatient || ""}
           >
+            <option value="">-- Select Patient --</option>
+            {[...patients]
+              .sort((a, b) => {
+                const cmp = (a.last_name || "").localeCompare(b.last_name || "");
+                return cmp !== 0 ? cmp : (a.first_name || "").localeCompare(b.first_name || "");
+              })
+              .map(p => (
+                <option key={p.id} value={p.id}>
+                  {p.last_name}, {p.first_name} – MRN {p.mrn || "N/A"}
+                </option>
+              ))}
+          </select>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex gap-4 mb-6 justify-center">
+          <button onClick={() => setTab("missed")} className={`px-4 py-2 rounded ${tab === "missed" ? "bg-red-100 text-red-700" : "bg-white"}`}>
             <AlertTriangle className="inline mr-1 w-4 h-4" /> Missed Tasks
           </button>
-          <button
-            onClick={() => setTab('priority')}
-            className={`px-4 py-2 rounded ${tab === 'priority' ? 'bg-blue-100 text-blue-700' : 'bg-white'}`}
-          >
+          <button onClick={() => setTab("priority")} className={`px-4 py-2 rounded ${tab === "priority" ? "bg-blue-100 text-blue-700" : "bg-white"}`}>
             <Flag className="inline mr-1 w-4 h-4" /> Priority Tasks
           </button>
         </div>
 
-        {tab === 'missed' && (
+        {/* Missed tab */}
+        {tab === "missed" && (
           <div className="space-y-6">
             {filteredMissedTasks.length === 0 ? (
-              <p className="text-center text-gray-500">🎉 No missed tasks without reason</p>
-            ) : (
-              filteredMissedTasks.map((task) => (
-                <div key={task.patient_task_id} className="border p-5 rounded shadow-sm bg-white">
-
-                  <h3 className="text-lg font-semibold text-red-600">{task.task_name}</h3>
-                  <p className="text-sm text-gray-600">Patient: {task.patient_name}</p>
-                  <p className="text-sm text-gray-600">
-                    <CalendarDays className="inline w-4 h-4 mr-1" />
-                    Due: {new Date(task.due_date).toLocaleDateString()}
-                  </p>
-                  <textarea
-                    className="w-full border rounded p-2 mt-2 text-sm"
-                    placeholder="Enter reason..."
-                    value={reasonInputs[task.patient_task_id] || ''}
-                    onChange={(e) => handleReasonChange(task.patient_task_id, e.target.value)}
-                  />
-                  <button
-                    onClick={() => handleMissed(task.patient_task_id,task.version)}
-                    className="mt-2 btn btn-primary"
-                  >
-                    Submit Reason
-                  </button>
-                </div>
-              ))
-            )}
+              <p className="text-center text-gray-500">No missed tasks without reason</p>
+            ) : filteredMissedTasks.map(task => (
+              <div key={task.patient_task_id} className="border p-5 rounded shadow-sm bg-white">
+                <h3 className="text-lg font-semibold text-red-600">{task.task_name}</h3>
+                <p className="text-sm text-gray-600">Patient: {task.patient_name}</p>
+                <p className="text-sm text-gray-600">
+                  <CalendarDays className="inline w-4 h-4 mr-1" />
+                  Due: {formatDueDate(task.due_date)}
+                </p>
+                <textarea
+                  className="w-full border rounded p-2 mt-2 text-sm"
+                  placeholder="Enter reason..."
+                  value={reasonInputs[task.patient_task_id] || ""}
+                  onChange={(e) => setReasonInputs(prev => ({ ...prev, [task.patient_task_id]: e.target.value }))}
+                />
+                <button onClick={() => handleMissed(task.patient_task_id, task.version)} className="mt-2 btn btn-primary">
+                  Submit Reason
+                </button>
+              </div>
+            ))}
           </div>
         )}
 
-        {tab === 'priority' && (
+        {/* Priority tab */}
+        {tab === "priority" && (
           <div className="space-y-6">
             {filteredPriorityTasks.length === 0 ? (
-              <p className="text-center text-gray-500">🎉 No priority tasks for today</p>
-            ) : (
-              filteredPriorityTasks.map((task) => (
-                <div key={task.patient_task_id} className="border p-5 rounded shadow-sm bg-white">
-                <h3 className={`text-lg font-semibold ${ task.status === 'Missed' ? 'text-red-600' : ''}`}>{task.task_name}</h3>
-                  <p className="text-sm text-gray-600">Patient: {task.patient_name}</p>
-                  <p className="text-sm text-gray-600">
-                    <CalendarDays className="inline w-4 h-4 mr-1" />
-                    Due: {new Date(task.due_date).toLocaleDateString()}
-                  </p>
-                  <p className="text-sm text-gray-600 flex items-center gap-1">
-                    <ClipboardCheck className="w-4 h-4" /> {task.status}
-                  </p>
-                  <div className="mt-3 flex flex-col md:flex-row gap-2">
-                    {task.status === "Pending" && (
-                      <button onClick={() => handleStart(task.patient_task_id,task.version)} className="btn">
-                        Start
-                      </button>
-                    )}
-                    {task.is_repeating && task.due_in_days_after_dependency != null && (
-                      <button onClick={() => handleFollowUp(task.patient_task_id,task.version)} className="btn btn-outline">
-                        Follow Up
-                      </button>
-                    )}
-                    <button
-                      className="btn btn-xs btn-outline"
-                      onClick={() =>
-                        handleComplete(task.patient_task_id ,task.version, task.is_court_date ?? false)
-                      }
-                    >
-                      Complete
-                    </button>
-                    <textarea
-                      className="border rounded p-2 text-sm flex-1"
-                      placeholder="Required: Reason for missing..."
-                      onChange={(e) => handleReasonChange(task.patient_task_id, e.target.value)}
-                    />
-                    <button
-                      onClick={() => handleMissed(task.patient_task_id,task.version)}
-                      className="btn bg-red-600 text-white"
-                    >
-                      Mark Missed
-                    </button>
-                  </div>
+              <p className="text-center text-gray-500">No priority tasks for today</p>
+            ) : filteredPriorityTasks.map(task => (
+              <div key={task.patient_task_id} className="border p-5 rounded shadow-sm bg-white">
+                <h3 className={`text-lg font-semibold ${task.status === "Missed" ? "text-red-600" : ""}`}>{task.task_name}</h3>
+                <p className="text-sm text-gray-600">Patient: {task.patient_name}</p>
+                <p className="text-sm text-gray-600">
+                  <CalendarDays className="inline w-4 h-4 mr-1" />
+                  Due: {formatDueDate(task.due_date)}
+                </p>
+                <p className="text-sm text-gray-600 flex items-center gap-1">
+                  <ClipboardCheck className="w-4 h-4" /> {task.status}
+                </p>
+                <div className="mt-3 flex flex-col md:flex-row gap-2">
+                  {task.status === "Pending" && (
+                    <button onClick={() => handleStart(task.patient_task_id, task.version)} className="btn">Start</button>
+                  )}
+                  {task.is_repeating && task.due_in_days_after_dependency != null && (
+                    <button onClick={() => handleFollowUp(task.patient_task_id, task.version)} className="btn btn-outline">Follow Up</button>
+                  )}
+                  <button onClick={() => handleComplete(task.patient_task_id, task.version, task.is_court_date ?? false)} className="btn btn-xs btn-outline">
+                    Complete
+                  </button>
+                  <textarea
+                    className="border rounded p-2 text-sm flex-1"
+                    placeholder="Required: Reason for missing..."
+                    onChange={(e) => setReasonInputs(prev => ({ ...prev, [task.patient_task_id]: e.target.value }))}
+                  />
+                  <button onClick={() => handleMissed(task.patient_task_id, task.version)} className="btn bg-red-600 text-white">
+                    Mark Missed
+                  </button>
                 </div>
-              ))
-            )}
+              </div>
+            ))}
           </div>
         )}
       </main>

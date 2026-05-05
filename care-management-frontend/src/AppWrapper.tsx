@@ -4,10 +4,10 @@ import { useNavigate } from 'react-router-dom';
 import { logoutAndClearAll } from './redux/actions/logoutAndClearAll';
 import App from './App';
 import { toast } from 'react-toastify';
-import type { AppDispatch } from './redux/store'; // ✅ Import your dispatch type
+import type { AppDispatch } from './redux/store';
 
 const AppWrapper = () => {
-  const dispatch = useDispatch<AppDispatch>(); // ✅ Type dispatch properly
+  const dispatch = useDispatch<AppDispatch>(); 
   const navigate = useNavigate();
 
 
@@ -19,7 +19,7 @@ const AppWrapper = () => {
   };
 
   useIdleTimer({
-    timeout: 20 * 60 * 1000, // 20 minutes
+    timeout: 20 * 60 * 1000,
     onIdle: handleIdle,
     debounce: 500,
   });

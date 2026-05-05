@@ -1,3 +1,4 @@
+// src/redux/slices/adminSlice.ts
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 import type { UnapprovedUser } from "../types";
@@ -23,7 +24,8 @@ const initialState: AdminState = {
   error: null,
 };
 
-// ✅ Thunks
+// ─── Thunks ───────────────────────────────────────────────────────────────────
+
 export const fetchUnapprovedUsers = createAsyncThunk(
   "admin/fetchUnapprovedUsers",
   async (_, { rejectWithValue }) => {
@@ -52,8 +54,10 @@ export const approveUser = createAsyncThunk(
   }
 );
 
-export const rejectUser = createAsyncThunk(
-  "admin/rejectUser",
+// FIX: renamed from rejectUser → revokeUser to match the backend route name
+// and make it clear this is a revoke action, not a signup rejection
+export const revokeUser = createAsyncThunk(
+  "admin/revokeUser",
   async (id: number, { rejectWithValue }) => {
     try {
       const res = await axios.put(
@@ -71,7 +75,12 @@ export const rejectUser = createAsyncThunk(
 export const addHospital = createAsyncThunk(
   "admin/addHospital",
   async (
-    data: { name: string; organization_id?: number | null },
+    data: {
+      name: string;
+      organization_id?: number | null;
+      timezone: string;
+      daily_room_cost?: number;   // FIX: was missing from type, backend now accepts it
+    },
     { rejectWithValue }
   ) => {
     try {
@@ -80,13 +89,10 @@ export const addHospital = createAsyncThunk(
       });
       return res.data.message as string;
     } catch (err: any) {
-      return rejectWithValue(
-        err.response?.data?.error || "Failed to add hospital"
-      );
+      return rejectWithValue(err.response?.data?.error || "Failed to add hospital");
     }
   }
 );
-
 
 export const deleteHospital = createAsyncThunk(
   "admin/deleteHospital",
@@ -95,14 +101,15 @@ export const deleteHospital = createAsyncThunk(
       const res = await axios.delete(`${BASE_URL}/admin/hospitals/${id}`, {
         withCredentials: true,
       });
-      return res.data;
+      return res.data as { message: string };
     } catch (err: any) {
       return rejectWithValue(err.response?.data?.error || "Failed to delete hospital");
     }
   }
 );
 
-// ✅ Slice
+// ─── Slice ────────────────────────────────────────────────────────────────────
+
 const adminSlice = createSlice({
   name: "admin",
   initialState,
@@ -119,6 +126,7 @@ const adminSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
+      // fetchUnapprovedUsers
       .addCase(fetchUnapprovedUsers.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -132,26 +140,35 @@ const adminSlice = createSlice({
         state.loading = false;
       })
 
+      // approveUser
       .addCase(approveUser.fulfilled, (state, action) => {
+        // Remove from unapproved list
         state.unapprovedUsers = state.unapprovedUsers.filter(
-          (user) => user.id !== action.payload
+          (u) => u.id !== action.payload
         );
+        // FIX: also update is_approved in allUsers list so the
+        // UsersModal table reflects the change without a re-fetch
+        const user = state.allUsers.find((u) => u.id === action.payload);
+        if (user) user.is_approved = true;
       })
       .addCase(approveUser.rejected, (state, action) => {
         state.error = action.payload as string;
       })
 
-    .addCase(rejectUser.fulfilled, (state, action) => {
-  state.unapprovedUsers = state.unapprovedUsers.filter(
-    (user) => user.id !== action.payload.id
-  );
-})
+      // revokeUser (was rejectUser)
+      .addCase(revokeUser.fulfilled, (state, action) => {
+        state.unapprovedUsers = state.unapprovedUsers.filter(
+          (u) => u.id !== action.payload.id
+        );
+        // FIX: also update is_approved in allUsers list
+        const user = state.allUsers.find((u) => u.id === action.payload.id);
+        if (user) user.is_approved = false;
+      })
+      .addCase(revokeUser.rejected, (state, action) => {
+        state.error = action.payload as string;
+      })
 
-    .addCase(rejectUser.rejected, (state, action) => {
-  state.error = action.payload as string; // NO toast here
-})
-
-
+      // addHospital
       .addCase(addHospital.fulfilled, (state, action) => {
         state.hospitalMessage = action.payload;
       })
@@ -159,6 +176,7 @@ const adminSlice = createSlice({
         state.error = action.payload as string;
       })
 
+      // deleteHospital
       .addCase(deleteHospital.fulfilled, (state, action) => {
         state.hospitalMessage = action.payload.message;
       })
@@ -166,6 +184,7 @@ const adminSlice = createSlice({
         state.error = action.payload as string;
       })
 
+      // fetchAllUsers (cross-slice)
       .addCase(fetchAllUsers.fulfilled, (state, action) => {
         state.allUsers = action.payload;
       })

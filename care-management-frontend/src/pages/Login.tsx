@@ -1,30 +1,31 @@
+// src/pages/Login.tsx
 import React, { useState, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { loginUser } from "../redux/slices/userSlice";
+import { loginUser, fetchCurrentUser } from "../redux/slices/userSlice";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import { RootState } from "../redux/store";
 import { Mail, Lock } from "lucide-react";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
-import type { AppDispatch } from '../redux/store';
-import { fetchCurrentUser } from "../redux/slices/userSlice";
-const Login = () => {
-  const dispatch = useDispatch<AppDispatch>();  
-  const navigate = useNavigate();
-  const { user, loading, error } = useSelector((state: RootState) => state.user);
+import type { AppDispatch } from "../redux/store";
 
+const Login = () => {
+  const dispatch = useDispatch<AppDispatch>();
+  const navigate = useNavigate();
+
+  const { user, loading, error } = useSelector((s: RootState) => s.user);
   const [formData, setFormData] = useState({ email: "", password: "" });
+
+
   useEffect(() => {
     if (!user) return;
-
-    if (user.has_global_access) {
+    if (user.role === "super_admin" || user.role === "admin" || (user.role === "administration" && user.has_global_access)) {
       navigate("/dashboard");
     } else {
       navigate("/homepage");
     }
   }, [user, navigate]);
-
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -35,11 +36,13 @@ const Login = () => {
     e.preventDefault();
     try {
       await dispatch(loginUser(formData)).unwrap();
+      // FIX: fetchCurrentUser after login ensures Redux has the full
+      // user object with role, hospital_id, etc. before the redirect fires
       await dispatch(fetchCurrentUser()).unwrap();
-
-      toast.success("🎉 Logged in successfully!");
+      toast.success("Logged in successfully!");
     } catch (err: any) {
-      const message = typeof err === "string" ? err : err?.error || err?.message || "Login failed";
+      const message =
+        typeof err === "string" ? err : err?.error || err?.message || "Login failed";
       toast.error(message);
     }
   };
@@ -47,22 +50,20 @@ const Login = () => {
   return (
     <div className="flex flex-col min-h-screen text-white">
       <Navbar />
+
       <main className="flex flex-grow items-center justify-center p-6">
         <div className="card w-full max-w-md">
           <h2 className="text-2xl font-bold mb-4">Sign In</h2>
+
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
               <label className="block mb-1 font-bold">Email</label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-black w-5 h-5" />
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-black w-5 h-5" />
                 <input
-                  className="!pl-10 bg-white text-black placeholder-gray-400 border rounded py-2 px-3"
-                  type="email"
-                  name="email"
-                  placeholder="Enter your email"
-                  value={formData.email}
-                  onChange={handleChange}
-                  required
+                  className="!pl-10 bg-white text-black placeholder-gray-400 border rounded py-2 px-3 w-full"
+                  type="email" name="email" placeholder="Enter your email"
+                  value={formData.email} onChange={handleChange} required
                 />
               </div>
             </div>
@@ -70,15 +71,11 @@ const Login = () => {
             <div>
               <label className="block mb-1 font-bold">Password</label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-black w-5 h-5" />
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-black w-5 h-5" />
                 <input
-                  className="!pl-10 bg-white text-black placeholder-gray-400 border rounded py-2 px-3"
-                  type="password"
-                  name="password"
-                  placeholder="Enter your password"
-                  value={formData.password}
-                  onChange={handleChange}
-                  required
+                  className="!pl-10 bg-white text-black placeholder-gray-400 border rounded py-2 px-3 w-full"
+                  type="password" name="password" placeholder="Enter your password"
+                  value={formData.password} onChange={handleChange} required
                 />
               </div>
             </div>
@@ -89,20 +86,21 @@ const Login = () => {
               {loading ? "Signing in..." : "Sign In"}
             </button>
           </form>
+
           <p className="text-center text-sm mt-3">
             <a href="/forgot-password" className="text-orange font-medium hover:underline">
               Forgot your password?
             </a>
           </p>
-
           <p className="text-center text-sm mt-4">
-            Don’t have an account?{" "}
+            Don't have an account?{" "}
             <a href="/signup" className="text-orange font-medium hover:underline">
               Sign Up
             </a>
           </p>
         </div>
       </main>
+
       <Footer />
     </div>
   );

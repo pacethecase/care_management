@@ -1,1314 +1,877 @@
-
+// controller/patientController.js
 const pool = require("../models/db");
 const assignTasksToPatient = require("../services/assignTasksToPatient");
-const { DateTime } = require('luxon');
+const { DateTime } = require("luxon");
+const { getTimezoneForUser } = require("../utils/timezone");
 
+// ─── Role helpers ─────────────────────────────────────────────────────────────
+const isSuperAdmin    = (u) => u.role === "super_admin";
+const isAdmin         = (u) => u.role === "admin";
+const isStaff         = (u) => u.role === "staff";
+const hasGlobalAccess = (u) => u.role === "administration" && u.has_global_access;
 
+// ─── GET PATIENTS ─────────────────────────────────────────────────────────────
 const getPatients = async (req, res) => {
-  if (!req.user?.is_approved) {
+  if (!req.user?.is_approved)
     return res.status(403).json({ error: "Access denied: User not approved." });
-  }
+
+  // FIX: global super admins should see patients — they were getting 403 before.
+  // They can view across orgs; just scope them to org if not filtering by hospital.
+  const { id: userId, role, organization_id, hospital_id: userHospitalId } = req.user;
+  const { hospitalId: filterHospitalId, adminId: filterAdminId } = req.query;
 
   try {
-    const userId = req.user.id;
-    const {
-      is_staff,
-      is_admin,
-      is_super_admin,
-      has_global_access,
-      organization_id,
-      hospital_id: userHospitalId,
-    } = req.user;
+    let conditions = [];
+    let params = [];
 
-    const { hospitalId: filterHospitalId, adminId: filterAdminId } = req.query;
-    const timezone = req.headers["x-timezone"] || "America/New_York";
-
-    const todayEndInUTC = DateTime.now()
-      .setZone(timezone)
-      .endOf("day")
-      .toUTC()
-      .toJSDate();
-
-  
-    let conditions = [];           
-    let params = [todayEndInUTC];
-    
-    if (req.user.has_global_access) {
-      return res.status(403).json({
-        error: "Access denied: Organization admins cannot access patient records.",
-      });
-    }
-
-   
-    else if (is_super_admin) {
-        params.push(organization_id);
-        conditions.push(`p.hospital_id IN (SELECT id FROM hospitals WHERE organization_id = $${params.length})`);
-
-        if (filterHospitalId) {
-          params.push(filterHospitalId);
-          conditions.push(`p.hospital_id = $${params.length}`);
-        }
+    if (hasGlobalAccess(req.user)) {
+      // Global super admin — optionally filter by hospital
+      if (filterHospitalId) {
+        params.push(filterHospitalId);
+        conditions.push(`p.hospital_id = $${params.length}`);
       }
-
- 
-  
-    else if (is_admin) {
+      // No hospital filter = all hospitals (global access)
+    } else if (isSuperAdmin(req.user)) {
+      params.push(organization_id);
+      conditions.push(`p.hospital_id IN (SELECT id FROM hospitals WHERE organization_id = $${params.length})`);
+      if (filterHospitalId) {
+        params.push(filterHospitalId);
+        conditions.push(`p.hospital_id = $${params.length}`);
+      }
+    } else if (isAdmin(req.user)) {
       params.push(userHospitalId);
       conditions.push(`p.hospital_id = $${params.length}`);
-    }
-    else if (is_staff) {
+    } else if (isStaff(req.user)) {
       params.push(userId, userHospitalId);
       conditions.push(`ps.staff_id = $${params.length - 1}`);
       conditions.push(`p.hospital_id = $${params.length}`);
-
-    }
-    else {
-      return res.status(403).json({
-        error: "Access denied: No valid role assigned.",
-      });
+    } else {
+      return res.status(403).json({ error: "Access denied: No valid role assigned." });
     }
 
     if (filterAdminId) {
       params.push(filterAdminId);
       conditions.push(`p.added_by_user_id = $${params.length}`);
     }
+
     conditions.push("p.status = 'Admitted'");
-    conditions.push("p.status != 'Discharged'");
-    conditions.push("COALESCE(p.is_archived, false) = false");
+    conditions.push("p.is_archived = FALSE");
 
     const whereClause = conditions.length ? "WHERE " + conditions.join(" AND ") : "";
 
-
     const query = `
-      SELECT 
-        p.*,
+      SELECT
+        p.id, p.first_name, p.last_name,
+        TO_CHAR(p.birth_date, 'YYYY-MM-DD') AS birth_date,
+        EXTRACT(YEAR FROM AGE(NOW(), p.birth_date))::INTEGER AS age,
+        p.room_no, p.medical_info, p.status, p.mrn,
+        p.admitted_date, p.hospital_id, p.version, p.updated_at, p.created_at,
+        p.is_behavioral, p.is_restrained, p.is_geriatric_psych_available, p.is_behavioral_team,
+        p.is_ltc, p.is_ltc_financial, p.is_ltc_medical,
+        p.is_guardianship, p.is_guardianship_financial, p.is_guardianship_person, p.is_guardianship_emergency,
+        p.added_by_user_id,
+        h.name AS hospital_name,
         CASE
           WHEN EXISTS (
             SELECT 1 FROM patient_tasks pt
-            WHERE pt.patient_id = p.id AND pt.status = 'Missed' AND pt.is_visible = true
+            WHERE pt.patient_id = p.id AND pt.status = 'Missed' AND pt.is_visible = TRUE
           ) THEN 'missed'
           WHEN EXISTS (
             SELECT 1 FROM patient_tasks pt
             WHERE pt.patient_id = p.id
-              AND pt.due_date <= $1::timestamp
-              AND pt.status NOT IN ('Completed','Delayed Completed','Missed')
-              AND pt.is_visible = true
+              AND pt.due_date <= NOW()
+              AND pt.status NOT IN ('Completed', 'Missed')
+              AND pt.is_visible = TRUE
           ) THEN 'in_progress'
           WHEN EXISTS (
             SELECT 1 FROM patient_tasks pt
             WHERE pt.patient_id = p.id
-              AND pt.status IN ('Completed','Delayed Completed')
-              AND pt.is_visible = true
+              AND pt.status = 'Completed'
+              AND pt.is_visible = TRUE
           ) THEN 'completed'
           ELSE NULL
         END AS task_status,
         json_agg(json_build_object('id', u.id, 'name', u.name))
           FILTER (WHERE u.id IS NOT NULL) AS assigned_staff
       FROM patients p
+      LEFT JOIN hospitals h ON h.id = p.hospital_id
       LEFT JOIN patient_staff ps ON p.id = ps.patient_id
       LEFT JOIN users u ON ps.staff_id = u.id
       ${whereClause}
-      GROUP BY p.id
+      GROUP BY p.id, h.name
       ORDER BY p.created_at DESC
     `;
 
-    const result = await pool.query(query, params);
-    return res.status(200).json(result.rows);
-
-  } catch (err) {
-    console.error("❌ Error fetching patients:", err);
-    return res.status(500).json({ error: "Internal server error" });
-  }
-};
-
-
-
-const addPatient = async (req, res) => {
-  if (!req.user?.is_approved) {
-  return res.status(403).json({ error: "Access denied: User not approved." });
-}
-
-  const added_by_user_id = req.user.id;
-  const hospital_id = req.user.hospital_id;
-
-  const timezone = req.headers['x-timezone'] || 'America/New_York';
-  console.log("Timezone header:", req.headers['x-timezone']);
-
-  try {
-    const {
-      first_name,
-      last_name,
-      birth_date,
-      age,
-      roomNo,
-      mrn,
-      medical_info,
-      assignedStaffIds = [],
-      is_behavioral,
-      is_restrained,
-      is_geriatric_psych_available,
-      is_behavioral_team,
-      is_ltc,
-      is_ltc_medical,
-      is_ltc_financial,
-      is_guardianship,
-      is_guardianship_financial,
-      is_guardianship_person,
-      is_guardianship_emergency,
-      admitted_date,
-      created_at
-    } = req.body;
-
-    if (!req.user.is_admin || req.user.has_global_access) {
-      return res.status(403).json({
-        error: "Only hospital admins are allowed to add patients.",
-      });
-    }
-    if (!hospital_id) {
-      return res.status(400).json({
-        error: "User is not assigned to any hospital. Cannot add patient.",
-      });
-    }
-
-
-    if (!first_name || !last_name || !birth_date || !roomNo || !mrn) {
-      return res.status(400).json({ message: "Missing required fields" });
-    }
-    if (!assignedStaffIds || assignedStaffIds.length === 0) {
-      return res.status(400).json({
-        message: "At least one staff member must be assigned to the patient.",
-      });
-    }
-
-    const normalizedStaff1 = assignedStaffIds
-      .map((s) => {
-        if (typeof s === "string") {
-          try {
-            return JSON.parse(s);
-          } catch {
-            console.warn("⚠️ Invalid staff entry string:", s);
-            return null;
-          }
-        }
-        return s;
-      })
-      .filter(Boolean);
-
-    const hasEditAccess = normalizedStaff1.some(
-      (staff) =>
-        (staff.access_level &&
-          staff.access_level.toLowerCase() === "edit") ||
-        staff.access_level === "full"
-    );
-
-    if (!hasEditAccess) {
-      return res.status(400).json({
-        message: "At least one assigned staff member must have edit access.",
-      });
-    }
-    const { rows: existing } = await pool.query(
-      `
-      SELECT id, first_name, last_name, birth_date, mrn
-      FROM patients
-      WHERE LOWER(first_name) = LOWER($1)
-        AND LOWER(last_name) = LOWER($2)
-        AND TO_CHAR(birth_date, 'YYYY-MM-DD') = $3
-        AND mrn = $4
-        AND hospital_id = $5
-      `,
-      [first_name, last_name, birth_date, mrn, hospital_id]
-    );
-
-    if (existing.length > 0) {
-      return res.status(409).json({
-        error: "A patient with the same Name, DOB, and MRN already exists.",
-        existingPatient: existing[0],
-      });
-    }
-
-    const selectedAlgorithms = [];
-    if (is_behavioral) selectedAlgorithms.push("Behavioral");
-    if (is_guardianship) selectedAlgorithms.push("Guardianship");
-    if (is_ltc) selectedAlgorithms.push("LTC");
-
-    const admittedDateUTC = admitted_date
-  ? DateTime.fromISO(admitted_date, { zone: timezone }).toUTC().toISO()
-  : null;
-    const createdAtUTC = created_at
-      ? DateTime.fromISO(created_at, { zone: timezone }).toUTC().toISO()
-      : DateTime.now().setZone(timezone).toUTC().toISO();
-    // ADD after the hasEditAccess check, before the duplicate check:
-
-    if (is_ltc && !is_ltc_medical && !is_ltc_financial) {
-      return res.status(400).json({ error: "LTC selected — please choose at least one: Financial or Medical." });
-    }
-
-    if (is_guardianship && !is_guardianship_financial && !is_guardianship_person) {
-      return res.status(400).json({ error: "Guardianship selected — please choose at least one: Financial or Person." });
-    }
-    const result = await pool.query(
-      `INSERT INTO patients (
-        first_name, last_name, birth_date, age, room_no, mrn, medical_info,
-        is_behavioral, is_restrained, is_geriatric_psych_available, is_behavioral_team,
-        is_ltc, is_ltc_medical, is_ltc_financial,
-        is_guardianship, is_guardianship_financial, is_guardianship_person, is_guardianship_emergency,
-        admitted_date, added_by_user_id, hospital_id, created_at, selected_algorithms,ever_selected_algorithms
-      )
-      VALUES (
-        $1, $2, $3, $4, $5, $6, $7,
-        $8, $9, $10, $11,
-        $12, $13, $14,
-        $15, $16, $17, $18,
-        $19, $20, $21, $22, $23, $24
-      )
-      RETURNING *`,
-      [
-        first_name, last_name, birth_date, age, roomNo, mrn, medical_info,
-        is_behavioral, is_restrained, is_geriatric_psych_available, is_behavioral_team,
-        is_ltc, is_ltc_medical, is_ltc_financial,
-        is_guardianship, is_guardianship_financial, is_guardianship_person, is_guardianship_emergency,
-        admittedDateUTC, added_by_user_id, hospital_id, createdAtUTC,
-        selectedAlgorithms,selectedAlgorithms
-      ]
-    );
-
-    const newPatient = result.rows[0];
-
-
-    if (assignedStaffIds.length > 0) {
-      const staffIdsOnly = assignedStaffIds.map((s) => {
-        if (typeof s === "string") {
-          try {
-            const parsed = JSON.parse(s);
-            return parseInt(parsed.staff_id ?? parsed.id, 10);
-          } catch {
-            return null;
-          }
-        }
-        return parseInt(s.staff_id ?? s.id, 10);
-      }).filter((id) => !isNaN(id));
-
-      const { rows: validStaff } = await pool.query(
-        `SELECT id FROM users WHERE id = ANY($1::int[]) AND hospital_id = $2 AND is_approved = true`,
-        [staffIdsOnly, hospital_id]
-      );
-
-      const validStaffIds = validStaff.map((s) => s.id);
-      if (validStaffIds.length !== staffIdsOnly.length) {
-        return res.status(400).json({
-          error: "One or more assigned staff are not approved or not in your hospital",
-        });
-      }
-    }
-
-    const normalizedStaff = assignedStaffIds.map((s) => {
-      if (typeof s === "string") {
-        try {
-          return JSON.parse(s);
-        } catch {
-          console.warn("⚠️ Invalid staff entry string:", s);
-          return null;
-        }
-      }
-      return s;
-    }).filter(Boolean);
-    for (const staff of normalizedStaff) {
-      const staffIdRaw = staff.staff_id ?? staff.id;
-      const staffId = parseInt(staffIdRaw, 10);
-      const accessLevel = staff.access_level || "view";
-
-      if (isNaN(staffId)) {
-        console.warn("⚠️ Skipping invalid staff_id:", staff);
-        continue;
-      }
-
-      await pool.query(
-        `INSERT INTO patient_staff (patient_id, staff_id, access_level)
-        VALUES ($1, $2, $3)`,
-        [newPatient.id, staffId, accessLevel]
-      );
-    }
-
-      await assignTasksToPatient(
-        newPatient.id,
-        timezone,
-        [],
-        selectedAlgorithms,  
-        []                    
-      );
-
-      if (normalizedStaff.length > 0) {
-        const io = req.app.get("io");
-
-        for (const staff of normalizedStaff) {
-          const staffIdRaw = staff.staff_id ?? staff.id;
-          const staffId = parseInt(staffIdRaw, 10);
-          if (isNaN(staffId)) {
-            console.warn("⚠️ Skipping invalid staff_id for notification:", staff);
-            continue;
-          }
-
-          const title = "New Patient Assigned";
-          const message = `You are assigned to ${newPatient.first_name} ${newPatient.last_name}`;
-
-          const { rows: [notif] } = await pool.query(
-            `INSERT INTO notifications (user_id, patient_id, title, message, type)
-            VALUES ($1, $2, $3, $4, $5)
-            RETURNING *`,
-            [staffId, newPatient.id, title, message, "assignment"]
-          );
-
-          io?.to?.(`user-${staffId}`)?.emit("notification", notif);
-        }
-      }
-
-      res.status(201).json({ message: "Patient added and tasks assigned", patient: newPatient });
-    } catch (err) {
-      console.error("❌ Error adding patient:", err);
-      res.status(500).json({ error: "Internal server error" });
-    }
-};
-
-
-
-const getPatientById = async (req, res) => {
-  if (!req.user?.is_approved) {
-    return res.status(403).json({ error: "Access denied: User not approved." });
-  }
-
-  // ❌ Org admins never access patients
-  if (req.user.has_global_access) {
-    return res.status(403).json({
-      error: "Access denied: Organization admins cannot access patient data.",
-    });
-  }
-
-  const { patientId } = req.params;
-  let conditions = ["p.id = $1", "COALESCE(p.is_archived, false) = false"];
-  let params = [patientId];
-  let idx = 2;
-
-  // ✅ SUPER ADMIN → org hospitals only
-  if (req.user.is_super_admin) {
-    params.push(req.user.organization_id);
-    conditions.push(`
-      p.hospital_id IN (
-        SELECT id FROM hospitals WHERE organization_id = $${idx}
-      )
-    `);
-    idx++;
-  }
-
-  // ✅ ADMIN → hospital only
-  else if (req.user.is_admin) {
-    params.push(req.user.hospital_id);
-    conditions.push(`p.hospital_id = $${idx}`);
-    idx++;
-  }
-
-  // ✅ STAFF → assigned patients only
-  else if (req.user.is_staff) {
-    params.push(req.user.id);
-    conditions.push(`
-      EXISTS (
-        SELECT 1 FROM patient_staff
-        WHERE patient_id = p.id
-          AND staff_id = $${idx}
-      )
-    `);
-    idx++;
-
-    // enforce same hospital
-    params.push(req.user.hospital_id);
-    conditions.push(`p.hospital_id = $${idx}`);
-    idx++;
-  }
-
-  // ❌ No valid role
-  else {
-    return res.status(403).json({ error: "Access denied" });
-  }
-
-  try {
-    const query = `
-      SELECT 
-        p.id,
-        p.first_name,
-        p.last_name,
-        TO_CHAR(p.birth_date, 'YYYY-MM-DD') AS birth_date,
-        p.age,
-        p.room_no,
-        p.medical_info,
-        p.status,
-        p.discharge_date,
-        p.discharge_note,
-        p.mrn,
-        p.admitted_date,
-        p.is_behavioral,
-        p.is_restrained,
-        p.is_geriatric_psych_available,
-        p.is_behavioral_team,
-        p.is_ltc,
-        p.is_ltc_financial,
-        p.is_ltc_medical,
-        p.is_guardianship,
-        p.is_guardianship_financial,
-        p.is_guardianship_person,
-        p.is_guardianship_emergency,
-        p.guardianship_court_datetime::timestamptz AS guardianship_court_datetime,
-        p.ltc_court_datetime::timestamptz AS ltc_court_datetime,
-        p.created_at,
-        p.added_by_user_id,
-        p.selected_algorithms,
-        p.hospital_id,
-        p.updated_at,
-        p.version,
-        json_agg(
-          json_build_object(
-            'id', u.id,
-            'name', u.name,
-            'access_level', ps.access_level
-          )
-        ) FILTER (WHERE u.id IS NOT NULL) AS assigned_staff,
-        CASE
-          WHEN EXISTS (
-            SELECT 1 FROM patient_tasks pt
-            WHERE pt.patient_id = p.id AND pt.status = 'Missed'
-          ) THEN 'missed'
-          WHEN NOT EXISTS (
-            SELECT 1 FROM patient_tasks pt
-            WHERE pt.patient_id = p.id AND pt.ideal_due_date::date = CURRENT_DATE
-          ) THEN 'completed'
-          WHEN NOT EXISTS (
-            SELECT 1 FROM patient_tasks pt
-            WHERE pt.patient_id = p.id
-              AND pt.ideal_due_date::date = CURRENT_DATE
-              AND pt.status != 'Completed'
-          ) THEN 'completed'
-          ELSE 'in_progress'
-        END AS task_status
-      FROM patients p
-      LEFT JOIN patient_staff ps ON p.id = ps.patient_id
-      LEFT JOIN users u ON ps.staff_id = u.id
-      WHERE ${conditions.join(" AND ")}
-      GROUP BY p.id
-    `;
-
-    const result = await pool.query(query, params);
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: "Patient not found or access denied" });
-    }
-
-    return res.status(200).json(result.rows[0]);
-
-  } catch (err) {
-    console.error("❌ Error fetching patient:", err);
-    return res.status(500).json({ error: "Internal server error" });
-  }
-};
-
-
-const getPatientTasks = async (req, res) => {
-  if (!req.user?.is_approved) {
-    return res.status(403).json({ error: "Access denied: User not approved." });
-  }
-
-  if (req.user.has_global_access) {
-    return res.status(403).json({
-      error: "Access denied: Organization admins cannot access patient data.",
-    });
-  }
-
-  const { patientId } = req.params;
-  let conditions = ["id = $1"];
-  let params = [patientId];
-  let idx = 2;
-  if (req.user.is_super_admin) {
-    params.push(req.user.organization_id);
-    conditions.push(`
-      hospital_id IN (
-        SELECT id FROM hospitals WHERE organization_id = $${idx}
-      )
-    `);
-    idx++;
-  }
-
-
-  else if (req.user.is_admin) {
-    params.push(req.user.hospital_id);
-    conditions.push(`hospital_id = $${idx}`);
-    idx++;
-  }
-
-  else if (req.user.is_staff) {
-    params.push(req.user.id);
-    conditions.push(`
-      EXISTS (
-        SELECT 1 FROM patient_staff
-        WHERE patient_id = patients.id
-          AND staff_id = $${idx}
-      )
-    `);
-    idx++;
-
-    params.push(req.user.hospital_id);
-    conditions.push(`hospital_id = $${idx}`);
-    idx++;
-  }
-
-  else {
-    return res.status(403).json({ error: "Access denied" });
-  }
-
-  try {
-    const patientCheckQuery = `
-      SELECT status FROM patients
-      WHERE ${conditions.join(" AND ")}
-    `;
-    const patientCheck = await pool.query(patientCheckQuery, params);
-
-    if (!patientCheck.rows.length) {
-      return res.status(404).json({ error: "Patient not found or access denied" });
-    }
-
-    // ✅ Block discharged if not super admin
-    if (patientCheck.rows[0].status === "Discharged" && !req.user.is_super_admin) {
-      return res.status(403).json({ error: "Tasks not available for discharged patients" });
-    }
-
-    // ✅ Fetch tasks
-    const query = `
-      SELECT 
-        pt.id AS patient_task_id,
-        pt.status_history,
-        pt.task_id,
-        t.name AS task_name,
-        t.category,
-        t.description,
-        pt.status,
-        pt.due_date,
-        pt.completed_at,
-        pt.started_at,
-        pt.version,
-        pt.updated_at,
-        pt.override_count,
-        t.condition_required,
-        t.is_repeating,
-        t.due_in_days_after_dependency,
-        t.is_non_blocking,
-        t.is_overridable,
-        t.is_court_date,
-        t.algorithm,
-        pt.ideal_due_date,
-        pt.task_note,
-        pt.include_note_in_report,
-        pt.contact_info,
-        u1.name AS completed_by,
-        u2.name AS started_by,
-        u3.name AS acknowledged_by,
-        acknowledged_history.timestamp AS acknowledged_at
-      FROM patient_tasks pt
-      JOIN tasks t ON pt.task_id = t.id
-      LEFT JOIN LATERAL (
-        SELECT (elem.value ->> 'staff_id')::INTEGER AS staff_id
-        FROM jsonb_array_elements(pt.status_history) elem
-        WHERE elem.value ->> 'status' IN ('Completed', 'Delayed Completed')
-        ORDER BY (elem.value ->> 'timestamp')::timestamp DESC LIMIT 1
-      ) AS completed_history ON TRUE
-      LEFT JOIN users u1 ON u1.id = completed_history.staff_id
-      LEFT JOIN LATERAL (
-        SELECT (elem.value ->> 'staff_id')::INTEGER AS staff_id
-        FROM jsonb_array_elements(pt.status_history) elem
-        WHERE elem.value ->> 'status' = 'In Progress'
-        ORDER BY (elem.value ->> 'timestamp')::timestamp DESC LIMIT 1
-      ) AS started_history ON TRUE
-      LEFT JOIN users u2 ON u2.id = started_history.staff_id
-      LEFT JOIN LATERAL (
-        SELECT (elem.value ->> 'staff_id')::INTEGER AS staff_id,
-               (elem.value ->> 'timestamp')::timestamptz AS timestamp
-        FROM jsonb_array_elements(pt.status_history) elem
-        WHERE elem.value ->> 'status' = 'Acknowledged'
-        ORDER BY (elem.value ->> 'timestamp')::timestamp DESC LIMIT 1
-      ) AS acknowledged_history ON TRUE
-      LEFT JOIN users u3 ON u3.id = acknowledged_history.staff_id
-      WHERE pt.patient_id = $1
-        AND COALESCE(pt.is_visible, TRUE) = TRUE
-        AND COALESCE((SELECT is_archived FROM patients WHERE id = $1), false) = false
-      ORDER BY pt.due_date ASC
-    `;
-
-    const { rows } = await pool.query(query, [patientId]);
+    const { rows } = await pool.query(query, params);
     return res.status(200).json(rows);
 
   } catch (err) {
-    console.error("❌ Error fetching patient tasks:", err);
+    console.error("Error fetching patients:", err);
     return res.status(500).json({ error: "Internal server error" });
   }
 };
 
-
-const dischargePatient = async (req, res) => {
-  if (!req.user?.is_approved) {
+const addPatient = async (req, res) => {
+  if (!req.user?.is_approved)
     return res.status(403).json({ error: "Access denied: User not approved." });
-  }
 
-  if (!req.user.is_admin || req.user.has_global_access) {
-    return res.status(403).json({ error: "Only hospital admins may discharge patients." });
-  }
+  // FIX: role check — removed duplicate below
+  if (!isAdmin(req.user))
+    return res.status(403).json({ error: "Only hospital admins are allowed to add patients." });
 
-  const { patientId } = req.params;
-  const { dischargeNote, version } = req.body;
-  const userHospitalId = req.user.hospital_id;
+  const added_by_user_id = req.user.id;
+  const hospital_id      = req.user.hospital_id;
 
-  if (version == null) {
-    return res.status(400).json({ error: "Missing version." });
-  }
-
+  if (!hospital_id)
+    return res.status(400).json({ error: "User is not assigned to any hospital." });
   const client = await pool.connect();
-
   try {
+    const timezone = await getTimezoneForUser(req.user);
+
+    const {
+      first_name, last_name, birth_date, roomNo, mrn, medical_info,
+      assignedStaffIds = [],
+      is_behavioral, is_restrained, is_geriatric_psych_available, is_behavioral_team,
+      is_ltc, is_ltc_medical, is_ltc_financial,
+      is_guardianship, is_guardianship_financial, is_guardianship_person, is_guardianship_emergency,
+      admitted_date,
+    } = req.body;
+
+    // FIX: removed duplicate role/hospital checks that were inside try block
+
+    if (!first_name || !last_name || !birth_date || !roomNo || !mrn)
+      return res.status(400).json({ message: "Missing required fields" });
+
+    if (!assignedStaffIds?.length)
+      return res.status(400).json({ message: "At least one staff member must be assigned." });
+
+    const normalizedStaff = normalizeStaff(assignedStaffIds);
+    if (!normalizedStaff.some(s => ["edit", "full"].includes(String(s.access_level).toLowerCase())))
+      return res.status(400).json({ message: "At least one staff member must have edit access." });
+
+    // FIX: LTC/Guardianship validation BEFORE duplicate check and INSERT
+    if (is_ltc && !is_ltc_medical && !is_ltc_financial)
+      return res.status(400).json({ error: "LTC selected — please choose at least one: Financial or Medical." });
+
+    if (is_guardianship && !is_guardianship_financial && !is_guardianship_person)
+      return res.status(400).json({ error: "Guardianship selected — please choose at least one: Financial or Person." });
+
+    const { rows: existing } = await pool.query(
+      `SELECT id FROM patients
+       WHERE LOWER(first_name) = LOWER($1) AND LOWER(last_name) = LOWER($2)
+         AND TO_CHAR(birth_date, 'YYYY-MM-DD') = $3 AND mrn = $4 AND hospital_id = $5`,
+      [first_name, last_name, birth_date, mrn, hospital_id]
+    );
+    if (existing.length > 0)
+      return res.status(409).json({ error: "A patient with the same Name, DOB, and MRN already exists." });
+
+    const staffIds = normalizedStaff.map(s => parseInt(s.staff_id ?? s.id, 10)).filter(id => !isNaN(id));
+    const { rows: validStaff } = await pool.query(
+      `SELECT id FROM users WHERE id = ANY($1::int[]) AND hospital_id = $2 AND is_approved = TRUE`,
+      [staffIds, hospital_id]
+    );
+    if (validStaff.length !== staffIds.length)
+      return res.status(400).json({ error: "One or more staff are not approved or not in your hospital." });
+
+    const selectedAlgorithms = [];
+    if (is_behavioral)   selectedAlgorithms.push("Behavioral");
+    if (is_guardianship) selectedAlgorithms.push("Guardianship");
+    if (is_ltc)          selectedAlgorithms.push("LTC");
+
+    const admittedDateUTC = admitted_date
+      ? DateTime.fromISO(admitted_date, { zone: timezone }).toUTC().toISO()
+      : null;
     await client.query("BEGIN");
-    const result = await client.query(
-      `
-      UPDATE patients
-      SET status = 'Discharged',
-          discharge_date = NOW(),
-          discharge_note = $1,
-          version = version + 1,
-          updated_at = NOW()
-      WHERE id = $2
-        AND hospital_id = $3
-        AND version = $4
-      RETURNING *;
-      `,
-      [dischargeNote, patientId, userHospitalId, version]
-    );
-    if (result.rowCount === 0) {
-      await client.query("ROLLBACK");
-      return res.status(409).json({
-        error: "Patient already updated or access denied. Refresh and try again."
-      });
-    }
-
-    const patient = result.rows[0];
-    const staffRes = await client.query(
-      `
-      SELECT u.id AS staff_id
-      FROM patient_staff ps
-      JOIN users u ON u.id = ps.staff_id
-      WHERE ps.patient_id = $1 AND u.is_staff = true
-      `,
-      [patientId]
+    // FIX: no age, no selected_algorithms, no ever_selected_algorithms in INSERT
+    const { rows: [newPatient] } = await client.query(
+      `INSERT INTO patients (
+        first_name, last_name, birth_date, room_no, mrn, medical_info,
+        is_behavioral, is_restrained, is_geriatric_psych_available, is_behavioral_team,
+        is_ltc, is_ltc_medical, is_ltc_financial,
+        is_guardianship, is_guardianship_financial, is_guardianship_person, is_guardianship_emergency,
+        admitted_date, added_by_user_id, hospital_id
+      ) VALUES (
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20
+      ) RETURNING *`,
+      [
+        first_name, last_name, birth_date, roomNo, mrn, medical_info,
+        is_behavioral, is_restrained, is_geriatric_psych_available, is_behavioral_team,
+        is_ltc, is_ltc_medical, is_ltc_financial,
+        is_guardianship, is_guardianship_financial, is_guardianship_person, is_guardianship_emergency,
+        admittedDateUTC, added_by_user_id, hospital_id,
+      ]
     );
 
-    const io = req.app.get("io");
-
-    for (const { staff_id } of staffRes.rows) {
-      const title = "Patient Discharged";
-      const message = `${patient.first_name} ${patient.last_name} has been discharged`;
-
-      const { rows: [notif] } = await client.query(
-        `
-        INSERT INTO notifications (user_id, patient_id, title, message, type)
-        VALUES ($1, $2, $3, $4, $5)
-        RETURNING *
-        `,
-        [staff_id, patient.id, title, message, "discharge"]
+    // FIX: insert into patient_algorithms instead of TEXT[] columns
+    for (const algo of selectedAlgorithms) {
+      await client.query(
+        `INSERT INTO patient_algorithms (patient_id, algorithm, assigned_at, assigned_by_user_id)
+         VALUES ($1, $2, $3, $4)`,
+        [newPatient.id, algo, admittedDateUTC || new Date().toISOString(), added_by_user_id]
       );
-
-      io?.to?.(`user-${staff_id}`)?.emit("notification", notif);
     }
 
+    // Insert staff assignments
+    for (const s of normalizedStaff) {
+      await client.query(
+        `INSERT INTO patient_staff (patient_id, staff_id, access_level) VALUES ($1,$2,$3)`,
+        [newPatient.id, parseInt(s.staff_id ?? s.id, 10), s.access_level || "view"]
+      );
+    }
     await client.query("COMMIT");
+    await assignTasksToPatient(newPatient.id, timezone, [], selectedAlgorithms, []);
 
-    res.status(200).json({ message: "Patient discharged successfully" });
+    // Notify assigned staff
+    const io = req.app.get("io");
+    for (const s of normalizedStaff) {
+      const staffId = parseInt(s.staff_id ?? s.id, 10);
+      if (isNaN(staffId)) continue;
+      const { rows: [notif] } = await pool.query(
+        `INSERT INTO notifications (user_id, patient_id, title, message, type)
+         VALUES ($1,$2,$3,$4,'assignment') RETURNING *`,
+        [staffId, newPatient.id, "New Patient Assigned",
+         `You are assigned to ${newPatient.first_name} ${newPatient.last_name}`]
+      );
+      io?.to?.(`user-${staffId}`)?.emit("notification", notif);
+    }
+ 
+    return res.status(201).json({ message: "Patient added and tasks assigned", patient: newPatient });
 
   } catch (err) {
     await client.query("ROLLBACK");
-    console.error("❌ Error discharging patient:", err);
-    res.status(500).json({ error: "Internal Server Error" });
+    console.error("Error adding patient:", err);
+    return res.status(500).json({ error: "Internal server error" });
   } finally {
     client.release();
   }
 };
 
+// ─── GET PATIENT BY ID ────────────────────────────────────────────────────────
+const getPatientById = async (req, res) => {
+  if (!req.user?.is_approved)
+    return res.status(403).json({ error: "Access denied: User not approved." });
 
-const reactivatePatient = async (req, res) => {
   const { patientId } = req.params;
-  const { version } = req.body;
-  const userHospitalId = req.user.hospital_id;
+  let conditions = ["p.id = $1", "p.is_archived = FALSE"];
+  let params = [patientId];
 
-  if (!req.user?.is_approved) {
-    return res.status(403).json({ error: "Access denied: User not approved." });
-  }
-
-  if (!req.user.is_admin || req.user.has_global_access) {
-    return res.status(403).json({
-      error: "Only hospital admins may reactivate patients.",
-    });
-  }
-
-  if (version == null) {
-    return res.status(400).json({ error: "Missing version." });
-  }
-
-  const client = await pool.connect();
-
-  try {
-    await client.query("BEGIN");
-    const result = await client.query(
-      `
-      UPDATE patients
-      SET discharge_date = NULL,
-          discharge_note = NULL,
-          status = 'Admitted',
-          version = version + 1,
-          updated_at = NOW()
-      WHERE id = $1
-        AND hospital_id = $2
-        AND version = $3
-      RETURNING *;
-      `,
-      [patientId, userHospitalId, version]
-    );
-
-    if (result.rowCount === 0) {
-      await client.query("ROLLBACK");
-      return res.status(409).json({
-        error: "Patient already updated or access denied. Refresh and try again.",
-      });
-    }
-
-    const patient = result.rows[0];
-    const staffRes = await client.query(
-      `
-      SELECT u.id AS staff_id
-      FROM patient_staff ps
-      JOIN users u ON u.id = ps.staff_id
-      WHERE ps.patient_id = $1 AND u.is_staff = true
-      `,
-      [patientId]
-    );
-
-    const io = req.app.get("io");
-
-    for (const { staff_id } of staffRes.rows) {
-      const title = "Patient Reinstated";
-      const message = `${patient.first_name} ${patient.last_name} has been reinstated to active care.`
-
-      const { rows: [notif] } = await client.query(
-        `
-        INSERT INTO notifications (user_id, patient_id, title, message, type)
-        VALUES ($1, $2, $3, $4, $5)
-        RETURNING *
-        `,
-        [staff_id, patient.id, title, message, "reinstated"]
-      );
-
-      io?.to?.(`user-${staff_id}`)?.emit("notification", notif);
-    }
-
-    await client.query("COMMIT");
-
-    res.status(200).json({ message: "Patient reactivated successfully" });
-
-  } catch (err) {
-    await client.query("ROLLBACK");
-    console.error("❌ Error reactivating patient:", err);
-    res.status(500).json({ error: "Internal Server Error" });
-  } finally {
-    client.release();
-  }
-};
-
-const getDischargedPatients = async (req, res) => {
-  if (!req.user?.is_approved) {
-    return res.status(403).json({ error: "Access denied: User not approved." });
-  }
-  if (req.user.has_global_access) {
-    return res.status(403).json({
-      error: "Access denied: Organization admins cannot access patient data.",
-    });
-  }
-  if (req.user.is_staff) {
-    return res.status(403).json({
-      error: "Access denied: Staff cannot access discharged patients.",
-    });
+  if (hasGlobalAccess(req.user)) {
+    // FIX: global admins can view patient details — they were blocked before
+  } else if (isSuperAdmin(req.user)) {
+    params.push(req.user.organization_id);
+    conditions.push(`p.hospital_id IN (SELECT id FROM hospitals WHERE organization_id = $${params.length})`);
+  } else if (isAdmin(req.user)) {
+    params.push(req.user.hospital_id);
+    conditions.push(`p.hospital_id = $${params.length}`);
+  } else if (isStaff(req.user)) {
+    params.push(req.user.id);
+    conditions.push(`EXISTS (SELECT 1 FROM patient_staff WHERE patient_id = p.id AND staff_id = $${params.length})`);
+    params.push(req.user.hospital_id);
+    conditions.push(`p.hospital_id = $${params.length}`);
+  } else {
+    return res.status(403).json({ error: "Access denied" });
   }
 
   try {
-    const { is_super_admin, is_admin, hospital_id, organization_id } = req.user;
-    const { start, end,hospitalId } = req.query;
-
-    let filters = [
-      `p.status = 'Discharged'`,
-      `COALESCE(p.is_archived,false) = false`,
-    ];
-    let params = [];
-    if (is_super_admin) {
-      params.push(organization_id);
-      filters.push(`
-        p.hospital_id IN (
-          SELECT id FROM hospitals WHERE organization_id = $${params.length}
-        )
-      `);
-      if (hospitalId) {
-        params.push(hospitalId);
-        filters.push(`p.hospital_id = $${params.length}`);
-      }
-    
-    }
-
-    else if (is_admin) {
-      params.push(hospital_id);
-      filters.push(`p.hospital_id = $${params.length}`);
-    }
-
-    else {
-      return res.status(403).json({ error: "Access denied." });
-    }
-
-    if (start) {
-      params.push(start);
-      filters.push(`p.discharge_date::date >= $${params.length}`);
-    }
-
-    if (end) {
-      params.push(end);
-      filters.push(`p.discharge_date::date <= $${params.length}`);
-    }
-
-    const sql = `
-      SELECT 
-        p.*,
-        json_agg(json_build_object('id', u.id, 'name', u.name))
-          FILTER (WHERE u.id IS NOT NULL) AS assigned_staff
+    const { rows } = await pool.query(`
+      SELECT
+        p.id, p.first_name, p.last_name,
+        TO_CHAR(p.birth_date, 'YYYY-MM-DD') AS birth_date,
+        EXTRACT(YEAR FROM AGE(NOW(), p.birth_date))::INTEGER AS age,
+        p.room_no, p.medical_info, p.status,
+        p.discharge_date, p.discharge_note, p.mrn, p.admitted_date,
+        p.is_behavioral, p.is_restrained, p.is_geriatric_psych_available, p.is_behavioral_team,
+        p.is_ltc, p.is_ltc_financial, p.is_ltc_medical,
+        p.is_guardianship, p.is_guardianship_financial, p.is_guardianship_person, p.is_guardianship_emergency,
+        p.guardianship_court_date, p.ltc_court_date,
+        p.created_at, p.added_by_user_id, p.hospital_id, p.updated_at, p.version,
+        -- FIX: active_algorithms from patient_algorithms table, not TEXT[] column
+        COALESCE(
+          (SELECT json_agg(algorithm ORDER BY assigned_at)
+           FROM patient_algorithms
+           WHERE patient_id = p.id AND removed_at IS NULL),
+          '[]'
+        ) AS active_algorithms,
+        json_agg(
+          json_build_object('id', u.id, 'name', u.name, 'access_level', ps.access_level)
+        ) FILTER (WHERE u.id IS NOT NULL) AS assigned_staff
       FROM patients p
       LEFT JOIN patient_staff ps ON p.id = ps.patient_id
       LEFT JOIN users u ON ps.staff_id = u.id
-      WHERE ${filters.join(" AND ")}
+      WHERE ${conditions.join(" AND ")}
       GROUP BY p.id
-      ORDER BY p.discharge_date DESC NULLS LAST
-    `;
+    `, params);
 
-    const countSql = `
-      SELECT COUNT(*)::int AS count
-      FROM patients p
-      WHERE ${filters.join(" AND ")}
-    `;
+    if (!rows.length)
+      return res.status(404).json({ error: "Patient not found or access denied" });
 
-    const [{ rows: patients }, { rows: countRows }] = await Promise.all([
-      pool.query(sql, params),
-      pool.query(countSql, params),
-    ]);
-
-    return res.status(200).json({
-      count: countRows[0]?.count ?? 0,
-      patients,
-    });
+    return res.status(200).json(rows[0]);
 
   } catch (err) {
-    console.error("❌ Error fetching discharged patients:", err);
+    console.error("Error fetching patient:", err);
     return res.status(500).json({ error: "Internal server error" });
   }
 };
 
-const updatePatient = async (req, res) => {
-  if (!req.user?.is_approved) {
+// ─── GET PATIENT TASKS ────────────────────────────────────────────────────────
+const getPatientTasks = async (req, res) => {
+  if (!req.user?.is_approved)
     return res.status(403).json({ error: "Access denied: User not approved." });
+
+  const { patientId } = req.params;
+  let conditions = ["id = $1", "is_archived = FALSE"];
+  let params = [patientId];
+
+  if (hasGlobalAccess(req.user)) {
+    // no extra filter
+  } else if (isSuperAdmin(req.user)) {
+    params.push(req.user.organization_id);
+    conditions.push(`hospital_id IN (SELECT id FROM hospitals WHERE organization_id = $${params.length})`);
+  } else if (isAdmin(req.user)) {
+    params.push(req.user.hospital_id);
+    conditions.push(`hospital_id = $${params.length}`);
+  } else if (isStaff(req.user)) {
+    params.push(req.user.id);
+    conditions.push(`EXISTS (SELECT 1 FROM patient_staff WHERE patient_id = patients.id AND staff_id = $${params.length})`);
+    params.push(req.user.hospital_id);
+    conditions.push(`hospital_id = $${params.length}`);
+  } else {
+    return res.status(403).json({ error: "Access denied" });
   }
 
-  if (req.user.has_global_access || req.user.is_super_admin) {
-    return res.status(403).json({ error: "Access denied: You cannot modify patient records." });
-  }
+  try {
+    const { rows: patientRows } = await pool.query(
+      `SELECT status FROM patients WHERE ${conditions.join(" AND ")}`, params
+    );
+    if (!patientRows.length)
+      return res.status(404).json({ error: "Patient not found or access denied" });
 
-  if (!req.user.is_admin && !req.user.is_staff) {
-    return res.status(403).json({
-      error: "Access denied: Only hospital admins and staff may update patients.",
-    });
-  }
+    // FIX: role check uses isSuperAdmin()
+    if (patientRows[0].status === "Discharged" && !isSuperAdmin(req.user))
+      return res.status(403).json({ error: "Tasks not available for discharged patients" });
 
-  const timezone = req.headers["x-timezone"] || "America/New_York";
+    // FIX: status_history now comes from patient_task_status_history table
+    // Completed/started/acknowledged user names fetched via JOIN on history table
+    const { rows } = await pool.query(`
+      SELECT
+        pt.id AS patient_task_id,
+        pt.task_id, pt.status, pt.version, pt.updated_at,
+        pt.due_date, pt.completed_at, pt.started_at,
+        pt.override_count, pt.override_count_max, pt.admin_override_approval,
+        pt.task_note, pt.include_note_in_report, pt.contact_info,
+        t.name AS task_name, t.category, t.description, t.algorithm,
+        t.condition_required, t.is_repeating, t.due_in_days_after_dependency,
+        t.is_non_blocking, t.is_overridable, t.is_court_date,
+        pt.ideal_due_date,
+        u1.name AS completed_by,
+        u2.name AS started_by,
+        u3.name AS acknowledged_by,
+        acknowledged_history.ack_at AS acknowledged_at,
+        -- FIX: status_history from joined table, not JSONB column
+        COALESCE(
+          (SELECT json_agg(
+            json_build_object(
+              'id', h.id,
+              'old_status', h.old_status,
+              'new_status', h.new_status,
+              'changed_at', h.changed_at,
+              'changed_by_user_id', h.changed_by_user_id,
+              'note', h.note
+            ) ORDER BY h.changed_at
+          )
+          FROM patient_task_status_history h
+          WHERE h.patient_task_id = pt.id),
+          '[]'
+        ) AS status_history
+      FROM patient_tasks pt
+      JOIN tasks t ON pt.task_id = t.id
+      LEFT JOIN LATERAL (
+        SELECT h.changed_by_user_id AS staff_id
+        FROM patient_task_status_history h
+        WHERE h.patient_task_id = pt.id 
+          AND h.new_status IN ('Completed', 'Delayed Completed')
+        ORDER BY h.changed_at DESC LIMIT 1
+      ) completed_history ON TRUE
+      LEFT JOIN users u1 ON u1.id = completed_history.staff_id
+
+      -- ADD: separate acknowledged_by for non-blocking display
+      LEFT JOIN LATERAL (
+        SELECT h.changed_by_user_id AS staff_id, h.changed_at AS ack_at
+        FROM patient_task_status_history h
+        WHERE h.patient_task_id = pt.id 
+          AND h.new_status = 'Acknowledged'
+        ORDER BY h.changed_at DESC LIMIT 1
+      ) acknowledged_history ON TRUE
+      LEFT JOIN users u3 ON u3.id = acknowledged_history.staff_id
+      LEFT JOIN LATERAL (
+        SELECT h.changed_by_user_id AS staff_id
+        FROM patient_task_status_history h
+        WHERE h.patient_task_id = pt.id AND h.new_status = 'In Progress'
+        ORDER BY h.changed_at DESC LIMIT 1
+      ) started_history ON TRUE
+      LEFT JOIN users u2 ON u2.id = started_history.staff_id
+      WHERE pt.patient_id = $1
+        AND pt.is_visible = TRUE
+        AND (SELECT is_archived FROM patients WHERE id = $1) = FALSE
+      ORDER BY pt.due_date ASC
+    `, [patientId]);
+
+    return res.status(200).json(rows);
+
+  } catch (err) {
+    console.error("Error fetching patient tasks:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+// ─── DISCHARGE PATIENT ────────────────────────────────────────────────────────
+const dischargePatient = async (req, res) => {
+  if (!req.user?.is_approved)
+    return res.status(403).json({ error: "Access denied: User not approved." });
+
+  // FIX: was !req.user.is_admin || req.user.has_global_access — broken logic
+  if (!isAdmin(req.user))
+    return res.status(403).json({ error: "Only hospital admins may discharge patients." });
+
+  const { patientId } = req.params;
+  const { dischargeNote, version } = req.body;
+
+  if (version == null)
+    return res.status(400).json({ error: "Missing version." });
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    const { rows, rowCount } = await client.query(
+      `UPDATE patients
+       SET status = 'Discharged', discharge_date = NOW(),
+           discharge_note = $1, version = version + 1, updated_at = NOW()
+       WHERE id = $2 AND hospital_id = $3 AND version = $4
+       RETURNING *`,
+      [dischargeNote, patientId, req.user.hospital_id, version]
+    );
+
+    if (rowCount === 0) {
+      await client.query("ROLLBACK");
+      return res.status(409).json({ error: "Patient already updated or access denied. Refresh and try again." });
+    }
+
+    // FIX: close out active patient_algorithms entries
+    await client.query(
+      `UPDATE patient_algorithms SET removed_at = NOW()
+       WHERE patient_id = $1 AND removed_at IS NULL`,
+      [patientId]
+    );
+
+    const patient = rows[0];
+
+    // FIX: notify role='staff' users not is_staff=TRUE
+    const { rows: staffRows } = await client.query(
+      `SELECT u.id AS staff_id FROM patient_staff ps
+       JOIN users u ON u.id = ps.staff_id
+       WHERE ps.patient_id = $1 AND u.role = 'staff'`,
+      [patientId]
+    );
+
+    const io = req.app.get("io");
+    for (const { staff_id } of staffRows) {
+      const { rows: [notif] } = await client.query(
+        `INSERT INTO notifications (user_id, patient_id, title, message, type)
+         VALUES ($1,$2,$3,$4,'discharge') RETURNING *`,
+        [staff_id, patient.id, "Patient Discharged",
+         `${patient.first_name} ${patient.last_name} has been discharged`]
+      );
+      io?.to?.(`user-${staff_id}`)?.emit("notification", notif);
+    }
+
+    await client.query("COMMIT");
+    return res.status(200).json({ message: "Patient discharged successfully" });
+
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("Error discharging patient:", err);
+    return res.status(500).json({ error: "Internal Server Error" });
+  } finally {
+    client.release();
+  }
+};
+
+// ─── REACTIVATE PATIENT ───────────────────────────────────────────────────────
+const reactivatePatient = async (req, res) => {
+  if (!req.user?.is_approved)
+    return res.status(403).json({ error: "Access denied: User not approved." });
+
+  // FIX: was !req.user.is_admin || req.user.has_global_access — broken logic
+  if (!isAdmin(req.user))
+    return res.status(403).json({ error: "Only hospital admins may reactivate patients." });
+
+  const { patientId } = req.params;
+  const { version } = req.body;
+
+  if (version == null)
+    return res.status(400).json({ error: "Missing version." });
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    const { rows, rowCount } = await client.query(
+      `UPDATE patients
+       SET discharge_date = NULL, discharge_note = NULL,
+           status = 'Admitted', version = version + 1, updated_at = NOW()
+       WHERE id = $1 AND hospital_id = $2 AND version = $3
+       RETURNING *`,
+      [patientId, req.user.hospital_id, version]
+    );
+
+    if (rowCount === 0) {
+      await client.query("ROLLBACK");
+      return res.status(409).json({ error: "Patient already updated or access denied. Refresh and try again." });
+    }
+
+    // FIX: re-open patient_algorithms entries from patient_algorithms table
+    const { rows: algoRows } = await client.query(
+      `SELECT DISTINCT algorithm FROM patient_algorithms
+       WHERE patient_id = $1 ORDER BY assigned_at DESC`,
+      [patientId]
+    );
+    for (const { algorithm } of algoRows) {
+      await client.query(
+        `INSERT INTO patient_algorithms (patient_id, algorithm, assigned_at, assigned_by_user_id)
+         VALUES ($1, $2, NOW(), $3)`,
+        [patientId, algorithm, req.user.id]
+      );
+    }
+
+    const patient = rows[0];
+    const { rows: staffRows } = await client.query(
+      `SELECT u.id AS staff_id FROM patient_staff ps
+       JOIN users u ON u.id = ps.staff_id
+       WHERE ps.patient_id = $1 AND u.role = 'staff'`,
+      [patientId]
+    );
+
+    const io = req.app.get("io");
+    for (const { staff_id } of staffRows) {
+      const { rows: [notif] } = await client.query(
+        `INSERT INTO notifications (user_id, patient_id, title, message, type)
+         VALUES ($1,$2,$3,$4,'reinstated') RETURNING *`,
+        [staff_id, patient.id, "Patient Reinstated",
+         `${patient.first_name} ${patient.last_name} has been reinstated to active care.`]
+      );
+      io?.to?.(`user-${staff_id}`)?.emit("notification", notif);
+    }
+
+    await client.query("COMMIT");
+    return res.status(200).json({ message: "Patient reactivated successfully" });
+
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("Error reactivating patient:", err);
+    return res.status(500).json({ error: "Internal Server Error" });
+  } finally {
+    client.release();
+  }
+};
+
+// ─── GET DISCHARGED PATIENTS ──────────────────────────────────────────────────
+const getDischargedPatients = async (req, res) => {
+  if (!req.user?.is_approved)
+    return res.status(403).json({ error: "Access denied: User not approved." });
+
+  if (isStaff(req.user))
+    return res.status(403).json({ error: "Staff cannot access discharged patients." });
+
+  try {
+    const { role, hospital_id, organization_id } = req.user;
+    const { start, end, hospitalId } = req.query;
+
+    let filters = ["p.status = 'Discharged'", "p.is_archived = FALSE"];
+    let params = [];
+
+    if (hasGlobalAccess(req.user)) {
+      if (hospitalId) { params.push(hospitalId); filters.push(`p.hospital_id = $${params.length}`); }
+    } else if (isSuperAdmin(req.user)) {
+      params.push(organization_id);
+      filters.push(`p.hospital_id IN (SELECT id FROM hospitals WHERE organization_id = $${params.length})`);
+      if (hospitalId) { params.push(hospitalId); filters.push(`p.hospital_id = $${params.length}`); }
+    } else if (isAdmin(req.user)) {
+      params.push(hospital_id);
+      filters.push(`p.hospital_id = $${params.length}`);
+    } else {
+      return res.status(403).json({ error: "Access denied." });
+    }
+
+    if (start) { params.push(start); filters.push(`p.discharge_date::date >= $${params.length}`); }
+    if (end)   { params.push(end);   filters.push(`p.discharge_date::date <= $${params.length}`); }
+
+    const whereClause = `WHERE ${filters.join(" AND ")}`;
+
+    const [{ rows: patients }, { rows: countRows }] = await Promise.all([
+      pool.query(`
+        SELECT p.*,
+          EXTRACT(YEAR FROM AGE(NOW(), p.birth_date))::INTEGER AS age,
+          json_agg(json_build_object('id', u.id, 'name', u.name))
+            FILTER (WHERE u.id IS NOT NULL) AS assigned_staff
+        FROM patients p
+        LEFT JOIN patient_staff ps ON p.id = ps.patient_id
+        LEFT JOIN users u ON ps.staff_id = u.id
+        ${whereClause}
+        GROUP BY p.id
+        ORDER BY p.discharge_date DESC NULLS LAST
+      `, params),
+      pool.query(`SELECT COUNT(*)::int AS count FROM patients p ${whereClause}`, params),
+    ]);
+
+    return res.status(200).json({ count: countRows[0]?.count ?? 0, patients });
+
+  } catch (err) {
+    console.error("Error fetching discharged patients:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+// ─── UPDATE PATIENT ───────────────────────────────────────────────────────────
+const updatePatient = async (req, res) => {
+  if (!req.user?.is_approved)
+    return res.status(403).json({ error: "Access denied: User not approved." });
+
+  // FIX: super_admins and global admins were blocked — now only staff and admin can update
+  if (!isAdmin(req.user) && !isStaff(req.user))
+    return res.status(403).json({ error: "Only hospital admins and staff may update patients." });
+
+  const timezone = await getTimezoneForUser(req.user);
   const patientId = parseInt(req.params.patientId, 10);
 
   const {
-    first_name,
-    last_name,
-    birth_date,
-    age,
-    roomNo,
-    mrn,
-    medical_info,
-    admitted_date,
-    assignedStaffIds = [],
-    selected_algorithms = [],
-    reason,
-    updated_at
+    first_name, last_name, birth_date, roomNo, mrn, medical_info, admitted_date,
+    assignedStaffIds = [], selected_algorithms = [], reason, updated_at,
+    is_restrained, is_geriatric_psych_available, is_behavioral_team,
+    is_ltc_medical, is_ltc_financial,
+    is_guardianship_financial, is_guardianship_person, is_guardianship_emergency,
   } = req.body;
-
+  const client = await pool.connect();
   try {
-    // --- Fetch Patient
-    const { rows } = await pool.query(`SELECT * FROM patients WHERE id=$1`, [patientId]);
+    const { rows } = await pool.query(`SELECT * FROM patients WHERE id = $1`, [patientId]);
     if (!rows.length) return res.status(404).json({ error: "Patient not found." });
 
     const patient = rows[0];
 
-    if (patient.hospital_id !== req.user.hospital_id) {
+    if (patient.hospital_id !== req.user.hospital_id)
       return res.status(403).json({ error: "Access denied: Patient belongs to another hospital." });
-    }
 
-    // --- Optimistic Locking
-    if (!updated_at) return res.status(400).json({ error: "Missing updated_at timestamp." });
+    if (!updated_at)
+      return res.status(400).json({ error: "Missing updated_at timestamp." });
 
-    if (patient.updated_at?.toISOString() !== new Date(updated_at).toISOString()) {
+    if (patient.updated_at?.toISOString() !== new Date(updated_at).toISOString())
       return res.status(409).json({ error: "This patient was already updated by someone else." });
-    }
 
-    // --- Normalize Staff Input
-    const normalize = (arr) =>
-      arr.map(s => {
-        if (typeof s === "string") {
-          try { return JSON.parse(s); } catch { return null; }
-        }
-        return s;
-      }).filter(Boolean);
-
-    const normalizedStaff = normalize(assignedStaffIds);
-
-    if (!normalizedStaff.length) {
+    const normalizedStaff = normalizeStaff(assignedStaffIds);
+    if (!normalizedStaff.length)
       return res.status(400).json({ error: "At least one staff member must be assigned." });
-    }
 
-    // --- Enforce Access Level
-    const hasEditAccess = normalizedStaff.some(s =>
-      ["edit", "full"].includes(String(s.access_level).toLowerCase())
-    );
+    if (!normalizedStaff.some(s => ["edit", "full"].includes(String(s.access_level).toLowerCase())))
+      return res.status(400).json({ error: "At least one staff member must have edit or full access." });
 
-    if (!hasEditAccess) {
-      return res.status(400).json({
-        error: "At least one assigned staff member must have edit or full access.",
-      });
-    }
-
-    const isAdmin = req.user.is_admin;
-
-    // --- Staff Comparison
-    const { rows: currentStaff } = await pool.query(
-      `SELECT staff_id FROM patient_staff WHERE patient_id=$1`,
+    // Algorithm diff
+    const { rows: currentAlgoRows } = await pool.query(
+      `SELECT algorithm FROM patient_algorithms WHERE patient_id = $1 AND removed_at IS NULL`,
       [patientId]
     );
-
-    const currentIds = currentStaff.map(s => String(s.staff_id)).sort();
-    const newIds = normalizedStaff.map(s => String(s.staff_id ?? s.id)).sort();
-    const staffChanged = currentIds.join() !== newIds.join();
-
-    const addedStaff = newIds.filter(id => !currentIds.includes(id));
-    const removedStaff = currentIds.filter(id => !newIds.includes(id));
-
-    if (!isAdmin && staffChanged && !reason?.trim()) {
-      return res.status(400).json({ error: "Reason is required when changing staff assignments." });
-    }
-
-    // --- Old Algorithms
-    const oldAlgorithms = [];
-    if (patient.is_behavioral) oldAlgorithms.push("Behavioral");
-    if (patient.is_guardianship) oldAlgorithms.push("Guardianship");
-    if (patient.is_ltc) oldAlgorithms.push("LTC");
-
-    // --- New Algorithms
+    const oldAlgorithms = currentAlgoRows.map(r => r.algorithm);
     const newAlgorithms = selected_algorithms;
-
-    const addedAlgorithms = newAlgorithms.filter(a => !oldAlgorithms.includes(a));
+    const addedAlgorithms   = newAlgorithms.filter(a => !oldAlgorithms.includes(a));
     const removedAlgorithms = oldAlgorithms.filter(a => !newAlgorithms.includes(a));
 
-    // ✅ EVER SELECTED (HISTORY PRESERVED)
-    const prevEver = patient.ever_selected_algorithms || [];
-    const mergedEver = Array.from(new Set([...prevEver, ...newAlgorithms]));
-
-    // --- Algorithm Flags
     const flags = {
-      is_behavioral: newAlgorithms.includes("Behavioral"),
+      is_behavioral:  newAlgorithms.includes("Behavioral"),
       is_guardianship: newAlgorithms.includes("Guardianship"),
-      is_ltc: newAlgorithms.includes("LTC"),
+      is_ltc:          newAlgorithms.includes("LTC"),
     };
 
-    // ✅ PATIENT UPDATE WITH HISTORY
-    await pool.query(
+    const admittedDateUTC = admitted_date
+      ? DateTime.fromISO(admitted_date, { zone: timezone }).toUTC().toISO()
+      : patient.admitted_date;
+
+    // Staff diff for notifications
+    const { rows: currentStaffRows } = await pool.query(
+      `SELECT staff_id FROM patient_staff WHERE patient_id = $1`, [patientId]
+    );
+    const currentIds = currentStaffRows.map(s => String(s.staff_id));
+    const newIds     = normalizedStaff.map(s => String(s.staff_id ?? s.id));
+    const addedStaff   = newIds.filter(id => !currentIds.includes(id));
+    const removedStaff = currentIds.filter(id => !newIds.includes(id));
+
+    // FIX: removed age from UPDATE — computed dynamically
+    // FIX: removed selected_algorithms/ever_selected_algorithms — now in patient_algorithms
+    await client.query("BEGIN");
+    await client.query(
       `UPDATE patients SET
-        first_name=$1,last_name=$2,birth_date=$3,age=$4,
-        room_no=$5,mrn=$6,medical_info=$7,
-        selected_algorithms=$8,
-        ever_selected_algorithms=$9,
-        is_behavioral=$10,is_restrained=$11,
-        is_geriatric_psych_available=$12,is_behavioral_team=$13,
-        is_ltc=$14,is_ltc_medical=$15,is_ltc_financial=$16,
-        is_guardianship=$17,is_guardianship_financial=$18,
-        is_guardianship_person=$19,is_guardianship_emergency=$20,
-        admitted_date=$21,updated_at=NOW()
-       WHERE id=$22`,
+        first_name=$1, last_name=$2, birth_date=$3,
+        room_no=$4, mrn=$5, medical_info=$6,
+        is_behavioral=$7, is_restrained=$8, is_geriatric_psych_available=$9, is_behavioral_team=$10,
+        is_ltc=$11, is_ltc_medical=$12, is_ltc_financial=$13,
+        is_guardianship=$14, is_guardianship_financial=$15, is_guardianship_person=$16, is_guardianship_emergency=$17,
+        admitted_date=$18, updated_at=NOW()
+      WHERE id=$19`,
       [
-        first_name, last_name, birth_date, age, roomNo, mrn, medical_info,
-
-        selected_algorithms,    
-        mergedEver,             
-
-        flags.is_behavioral,
-        req.body.is_restrained,
-        req.body.is_geriatric_psych_available,
-        req.body.is_behavioral_team,
-        flags.is_ltc,
-        req.body.is_ltc_medical,
-        req.body.is_ltc_financial,
-        flags.is_guardianship,
-        req.body.is_guardianship_financial,
-        req.body.is_guardianship_person,
-        req.body.is_guardianship_emergency,
-        admitted_date,
-        patientId
+        first_name, last_name, birth_date,
+        roomNo, mrn, medical_info,
+        flags.is_behavioral, is_restrained, is_geriatric_psych_available, is_behavioral_team,
+        flags.is_ltc, is_ltc_medical, is_ltc_financial,
+        flags.is_guardianship, is_guardianship_financial, is_guardianship_person, is_guardianship_emergency,
+        admittedDateUTC, patientId,
       ]
     );
 
-    // --- Replace Staff Assignments
-    await pool.query(`DELETE FROM patient_staff WHERE patient_id=$1`, [patientId]);
-
-    for (const s of normalizedStaff) {
-      await pool.query(
-        `INSERT INTO patient_staff (patient_id, staff_id, access_level)
-         VALUES ($1,$2,$3)`,
-        [patientId, parseInt(s.staff_id ?? s.id), s.access_level || "view"]
+    // FIX: update patient_algorithms table instead of TEXT[] columns
+    for (const algo of removedAlgorithms) {
+      await client.query(
+        `UPDATE patient_algorithms SET removed_at = NOW(), removed_by_user_id = $3
+         WHERE patient_id = $1 AND algorithm = $2 AND removed_at IS NULL`,
+        [patientId, algo, req.user.id]
+      );
+    }
+    for (const algo of addedAlgorithms) {
+      await client.query(
+        `INSERT INTO patient_algorithms (patient_id, algorithm, assigned_at, assigned_by_user_id)
+         VALUES ($1, $2, NOW(), $3)`,
+        [patientId, algo, req.user.id]
       );
     }
 
-    // --- Run Task Update Engine
-    await assignTasksToPatient(
-      patientId,
-      timezone,
-      [],
-      addedAlgorithms,
-      removedAlgorithms
+    // Replace staff assignments
+    await client.query(`DELETE FROM patient_staff WHERE patient_id = $1`, [patientId]);
+    for (const s of normalizedStaff) {
+      await client.query(
+        `INSERT INTO patient_staff (patient_id, staff_id, access_level) VALUES ($1,$2,$3)`,
+        [patientId, parseInt(s.staff_id ?? s.id, 10), s.access_level || "view"]
+      );
+    }
+
+  
+
+    await client.query(
+      `INSERT INTO patient_update_logs (patient_id, user_id, reason, changes)
+       VALUES ($1,$2,$3,$4)`,
+      [patientId, req.user.id, reason || "N/A",
+       JSON.stringify({ addedAlgorithms, removedAlgorithms, staffChanged: addedStaff.length > 0 || removedStaff.length > 0 })]
     );
 
-    // --- Log Changes
-    await pool.query(
-      `INSERT INTO patient_update_logs (patient_id,user_id,reason,changes,created_at)
-       VALUES ($1,$2,$3,$4,NOW())`,
-      [
-        patientId,
-        req.user.id,
-        reason || "N/A",
-        JSON.stringify({ staffChanged, addedAlgorithms, removedAlgorithms })
-      ]
-    );
-
-    // --- Notifications (unchanged)
+    // Notifications
     const io = req.app.get("io");
-    const { rows: admins } = await pool.query(
-      `SELECT id FROM users WHERE hospital_id=$1 AND (is_admin=true OR is_super_admin=true)`,
+    const updater = req.user.name || req.user.email || "User";
+    const updateMessage = `Patient ${first_name} ${last_name} updated by ${updater}`;
+
+    // FIX: notify role='admin' not is_admin=TRUE
+    const { rows: admins } = await client.query(
+      `SELECT id FROM users WHERE hospital_id = $1 AND role IN ('admin', 'super_admin')`,
       [req.user.hospital_id]
     );
-
-    const updater = req.user.name || req.user.email || "User";
-    const message = `Patient ${first_name} ${last_name} updated by ${updater}`;
-
     for (const admin of admins) {
-      const { rows: [notif] } = await pool.query(
-        `INSERT INTO notifications (user_id,patient_id,title,message,type)
+      const { rows: [notif] } = await client.query(
+        `INSERT INTO notifications (user_id, patient_id, title, message, type)
          VALUES ($1,$2,'Patient Updated',$3,'audit') RETURNING *`,
-        [admin.id, patientId, message]
+        [admin.id, patientId, updateMessage]
       );
       io?.to?.(`user-${admin.id}`)?.emit("notification", notif);
     }
 
     for (const sid of addedStaff) {
-      const { rows: [notif] } = await pool.query(
-        `INSERT INTO notifications (user_id,patient_id,title,message,type)
+      const { rows: [notif] } = await client.query(
+        `INSERT INTO notifications (user_id, patient_id, title, message, type)
          VALUES ($1,$2,'New Assignment',$3,'assignment') RETURNING *`,
-        [sid, patientId, message]
+        [sid, patientId, updateMessage]
       );
       io?.to?.(`user-${sid}`)?.emit("notification", notif);
     }
 
     for (const sid of removedStaff) {
-      const { rows: [notif] } = await pool.query(
-        `INSERT INTO notifications (user_id,patient_id,title,message,type)
+      const { rows: [notif] } = await client.query(
+        `INSERT INTO notifications (user_id, patient_id, title, message, type)
          VALUES ($1,$2,'Unassigned',$3,'unassignment') RETURNING *`,
-        [sid, patientId, message]
+        [sid, patientId, updateMessage]
       );
       io?.to?.(`user-${sid}`)?.emit("notification", notif);
     }
-
-    // --- Return
+    await client.query("COMMIT");
+    await assignTasksToPatient(patientId, timezone, [], addedAlgorithms, removedAlgorithms);
     const { rows: [updatedPatient] } = await pool.query(
-      `SELECT p.*, json_agg(
-          json_build_object(
-            'id', u.id,
-            'name', u.name,
-            'access_level', ps.access_level
-          )
-        ) AS assigned_staff
+      `SELECT p.*,
+         EXTRACT(YEAR FROM AGE(NOW(), p.birth_date))::INTEGER AS age,
+         json_agg(json_build_object('id', u.id, 'name', u.name, 'access_level', ps.access_level))
+           FILTER (WHERE u.id IS NOT NULL) AS assigned_staff
        FROM patients p
        LEFT JOIN patient_staff ps ON ps.patient_id = p.id
        LEFT JOIN users u ON u.id = ps.staff_id
-       WHERE p.id = $1
-       GROUP BY p.id`,
+       WHERE p.id = $1 GROUP BY p.id`,
       [patientId]
     );
 
-    return res.status(200).json({
-      message: "Patient updated successfully",
-      patient: updatedPatient
-    });
+    return res.status(200).json({ message: "Patient updated successfully", patient: updatedPatient });
 
   } catch (err) {
-    console.error("❌ Error updating patient:", err);
+    await client.query("ROLLBACK");
+    console.error("Error updating patient:", err);
     return res.status(500).json({ error: "Internal Server Error" });
+  } finally {
+    client.release();
   }
 };
 
-
-
-
-
+// ─── SEARCH PATIENTS ──────────────────────────────────────────────────────────
 const getSearchedPatients = async (req, res) => {
-  if (!req.user?.is_approved) {
+  if (!req.user?.is_approved)
     return res.status(403).json({ error: "Access denied: User not approved." });
-  }
-  if (req.user.has_global_access) {
-  return res.status(403).json({
-    error: "Access denied: Organization admins cannot access patient records.",
-  });
-}
 
+  const { q, status = "active", start, end, hospitalId: filterHospitalId, adminId } = req.query;
+  const { id: currentUserId, organization_id, hospital_id: userHospitalId } = req.user;
+
+  if (!q?.trim())
+    return res.status(400).json({ error: "Search query is required." });
 
   try {
-    const { q, status = "active", start, end, hospitalId: filterHospitalId, adminId } = req.query;
-
-    const {
-      id: currentUserId,
-      is_staff,
-      is_admin,
-      is_super_admin,
-      has_global_access,
-      organization_id,
-      hospital_id: userHospitalId,
-    } = req.user;
-
-    if (!q || q.trim() === "") {
-      return res.status(400).json({ error: "Search query is required." });
-    }
-
-    const timezone = req.headers["x-timezone"] || "America/New_York";
-    const today = DateTime.now().setZone(timezone).endOf("day").toUTC().toJSDate();
-    const query = `%${q.toLowerCase()}%`;
-
-    let params = [query, today];
+    const timezone = await getTimezoneForUser(req.user);
+    const searchQuery = `%${q.toLowerCase()}%`;
+    let params = [searchQuery];
     let conditions = [];
 
-
-    if (is_staff) {
+    if (hasGlobalAccess(req.user)) {
+      if (filterHospitalId) { params.push(filterHospitalId); conditions.push(`p.hospital_id = $${params.length}`); }
+    } else if (isSuperAdmin(req.user)) {
+      params.push(organization_id);
+      conditions.push(`p.hospital_id IN (SELECT id FROM hospitals WHERE organization_id = $${params.length})`);
+      if (filterHospitalId) { params.push(filterHospitalId); conditions.push(`p.hospital_id = $${params.length}`); }
+    } else if (isAdmin(req.user)) {
+      params.push(userHospitalId);
+      conditions.push(`p.hospital_id = $${params.length}`);
+    } else if (isStaff(req.user)) {
       params.push(currentUserId);
       conditions.push(`p.id IN (SELECT patient_id FROM patient_staff WHERE staff_id = $${params.length})`);
     }
-   
-    else if (is_super_admin) {
-      params.push(organization_id);
-      conditions.push(`p.hospital_id IN (SELECT id FROM hospitals WHERE organization_id = $${params.length})`);
-    }
-    else if (is_admin) {
-      params.push(userHospitalId);
-      conditions.push(`p.hospital_id = $${params.length}`);
-    }
 
-  
-    if (filterHospitalId) {
-      params.push(filterHospitalId);
-      conditions.push(`p.hospital_id = $${params.length}`);
-    }
+    if (adminId) { params.push(adminId); conditions.push(`p.added_by_user_id = $${params.length}`); }
 
+    if (status === "discharged")    conditions.push("p.discharge_date IS NOT NULL AND p.is_archived = FALSE");
+    else if (status === "archived") conditions.push("p.is_archived = TRUE");
+    else                            conditions.push("p.discharge_date IS NULL AND p.is_archived = FALSE");
 
-    if (adminId) {
+    const dateField = status === "archived" ? "p.archived_at" : status === "discharged" ? "p.discharge_date" : "p.created_at";
+    if (start) { params.push(start); conditions.push(`${dateField}::date >= $${params.length}`); }
+    if (end)   { params.push(end);   conditions.push(`${dateField}::date <= $${params.length}`); }
 
-      params.push(adminId);
-      conditions.push(`p.added_by_user_id = $${params.length}`);
-      params.push(adminId);
-      conditions.push(`p.hospital_id = (SELECT hospital_id FROM users WHERE id = $${params.length})`);
-    }
-
-    /** STATUS */
-    if (status === "discharged") {
-      conditions.push("p.discharge_date IS NOT NULL AND COALESCE(p.is_archived, false) = false");
-    } else if (status === "archived") {
-      conditions.push("COALESCE(p.is_archived, false) = true");
-    } else {
-      conditions.push("p.discharge_date IS NULL AND COALESCE(p.is_archived, false) = false");
-    }
-
-    /** DATE RANGE */
-    if (start || end) {
-      const dateField =
-        status === "archived" ? "p.archived_at"
-        : status === "discharged" ? "p.discharge_date"
-        : "p.created_at";
-
-      if (start && end) {
-        params.push(start, end);
-        conditions.push(`${dateField}::date BETWEEN $${params.length - 1} AND $${params.length}`);
-      } else if (start) {
-        params.push(start);
-        conditions.push(`${dateField}::date >= $${params.length}`);
-      } else if (end) {
-        params.push(end);
-        conditions.push(`${dateField}::date <= $${params.length}`);
-      }
-    }
-
-    const nameParts = q.trim().toLowerCase().split(" ");
-    if (nameParts.length === 2) {
-       conditions.push(`
-        (
-          (LOWER(p.first_name) LIKE $${params.length - 1} AND LOWER(p.last_name) LIKE $${params.length})
-          OR (LOWER(p.first_name) LIKE $${params.length} AND LOWER(p.last_name) LIKE $${params.length - 1})
-          OR LOWER(p.first_name || ' ' || p.last_name) LIKE $1
-          OR LOWER(p.last_name || ' ' || p.first_name) LIKE $1
-          OR LOWER(p.mrn) LIKE $1
-        )
-      `);
-    } else {
-      conditions.push(`
-        (
-          LOWER(p.first_name) LIKE $1
-          OR LOWER(p.last_name) LIKE $1
-          OR LOWER(p.mrn) LIKE $1
-          OR LOWER(p.first_name || ' ' || p.last_name) LIKE $1
-          OR LOWER(p.last_name || ' ' || p.first_name) LIKE $1
-        )
-      `);
-    }
+    conditions.push(`(
+      LOWER(p.first_name) LIKE $1 OR LOWER(p.last_name) LIKE $1 OR LOWER(p.mrn) LIKE $1
+      OR LOWER(p.first_name || ' ' || p.last_name) LIKE $1
+      OR LOWER(p.last_name || ' ' || p.first_name) LIKE $1
+    )`);
 
     const whereClause = "WHERE " + conditions.join(" AND ");
 
-    const sql = `
-      SELECT 
-        p.*,
-        CASE
-          WHEN EXISTS (
-            SELECT 1 FROM patient_tasks pt
-            WHERE pt.patient_id = p.id AND pt.status = 'Missed' AND pt.is_visible = true
-          ) THEN 'missed'
-          WHEN EXISTS (
-            SELECT 1 FROM patient_tasks pt
-            WHERE pt.patient_id = p.id
-              AND pt.due_date <= $2::timestamp
-              AND pt.status NOT IN ('Completed','Delayed Completed','Missed')
-              AND pt.is_visible = true
-          ) THEN 'in_progress'
-          WHEN EXISTS (
-            SELECT 1 FROM patient_tasks pt
-            WHERE pt.patient_id = p.id AND pt.status IN ('Completed','Delayed Completed') AND pt.is_visible = true
-          ) THEN 'completed'
-          ELSE NULL
-        END AS task_status,
+    const { rows } = await pool.query(`
+      SELECT p.*,
+        EXTRACT(YEAR FROM AGE(NOW(), p.birth_date))::INTEGER AS age,
         json_agg(json_build_object('id', u.id, 'name', u.name))
           FILTER (WHERE u.id IS NOT NULL) AS assigned_staff
       FROM patients p
@@ -1317,471 +880,265 @@ const getSearchedPatients = async (req, res) => {
       ${whereClause}
       GROUP BY p.id
       ORDER BY p.created_at DESC
-    `;
+    `, params);
 
-    const result = await pool.query(sql, params);
-    return res.status(200).json(result.rows);
+    return res.status(200).json(rows);
 
   } catch (err) {
-    console.error("❌ Error searching patients:", err);
+    console.error("Error searching patients:", err);
     return res.status(500).json({ error: "Internal server error" });
   }
 };
 
-
-
+// ─── GET PATIENTS BY ADMIN ────────────────────────────────────────────────────
 const getPatientsByAdmin = async (req, res) => {
-  if (!req.user?.is_approved) {
+  if (!req.user?.is_approved)
     return res.status(403).json({ error: "Access denied: User not approved." });
-  }
 
-  if (req.user.has_global_access) {
-    return res.status(403).json({
-      error: "Organization admins cannot access patient data.",
-    });
-  }
+  if (isStaff(req.user))
+    return res.status(403).json({ error: "Staff cannot access patients by admin." });
 
-  if (req.user.is_staff) {
-    return res.status(403).json({
-      error: "Staff cannot access patients by admin.",
-    });
-  }
+  const { adminId } = req.params;
+  const { hospital_id: userHospitalId, organization_id } = req.user;
+  const { hospitalId: filterHospitalId } = req.query;
 
   try {
-    const { adminId } = req.params;
-    const {
-      is_admin,
-      is_super_admin,
-      hospital_id: userHospitalId,
-      organization_id,
-    } = req.user;
+    const timezone = await getTimezoneForUser(req.user);
+    let params = [adminId];
+    let conditions = [`p.added_by_user_id = $1`, `p.status = 'Admitted'`, `p.is_archived = FALSE`];
 
-    const { hospitalId: filterHospitalId } = req.query;
-    const timezone = req.headers["x-timezone"] || "America/New_York";
-
-    const todayEndInUTC = DateTime.now()
-      .setZone(timezone)
-      .endOf("day")
-      .toUTC()
-      .toJSDate();
-
-    let params = [];
-    params.push(adminId);     
-    params.push(todayEndInUTC);     
-
-    let conditions = [];
-
-  
-    if (is_super_admin) {
+    if (hasGlobalAccess(req.user)) {
+      if (filterHospitalId) { params.push(filterHospitalId); conditions.push(`p.hospital_id = $${params.length}`); }
+    } else if (isSuperAdmin(req.user)) {
       params.push(organization_id);
-      conditions.push(`
-        p.hospital_id IN (
-          SELECT id FROM hospitals WHERE organization_id = $${params.length}
-        )
-      `);
-
-      if (filterHospitalId) {
-        params.push(filterHospitalId);
-        conditions.push(`p.hospital_id = $${params.length}`);
-      }
-    }
-
-    else if (is_admin) {
+      conditions.push(`p.hospital_id IN (SELECT id FROM hospitals WHERE organization_id = $${params.length})`);
+      if (filterHospitalId) { params.push(filterHospitalId); conditions.push(`p.hospital_id = $${params.length}`); }
+    } else if (isAdmin(req.user)) {
       params.push(userHospitalId);
       conditions.push(`p.hospital_id = $${params.length}`);
-    }
-
-    else {
+    } else {
       return res.status(403).json({ error: "Access denied" });
     }
-    conditions.push(`p.added_by_user_id = $1`);
 
-  
-    conditions.push(`p.status = 'Admitted'`);
-    conditions.push(`COALESCE(p.is_archived,false) = false`);
-
-    const whereClause = "WHERE " + conditions.join(" AND ");
-
-    const query = `
-      SELECT 
-        p.*,
-        CASE
-          WHEN EXISTS (
-            SELECT 1 FROM patient_tasks pt
-            WHERE pt.patient_id = p.id AND pt.status = 'Missed' AND pt.is_visible = true
-          ) THEN 'missed'
-          WHEN EXISTS (
-            SELECT 1 FROM patient_tasks pt
-            WHERE pt.patient_id = p.id
-              AND pt.due_date <= $2::timestamp
-              AND pt.status NOT IN ('Completed','Delayed Completed','Missed')
-              AND pt.is_visible = true
-          ) THEN 'in_progress'
-          WHEN EXISTS (
-            SELECT 1 FROM patient_tasks pt
-            WHERE pt.patient_id = p.id
-              AND pt.status IN ('Completed','Delayed Completed')
-              AND pt.is_visible = true
-          ) THEN 'completed'
-          ELSE NULL
-        END AS task_status,
+    const { rows } = await pool.query(`
+      SELECT p.*,
+        EXTRACT(YEAR FROM AGE(NOW(), p.birth_date))::INTEGER AS age,
         json_agg(json_build_object('id', u.id, 'name', u.name))
           FILTER (WHERE u.id IS NOT NULL) AS assigned_staff
       FROM patients p
       LEFT JOIN patient_staff ps ON p.id = ps.patient_id
       LEFT JOIN users u ON ps.staff_id = u.id
-      ${whereClause}
+      WHERE ${conditions.join(" AND ")}
       GROUP BY p.id
       ORDER BY p.created_at DESC
-    `;
+    `, params);
 
-    const result = await pool.query(query, params);
-    return res.status(200).json(result.rows);
+    return res.status(200).json(rows);
 
   } catch (err) {
-    console.error("❌ Error fetching patients by admin:", err);
+    console.error("Error fetching patients by admin:", err);
     return res.status(500).json({ error: "Internal server error" });
   }
 };
 
-
-
-
+// ─── UPDATE COURT DATE ────────────────────────────────────────────────────────
+// FIX: court dates are now tasks in patient_tasks (is_court_date=TRUE)
+// This endpoint updates the due_date of the relevant court date task, not a patient column
 const updateCourtDate = async (req, res) => {
-  if (!req.user?.is_approved) {
+  if (!req.user?.is_approved)
     return res.status(403).json({ error: "Access denied: User not approved." });
-  }
-
-  if (req.user.has_global_access || req.user.is_super_admin) {
-    return res.status(403).json({
-      error: "Access denied: You are not authorized to modify court dates.",
-    });
-  }
-
-  if (!req.user.is_admin && !req.user.is_staff) {
-    return res.status(403).json({
-      error: "Access denied: Only hospital admins and staff may edit court dates.",
-    });
-  }
+  if (isSuperAdmin(req.user) || hasGlobalAccess(req.user))
+    return res.status(403).json({ error: "Only hospital admins and staff may edit court dates." });
+  if (!isAdmin(req.user) && !isStaff(req.user))
+    return res.status(403).json({ error: "Only hospital admins and staff may edit court dates." });
 
   const { id: patientId } = req.params;
-  const { type, newDate, version } = req.body;
-  const timezone = req.headers["x-timezone"] || "America/New_York";
+  const { type, newDate, version } = req.body; // no longer need patient_task_id
 
-  if (version == null) {
-    return res.status(400).json({ error: "Missing version." });
-  }
-
-  if (!["guardianship", "ltc"].includes(type)) {
+  if (!["guardianship", "ltc"].includes(type))
     return res.status(400).json({ error: "Invalid type. Must be 'guardianship' or 'ltc'." });
-  }
 
-  const column =
-    type === "guardianship"
-      ? "guardianship_court_datetime"
-      : "ltc_court_datetime";
+  const column = type === "guardianship"
+    ? "guardianship_court_date"
+    : "ltc_court_date";
 
   const client = await pool.connect();
-
   try {
     await client.query("BEGIN");
 
-    // 🔒 Lock and verify record
-    const { rows } = await client.query(
+    const { rows, rowCount } = await client.query(
       `SELECT id, hospital_id, version FROM patients WHERE id = $1 FOR UPDATE`,
       [patientId]
     );
-
-    if (!rows.length) {
-      await client.query("ROLLBACK");
-      return res.status(404).json({ error: "Patient not found." });
-    }
+    if (!rowCount) { await client.query("ROLLBACK"); return res.status(404).json({ error: "Patient not found." }); }
 
     const patient = rows[0];
-
     if (patient.hospital_id !== req.user.hospital_id) {
       await client.query("ROLLBACK");
-      return res.status(403).json({
-        error: "Access denied: Patient belongs to another hospital.",
-      });
+      return res.status(403).json({ error: "Access denied: Patient belongs to another hospital." });
     }
-
     if (patient.version !== Number(version)) {
       await client.query("ROLLBACK");
-      return res.status(409).json({
-        error: "Patient was already modified. Please refresh and try again.",
-      });
+      return res.status(409).json({ error: "Patient was already modified. Please refresh." });
     }
 
-    if (req.user.is_staff) {
+    if (isStaff(req.user)) {
       const { rows: assigned } = await client.query(
         `SELECT 1 FROM patient_staff WHERE patient_id = $1 AND staff_id = $2`,
         [patientId, req.user.id]
       );
-
-      if (!assigned.length) {
-        await client.query("ROLLBACK");
-        return res.status(403).json({
-          error: "Access denied: You are not assigned to this patient.",
-        });
-      }
+      if (!assigned.length) { await client.query("ROLLBACK"); return res.status(403).json({ error: "Not assigned to this patient." }); }
     }
 
+    const timezone = await getTimezoneForUser(req.user);
     const localDateTime = DateTime.fromISO(newDate, { zone: timezone });
-    if (!localDateTime.isValid) {
-      await client.query("ROLLBACK");
-      return res.status(400).json({ error: "Invalid date format." });
-    }
+    if (!localDateTime.isValid) { await client.query("ROLLBACK"); return res.status(400).json({ error: "Invalid date format." }); }
 
     const utcDateTime = localDateTime.toUTC().toISO();
 
-    // ✅ Update with optimistic locking
-    const updateRes = await client.query(
-      `
-      UPDATE patients
-      SET ${column} = $1,
-          version = version + 1,
-          updated_at = NOW()
-      WHERE id = $2 AND version = $3
-      RETURNING *;
-      `,
-      [utcDateTime, patientId, version]
+    // Write court date to patient, bump version
+    await client.query(
+      `UPDATE patients SET ${column} = $1, version = version + 1, updated_at = NOW() WHERE id = $2`,
+      [utcDateTime, patientId]
     );
-
-    if (updateRes.rowCount === 0) {
-      await client.query("ROLLBACK");
-      return res.status(409).json({
-        error: "Patient already updated. Please refresh.",
-      });
-    }
 
     await client.query("COMMIT");
     return res.status(200).json({ message: "Court date updated successfully." });
 
-  } catch (error) {
+  } catch (err) {
     await client.query("ROLLBACK");
-    console.error("❌ Error updating court date:", error);
+    console.error("Error updating court date:", err);
     return res.status(500).json({ error: "Failed to update court date." });
   } finally {
     client.release();
   }
 };
 
+// ─── ARCHIVE DISCHARGED PATIENT ───────────────────────────────────────────────
 const archiveDischargedPatient = async (req, res) => {
-  if (!req.user?.is_approved) {
+  if (!req.user?.is_approved)
     return res.status(403).json({ error: "Access denied: User not approved." });
-  }
 
-  if (!req.user.is_admin || req.user.has_global_access || req.user.is_super_admin) {
-    return res.status(403).json({
-      error: "Only hospital admins may archive patients.",
-    });
-  }
+
+  if (!isAdmin(req.user))
+    return res.status(403).json({ error: "Only hospital admins may archive patients." });
 
   const { patientId } = req.params;
   const { reason, version } = req.body || {};
-  const hospitalId = req.user.hospital_id;
 
-  if (version == null) {
-    return res.status(400).json({ error: "Missing version." });
-  }
-
-  if (!reason || !reason.trim()) {
-    return res.status(400).json({ error: "Archive reason is required." });
-  }
+  if (version == null) return res.status(400).json({ error: "Missing version." });
+  if (!reason?.trim()) return res.status(400).json({ error: "Archive reason is required." });
 
   const client = await pool.connect();
-
   try {
     await client.query("BEGIN");
 
-    // 🔒 Lock & verify
-    const { rows } = await client.query(
-      `SELECT id, status, hospital_id, version
-       FROM patients
-       WHERE id = $1 AND hospital_id = $2
-       FOR UPDATE`,
-      [patientId, hospitalId]
+    const { rows, rowCount } = await client.query(
+      `SELECT id, status, hospital_id, version FROM patients
+       WHERE id = $1 AND hospital_id = $2 FOR UPDATE`,
+      [patientId, req.user.hospital_id]
     );
 
-    if (!rows.length) {
-      await client.query("ROLLBACK");
-      return res.status(404).json({ error: "Patient not found or access denied." });
-    }
+    if (!rowCount) { await client.query("ROLLBACK"); return res.status(404).json({ error: "Patient not found or access denied." }); }
 
     const patient = rows[0];
-
     if (patient.version !== Number(version)) {
       await client.query("ROLLBACK");
-      return res.status(409).json({
-        error: "Patient was already updated. Please refresh and try again.",
-      });
+      return res.status(409).json({ error: "Patient was already updated. Please refresh." });
     }
-
     if (patient.status !== "Discharged") {
       await client.query("ROLLBACK");
-      return res.status(400).json({
-        error: "Only discharged patients can be archived.",
-      });
+      return res.status(400).json({ error: "Only discharged patients can be archived." });
     }
 
-    // ✅ Version-safe update
     const { rows: updated } = await client.query(
-      `
-      UPDATE patients
-      SET is_archived = TRUE,
-          archived_at = NOW(),
-          archived_by_user_id = $1,
-          archived_reason = $2,
-          status = 'Archived',
-          version = version + 1,
-          updated_at = NOW()
-      WHERE id = $3 AND version = $4
-      RETURNING *;
-      `,
+      `UPDATE patients
+       SET is_archived = TRUE, archived_at = NOW(), archived_by_user_id = $1,
+           archived_reason = $2, status = 'Archived', version = version + 1, updated_at = NOW()
+       WHERE id = $3 AND version = $4 RETURNING *`,
       [req.user.id, reason.trim(), patientId, version]
     );
 
-    if (!updated.length) {
-      await client.query("ROLLBACK");
-      return res.status(409).json({
-        error: "Patient already updated. Refresh and retry.",
-      });
-    }
+    if (!updated.length) { await client.query("ROLLBACK"); return res.status(409).json({ error: "Patient already updated. Refresh and retry." }); }
 
     await client.query("COMMIT");
-
-    return res.status(200).json({
-      message: "Patient archived successfully.",
-      patient: updated[0],
-    });
+    return res.status(200).json({ message: "Patient archived successfully.", patient: updated[0] });
 
   } catch (err) {
     await client.query("ROLLBACK");
-    console.error("❌ Error archiving patient:", err);
-
-    if (err.code === "42703") {
-      return res.status(400).json({
-        error: "Archive fields missing on patients table.",
-      });
-    }
-
+    console.error("Error archiving patient:", err);
     return res.status(500).json({ error: "Internal server error" });
-
   } finally {
     client.release();
   }
 };
 
-
+// ─── GET ARCHIVED PATIENTS ────────────────────────────────────────────────────
 const getArchivedPatients = async (req, res) => {
-  if (!req.user?.is_approved) {
+  if (!req.user?.is_approved)
     return res.status(403).json({ error: "Access denied: User not approved." });
-  }
-  if (req.user.has_global_access) {
-    return res.status(403).json({
-      error: "Organization admins cannot access patient data.",
-    });
+
+  if (isStaff(req.user))
+    return res.status(403).json({ error: "Staff cannot access archived patients." });
+
+  const { hospital_id, organization_id } = req.user;
+  const { start, end, hospitalId } = req.query;
+
+  let filters = ["p.status = 'Archived'", "p.is_archived = TRUE"];
+  let params = [];
+
+  if (hasGlobalAccess(req.user)) {
+    if (hospitalId) { params.push(hospitalId); filters.push(`p.hospital_id = $${params.length}`); }
+  } else if (isSuperAdmin(req.user)) {
+    params.push(organization_id);
+    filters.push(`p.hospital_id IN (SELECT id FROM hospitals WHERE organization_id = $${params.length})`);
+    if (hospitalId) { params.push(hospitalId); filters.push(`p.hospital_id = $${params.length}`); }
+  } else if (isAdmin(req.user)) {
+    params.push(hospital_id);
+    filters.push(`p.hospital_id = $${params.length}`);
+  } else {
+    return res.status(403).json({ error: "Access denied." });
   }
 
-  if (req.user.is_staff) {
-    return res.status(403).json({
-      error: "Staff cannot access archived patients.",
-    });
-  }
+  if (start) { params.push(start); filters.push(`p.archived_at::date >= $${params.length}`); }
+  if (end)   { params.push(end);   filters.push(`p.archived_at::date <= $${params.length}`); }
 
   try {
-    const { is_super_admin, is_admin, hospital_id, organization_id } = req.user;
-    const { start, end, hospitalId } = req.query;
-
-    let filters = [
-      `p.status = 'Archived'`,
-      `COALESCE(p.is_archived,false) = true`
-    ];
-    let params = [];
-
-    if (is_super_admin) {
-      params.push(organization_id);
-      filters.push(`
-        p.hospital_id IN (
-          SELECT id FROM hospitals
-          WHERE organization_id = $${params.length}
-        )
-      `);
-
-      if (hospitalId) {
-        params.push(hospitalId);
-        filters.push(`p.hospital_id = $${params.length}`);
-      }
-    }
-    else if (is_admin) {
-      params.push(hospital_id);
-      filters.push(`p.hospital_id = $${params.length}`);
-    }
-
-    else {
-      return res.status(403).json({ error: "Access denied." });
-    }
-
-
-    if (start) {
-      params.push(start);
-      filters.push(`p.archived_at::date >= $${params.length}`);
-    }
-
-    if (end) {
-      params.push(end);
-      filters.push(`p.archived_at::date <= $${params.length}`);
-    }
-
-    const sql = `
-      SELECT 
-        p.*,
-        json_agg(json_build_object('id', u.id, 'name', u.name))
-          FILTER (WHERE u.id IS NOT NULL) AS assigned_staff
-      FROM patients p
-      LEFT JOIN patient_staff ps ON p.id = ps.patient_id
-      LEFT JOIN users u ON ps.staff_id = u.id
-      WHERE ${filters.join(" AND ")}
-      GROUP BY p.id
-      ORDER BY p.archived_at DESC NULLS LAST
-    `;
-
-    const countSql = `
-      SELECT COUNT(*)::int AS count
-      FROM patients p
-      WHERE ${filters.join(" AND ")}
-    `;
-
+    const whereClause = `WHERE ${filters.join(" AND ")}`;
     const [{ rows: patients }, { rows: countRows }] = await Promise.all([
-      pool.query(sql, params),
-      pool.query(countSql, params),
+      pool.query(`
+        SELECT p.*,
+          EXTRACT(YEAR FROM AGE(NOW(), p.birth_date))::INTEGER AS age,
+          json_agg(json_build_object('id', u.id, 'name', u.name))
+            FILTER (WHERE u.id IS NOT NULL) AS assigned_staff
+        FROM patients p
+        LEFT JOIN patient_staff ps ON p.id = ps.patient_id
+        LEFT JOIN users u ON ps.staff_id = u.id
+        ${whereClause}
+        GROUP BY p.id
+        ORDER BY p.archived_at DESC NULLS LAST
+      `, params),
+      pool.query(`SELECT COUNT(*)::int AS count FROM patients p ${whereClause}`, params),
     ]);
 
-    return res.status(200).json({
-      count: countRows[0]?.count ?? 0,
-      patients,
-    });
+    return res.status(200).json({ count: countRows[0]?.count ?? 0, patients });
 
   } catch (err) {
-    console.error("❌ Error fetching archived patients:", err);
+    console.error("Error fetching archived patients:", err);
     return res.status(500).json({ error: "Internal server error" });
   }
 };
 
+// ─── Utility: normalize staff input ──────────────────────────────────────────
+const normalizeStaff = (arr) =>
+  arr.map(s => {
+    if (typeof s === "string") { try { return JSON.parse(s); } catch { return null; } }
+    return s;
+  }).filter(Boolean);
 
 module.exports = {
-  getPatients,
-  addPatient,
-  getPatientById,
-  getPatientTasks,
-  dischargePatient,
-  reactivatePatient,
-  getDischargedPatients,
-  updatePatient,
-  getSearchedPatients,
-  getPatientsByAdmin,
-  updateCourtDate,
-  archiveDischargedPatient,
-  getArchivedPatients
+  getPatients, addPatient, getPatientById, getPatientTasks,
+  dischargePatient, reactivatePatient, getDischargedPatients,
+  updatePatient, getSearchedPatients, getPatientsByAdmin,
+  updateCourtDate, archiveDischargedPatient, getArchivedPatients,
 };

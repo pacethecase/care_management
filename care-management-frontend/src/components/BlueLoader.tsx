@@ -1,4 +1,3 @@
-
 const BlueLoader = () => {
   return (
     <div className="fixed inset-0 bg-white/50 flex justify-center items-center z-50">

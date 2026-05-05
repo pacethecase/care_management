@@ -1,272 +1,282 @@
+// controller/organizationController.js
 const pool = require("../models/db");
+const { DateTime } = require("luxon");
+
 
 const requireGlobalAdmin = (req, res) => {
-  if (!req.user?.has_global_access) {
+  if (req.user?.role !== 'administration' || !req.user?.has_global_access) {
     res.status(403).json({ error: "Global admin access required." });
     return false;
   }
   return true;
 };
 
+// ─── Helper: validate IANA timezone ──────────────────────────────────────────
+const isValidTimezone = (tz) => tz && DateTime.now().setZone(tz).isValid;
 
+// ─── CREATE ORGANIZATION ──────────────────────────────────────────────────────
 const createOrganization = async (req, res) => {
   if (!requireGlobalAdmin(req, res)) return;
 
-  const { name } = req.body;
+  const { name, timezone } = req.body;
 
-  if (!name) {
+  if (!name?.trim())
     return res.status(400).json({ error: "Organization name is required." });
-  }
+  if (!timezone)
+    return res.status(400).json({ error: "Timezone is required." });
+  if (!isValidTimezone(timezone))
+    return res.status(400).json({ error: "Invalid IANA timezone string." });
 
   try {
-    const result = await pool.query(
-      `INSERT INTO organizations (name)
-       VALUES ($1)
-       RETURNING id, name, created_at`,
-      [name]
+    const { rows } = await pool.query(
+      `INSERT INTO organizations (name, timezone)
+       VALUES ($1, $2)
+       RETURNING id, name, timezone, created_at`,
+      [name.trim(), timezone]
     );
 
-    res.status(201).json({
+    return res.status(201).json({
       message: "Organization created successfully",
-      organization: result.rows[0],
+      organization: rows[0],
     });
   } catch (err) {
     console.error("Error creating organization:", err);
-    res.status(500).json({ error: "Failed to create organization" });
+    return res.status(500).json({ error: "Failed to create organization" });
   }
 };
 
-
+// ─── GET ALL ORGANIZATIONS ────────────────────────────────────────────────────
+// FIX: no global admin gate — super_admins need to see their own org too,
+// and the frontend org selector needs this. Scope by role instead.
 const getOrganizations = async (req, res) => {
-  try {
-    const { rows } = await pool.query(`
-      SELECT o.id, o.name, o.created_at,
-        (
-          SELECT COUNT(*) FROM hospitals h WHERE h.organization_id = o.id
-        ) AS hospital_count
-      FROM organizations o
-      ORDER BY o.created_at DESC
-    `);
+  const { role, organization_id, has_global_access } = req.user;
 
-    res.json({ organizations: rows });
+  try {
+    let query;
+    let params = [];
+
+    if (role === 'administration' && has_global_access) {
+      // Global admin sees all orgs
+      query = `
+        SELECT o.id, o.name, o.timezone, o.created_at,
+          (SELECT COUNT(*) FROM hospitals h WHERE h.organization_id = o.id) AS hospital_count
+        FROM organizations o
+        ORDER BY o.created_at DESC
+      `;
+    } else {
+      // Org-level super admin sees only their org
+      query = `
+        SELECT o.id, o.name, o.timezone, o.created_at,
+          (SELECT COUNT(*) FROM hospitals h WHERE h.organization_id = o.id) AS hospital_count
+        FROM organizations o
+        WHERE o.id = $1
+        ORDER BY o.created_at DESC
+      `;
+      params = [organization_id];
+    }
+
+    const { rows } = await pool.query(query, params);
+    return res.json({ organizations: rows });
+
   } catch (err) {
     console.error("Error fetching organizations:", err);
-    res.status(500).json({ error: "Failed to fetch organizations" });
+    return res.status(500).json({ error: "Failed to fetch organizations" });
   }
 };
 
-
+// ─── GET ORGANIZATION BY ID ───────────────────────────────────────────────────
 const getOrganizationById = async (req, res) => {
   if (!requireGlobalAdmin(req, res)) return;
 
+  const orgId = req.params.id;
+
   try {
-    const orgId = req.params.id;
-
-    const org = await pool.query(
-      `SELECT id, name, created_at FROM organizations WHERE id = $1`,
+    const { rows: orgRows } = await pool.query(
+      `SELECT id, name, timezone, created_at FROM organizations WHERE id = $1`,
       [orgId]
     );
-
-    if (org.rowCount === 0) {
+    if (!orgRows.length)
       return res.status(404).json({ error: "Organization not found" });
-    }
 
-    const hospitals = await pool.query(
-      `SELECT id, name, daily_room_cost, created_at
-       FROM hospitals
-       WHERE organization_id = $1`,
+    const { rows: hospitalRows } = await pool.query(
+      `SELECT id, name, daily_room_cost, timezone, created_at
+       FROM hospitals WHERE organization_id = $1`,
       [orgId]
     );
 
-    res.json({
-      organization: org.rows[0],
-      hospitals: hospitals.rows,
-    });
+    return res.json({ organization: orgRows[0], hospitals: hospitalRows });
+
   } catch (err) {
     console.error("Error fetching organization:", err);
-    res.status(500).json({ error: "Failed to fetch organization" });
+    return res.status(500).json({ error: "Failed to fetch organization" });
   }
 };
 
-
+// ─── UPDATE ORGANIZATION ──────────────────────────────────────────────────────
 const updateOrganization = async (req, res) => {
   if (!requireGlobalAdmin(req, res)) return;
 
   const orgId = req.params.id;
-  const { name } = req.body;
+  const { name, timezone } = req.body;
 
-  if (!name) {
-    return res.status(400).json({ error: "Organization name is required" });
-  }
+  if (!name?.trim())
+    return res.status(400).json({ error: "Organization name is required." });
+  if (timezone && !isValidTimezone(timezone))
+    return res.status(400).json({ error: "Invalid IANA timezone string." });
 
   try {
-    const result = await pool.query(
-      `
-      UPDATE organizations
-      SET name = $1
-      WHERE id = $2
-      RETURNING id, name, created_at
-      `,
-      [name, orgId]
+    const { rows, rowCount } = await pool.query(
+      `UPDATE organizations
+       SET name = $1, timezone = $2, updated_at = NOW()
+       WHERE id = $3
+       RETURNING id, name, timezone, created_at, updated_at`,
+      [name.trim(), timezone, orgId]
     );
 
-    if (result.rowCount === 0) {
+    if (rowCount === 0)
       return res.status(404).json({ error: "Organization not found" });
-    }
 
-    res.json({
+  
+    return res.json({
       message: "Organization updated successfully",
-      organization: result.rows[0],
+      organization: rows[0],
     });
   } catch (err) {
     console.error("Error updating organization:", err);
-    res.status(500).json({ error: "Failed to update organization" });
+    return res.status(500).json({ error: "Failed to update organization" });
   }
 };
 
-
+// ─── DELETE ORGANIZATION ──────────────────────────────────────────────────────
 const deleteOrganization = async (req, res) => {
   if (!requireGlobalAdmin(req, res)) return;
 
   const orgId = req.params.id;
 
   try {
-    const hospitalCheck = await pool.query(
+    const { rows: countRows } = await pool.query(
       `SELECT COUNT(*) FROM hospitals WHERE organization_id = $1`,
       [orgId]
     );
 
-    if (parseInt(hospitalCheck.rows[0].count) > 0) {
+    if (parseInt(countRows[0].count) > 0) {
       return res.status(400).json({
-        error:
-          "Cannot delete organization because hospitals exist under it. Remove or reassign hospitals first.",
+        error: "Cannot delete organization while hospitals exist under it. Remove or reassign hospitals first.",
       });
     }
 
-    // Safe to delete
-    const result = await pool.query(
-      `DELETE FROM organizations WHERE id = $1 RETURNING *`,
+    const { rows, rowCount } = await pool.query(
+      `DELETE FROM organizations WHERE id = $1 RETURNING id, name`,
       [orgId]
     );
 
-    if (result.rowCount === 0) {
+    if (rowCount === 0)
       return res.status(404).json({ error: "Organization not found" });
-    }
 
-    res.json({
+    return res.json({
       message: "Organization deleted successfully",
-      organization: result.rows[0],
+      organization: rows[0],
     });
   } catch (err) {
     console.error("Error deleting organization:", err);
-    res.status(500).json({ error: "Failed to delete organization" });
+    return res.status(500).json({ error: "Failed to delete organization" });
   }
 };
 
+// ─── ASSIGN HOSPITAL TO ORGANIZATION ─────────────────────────────────────────
 const assignHospitalToOrganization = async (req, res) => {
   if (!requireGlobalAdmin(req, res)) return;
 
   const { organization_id, hospital_id } = req.body;
 
-  if (!organization_id || !hospital_id) {
-    return res.status(400).json({ error: "organization_id and hospital_id are required" });
-  }
+  if (!organization_id || !hospital_id)
+    return res.status(400).json({ error: "organization_id and hospital_id are required." });
 
+  const client = await pool.connect();
   try {
-    await pool.query("BEGIN");
+    await client.query("BEGIN");
 
-    // 1. Check if org exists
-    const org = await pool.query(
-      `SELECT id FROM organizations WHERE id = $1`,
+    const { rows: orgRows } = await client.query(
+      `SELECT id, timezone FROM organizations WHERE id = $1`,
       [organization_id]
     );
-    if (org.rowCount === 0) {
-      await pool.query("ROLLBACK");
+    if (!orgRows.length) {
+      await client.query("ROLLBACK");
       return res.status(404).json({ error: "Organization not found" });
     }
 
-    // 2. Check if hospital exists
-    const hospital = await pool.query(
+    const { rows: hospRows } = await client.query(
       `SELECT id FROM hospitals WHERE id = $1`,
       [hospital_id]
     );
-    if (hospital.rowCount === 0) {
-      await pool.query("ROLLBACK");
+    if (!hospRows.length) {
+      await client.query("ROLLBACK");
       return res.status(404).json({ error: "Hospital not found" });
     }
 
-    // 3. Assign hospital → organization
-    await pool.query(
-      `UPDATE hospitals
-       SET organization_id = $1
-       WHERE id = $2`,
+
+    await client.query(
+      `UPDATE hospitals SET organization_id = $1 WHERE id = $2`,
       [organization_id, hospital_id]
     );
 
-    // 4. Assign all users in this hospital → organization
-    await pool.query(
-      `UPDATE users
-       SET organization_id = $1
-       WHERE hospital_id = $2`,
+
+    await client.query(
+      `UPDATE users SET organization_id = $1 WHERE hospital_id = $2`,
       [organization_id, hospital_id]
     );
 
-    await pool.query("COMMIT");
-
-    res.json({ message: "Hospital and users assigned to organization successfully" });
+    await client.query("COMMIT");
+    return res.json({ message: "Hospital assigned to organization successfully" });
 
   } catch (err) {
-    await pool.query("ROLLBACK");
+    await client.query("ROLLBACK");
     console.error("Error assigning hospital:", err);
-    res.status(500).json({ error: "Failed to assign hospital" });
+    return res.status(500).json({ error: "Failed to assign hospital" });
+  } finally {
+    client.release();
   }
 };
 
-
+// ─── REMOVE HOSPITAL FROM ORGANIZATION ───────────────────────────────────────
 const removeHospitalFromOrganization = async (req, res) => {
   if (!requireGlobalAdmin(req, res)) return;
 
   const { hospital_id } = req.params;
 
+  const client = await pool.connect();
   try {
-    await pool.query("BEGIN");
+    await client.query("BEGIN");
 
-    // 1. Remove hospital from org
-    const result = await pool.query(
-      `UPDATE hospitals
-       SET organization_id = NULL
-       WHERE id = $1
-       RETURNING *`,
+    const { rows, rowCount } = await client.query(
+      `UPDATE hospitals SET organization_id = NULL WHERE id = $1 RETURNING id, name`,
       [hospital_id]
     );
 
-    if (result.rowCount === 0) {
-      await pool.query("ROLLBACK");
+    if (rowCount === 0) {
+      await client.query("ROLLBACK");
       return res.status(404).json({ error: "Hospital not found" });
     }
 
-    // 2. Unassign all users in that hospital
-    await pool.query(
-      `UPDATE users
-       SET organization_id = NULL
-       WHERE hospital_id = $1`,
+    await client.query(
+      `UPDATE users SET organization_id = NULL WHERE hospital_id = $1`,
       [hospital_id]
     );
 
-    await pool.query("COMMIT");
-
-    res.json({
+    await client.query("COMMIT");
+    return res.json({
       message: "Hospital removed from organization and users unlinked",
-      hospital: result.rows[0],
+      hospital: rows[0],
     });
 
   } catch (err) {
-    await pool.query("ROLLBACK");
+    await client.query("ROLLBACK");
     console.error("Error removing hospital:", err);
-    res.status(500).json({ error: "Failed to remove hospital" });
-  }
-};
-
+    return res.status(500).json({ error: "Failed to remove hospital" });
+  } finally {
+    client.release();  
+  }                   
+};                   
 
 module.exports = {
   createOrganization,

@@ -1,85 +1,85 @@
+// src/components/TransitionalCareReport.tsx
+import { useHospitalTimezone } from "../hooks/timezone";
+
 type TransitionalCareReportProps = {
   report: {
     patient: {
-      name: string;
-      mrn: string;
-      dob: string;
+      name:          string;
+      mrn:           string;
+      dob:           string;
       admitted_date: string;
     };
-    date_of_report: string;
     sections: {
       algorithm: string;
       tasks_completed: {
-        task_name: string;
+        task_name:    string;
         completed_at: string;
-        contact_info:string;
-        task_note: string | null;  
+        contact_info: string;
+        task_note:    string | null;
       }[];
     }[];
   } | null;
 };
 
 const TransitionalCareReport = ({ report }: TransitionalCareReportProps) => {
-  if (!report) return null;
+  const { formatDateTime, formatDateOnly } = useHospitalTimezone();
 
-  const { patient, date_of_report, sections } = report;
+  if (!report) return null;
+  const { patient, sections } = report;
 
   return (
     <div className="bg-white rounded-xl shadow p-6 mt-6">
-        <h2 className="text-2xl font-semibold mb-4 text-center  no-print">Transitional Care Report</h2>
+      <h2 className="text-2xl font-semibold mb-4 text-center no-print">Transitional Care Report</h2>
 
-      {/* Patient Info */}
       <div className="text-sm text-gray-700 mb-6 space-y-1">
         <p><strong>Patient:</strong> {patient.name}</p>
         <p><strong>MRN:</strong> {patient.mrn}</p>
-        <p><strong>DOB:</strong> {patient.dob}</p>
-        <p><strong>Admitted:</strong> {patient.admitted_date}</p>
-        <p><strong>Report Date:</strong> {date_of_report}</p>
+        {/* FIX: DOB is a plain date — use formatDateOnly (no timezone conversion) */}
+        <p><strong>DOB:</strong> {formatDateOnly(patient.dob)}</p>
+        <p><strong>Admitted:</strong> {formatDateTime(patient.admitted_date)}</p>
+  
       </div>
 
-      {/* Section Table per Algorithm */}
       {Array.isArray(sections) && sections.length > 0 ? (
         sections.map((section, idx) => (
           <div key={idx} className="mb-8">
-            <h3 className="text-lg font-semibold mb-2">
-              {section.algorithm}
-            </h3>
-                
-                <div className="hidden md:block overflow-x-auto">
-      <table className="w-full border-collapse text-sm min-w-[600px]">
-        <thead>
-          <tr className="bg-prussian-blue text-white">
-            <th className="p-3 text-left">Task Name</th>
-            <th className="p-3 text-left">Completed Date</th>
-            <th className="p-3 text-left">Contact Info</th>
-            <th className="p-3 text-left">Task Note</th>
-          </tr>
-        </thead>
-        <tbody>
-          {section.tasks_completed.map((task, i) => (
-            
-            <tr key={i} className="border-b">
-              <td className="p-3">{task.task_name}</td>
-              <td className="p-3">{task.completed_at || 'N/A'}</td>
-              <td className="p-3">{task.contact_info || '—'}</td>
-              <td className="p-3">{task.task_note || '—'}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+            <h3 className="text-lg font-semibold mb-2">{section.algorithm}</h3>
 
-    {/* MOBILE CARD VIEW */}
-    <div className="md:hidden space-y-4  no-print">
-      {section.tasks_completed.map((task, i) => (
-        <div key={i} className="border rounded-lg p-4 shadow-sm bg-gray-50">
-          <p className="font-semibold mb-1">{task.task_name}</p>
-          <p className="text-sm"><strong>Completed Date:</strong> {task.completed_at || 'N/A'}</p>
-          <p className="text-sm"><strong>Contact Info:</strong> {task.contact_info || '—'}</p>
-        </div>
-      ))}
-</div>
+            {/* Desktop table */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full border-collapse text-sm min-w-[600px]">
+                <thead>
+                  <tr className="bg-prussian-blue text-white">
+                    <th className="p-3 text-left">Task Name</th>
+                    <th className="p-3 text-left">Completed Date</th>
+                    <th className="p-3 text-left">Contact Info</th>
+                    <th className="p-3 text-left">Task Note</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {section.tasks_completed.map((task, i) => (
+                    <tr key={i} className="border-b">
+                      <td className="p-3">{task.task_name}</td>
+                      <td className="p-3">{formatDateTime(task.completed_at)}</td>
+                      <td className="p-3">{task.contact_info || "—"}</td>
+                      <td className="p-3">{task.task_note    || "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
 
+            {/* Mobile cards */}
+            <div className="md:hidden space-y-4 no-print">
+              {section.tasks_completed.map((task, i) => (
+                <div key={i} className="border rounded-lg p-4 shadow-sm bg-gray-50">
+                  <p className="font-semibold mb-1">{task.task_name}</p>
+                  <p className="text-sm"><strong>Completed:</strong> {formatDateTime(task.completed_at)}</p>
+                  <p className="text-sm"><strong>Contact:</strong> {task.contact_info || "—"}</p>
+                  <p className="text-sm"><strong>Note:</strong> {task.task_note || "—"}</p>
+                </div>
+              ))}
+            </div>
           </div>
         ))
       ) : (

@@ -1,7 +1,7 @@
-import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import axios from 'axios';
-import type { Patient } from '../types'; // reuse your shared Patient type
-
+// src/redux/slices/patientSlice.ts
+import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
+import axios from "axios";
+import type { Patient } from "../types";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
@@ -9,10 +9,11 @@ interface PatientState {
   patients: Patient[];
   dischargedPatients: Patient[];
   dischargedCount: number;
-  searchResults: Patient[];
   archivedPatients: Patient[];
+  archivedCount: number;
   archivedLoading: boolean;
   archivedError: string | null;
+  searchResults: Patient[];
   selectedPatient: Patient | null;
   loading: boolean;
   error: string | null;
@@ -24,6 +25,7 @@ const initialState: PatientState = {
   dischargedPatients: [],
   dischargedCount: 0,
   archivedPatients: [],
+  archivedCount: 0,
   archivedLoading: false,
   archivedError: null,
   searchResults: [],
@@ -33,6 +35,8 @@ const initialState: PatientState = {
   updateSuccess: false,
 };
 
+// ─── Thunks ───────────────────────────────────────────────────────────────────
+
 export const fetchPatients = createAsyncThunk(
   "patients/fetchPatients",
   async (
@@ -40,111 +44,88 @@ export const fetchPatients = createAsyncThunk(
     { rejectWithValue }
   ) => {
     try {
-      const res = await axios.get(`${BASE_URL}/patients`, {
-        params, 
-        withCredentials: true,
-      });
-      return res.data;
+      const res = await axios.get(`${BASE_URL}/patients`, { params, withCredentials: true });
+      return res.data as Patient[];
     } catch (err: any) {
-      return rejectWithValue(err.response?.data || "Failed to fetch patients");
+      return rejectWithValue(err.response?.data?.error || "Failed to fetch patients");
     }
   }
 );
 
-
 export const addPatient = createAsyncThunk(
-  'patients/addPatient',
+  "patients/addPatient",
   async (
-    patientData: {
-      [key: string]: any;
-      assignedStaffIds: { staff_id: string; access_level: 'view' | 'edit' }[];
-    },
-    { rejectWithValue }) => {
+    patientData: { [key: string]: any; assignedStaffIds: { staff_id: string; access_level: "view" | "edit" }[] },
+    { rejectWithValue }
+  ) => {
     try {
-      const response = await axios.post(`${BASE_URL}/patients`, patientData, {
-        withCredentials: true,
-      });
-      return response.data;
-    } catch (error: any) {
-      const status = error.response?.status;
-      const data = error.response?.data;
-      return rejectWithValue({ status, data });
+      const res = await axios.post(`${BASE_URL}/patients`, patientData, { withCredentials: true });
+      return res.data;
+    } catch (err: any) {
+      return rejectWithValue({ status: err.response?.status, data: err.response?.data });
     }
   }
 );
 
 export const fetchPatientById = createAsyncThunk(
-  'patients/fetchById',
+  "patients/fetchById",
   async (patientId: number, { rejectWithValue }) => {
     try {
-      const res = await axios.get(`${BASE_URL}/patients/${patientId}`, {
-        withCredentials: true,
-      });
-      return res.data;
+      const res = await axios.get(`${BASE_URL}/patients/${patientId}`, { withCredentials: true });
+      return res.data as Patient;
     } catch (err: any) {
-      return rejectWithValue(err.response?.data || 'Failed to fetch patient');
+      return rejectWithValue(err.response?.data?.error || "Failed to fetch patient");
     }
   }
 );
 
 export const dischargePatient = createAsyncThunk(
-  'patients/dischargePatient',
-  async ({ patientId,version,dischargeNote }: { patientId: number; version:number; dischargeNote: string }, { rejectWithValue }) => {
+  "patients/dischargePatient",
+  async (
+    { patientId, version, dischargeNote }: { patientId: number; version: number; dischargeNote: string },
+    { rejectWithValue }
+  ) => {
     try {
-      const response = await axios.post(`${BASE_URL}/patients/${patientId}/discharge`, { dischargeNote,version }, {
-        withCredentials: true,
-      });
-      return { patientId, message: response.data.message };
-    } catch (error: any) {
-      return rejectWithValue(error.response?.data || 'Failed to discharge patient');
+      const res = await axios.post(
+        `${BASE_URL}/patients/${patientId}/discharge`,
+        { dischargeNote, version },
+        { withCredentials: true }
+      );
+      return { patientId, message: res.data.message };
+    } catch (err: any) {
+      return rejectWithValue(err.response?.data?.error || "Failed to discharge patient");
     }
   }
 );
+
 export const reactivatePatient = createAsyncThunk<
   { patientId: number },
   { patientId: number; version: number },
   { rejectValue: string }
->(
-  'patients/reactivatePatient',
-  async ({ patientId, version }, { rejectWithValue }) => {
-    try {
-      await axios.patch(
-        `${BASE_URL}/patients/${patientId}/reactivate`,
-        { version },
-        { withCredentials: true }
-      );
-
-      return { patientId };
-    } catch (err: any) {
-      return rejectWithValue(
-        err.response?.data?.error || 'Failed to reactivate patient'
-      );
-    }
+>("patients/reactivatePatient", async ({ patientId, version }, { rejectWithValue }) => {
+  try {
+    await axios.patch(`${BASE_URL}/patients/${patientId}/reactivate`, { version }, { withCredentials: true });
+    return { patientId };
+  } catch (err: any) {
+    return rejectWithValue(err.response?.data?.error || "Failed to reactivate patient");
   }
-);
+});
 
 export const fetchDischargedPatients = createAsyncThunk<
   { count: number; patients: Patient[] },
   { start?: string; end?: string; hospitalId?: string } | void,
   { rejectValue: string }
->(
-  "patients/fetchDischargedPatients",
-  async (params, { rejectWithValue }) => {
-    try {
-      const response = await axios.get(`${BASE_URL}/patients/discharged`, {
-        params,
-        withCredentials: true,
-      });
-      return response.data;
-    } catch (error: any) {
-      return rejectWithValue("Failed to fetch discharged patients");
-    }
+>("patients/fetchDischargedPatients", async (params, { rejectWithValue }) => {
+  try {
+    const res = await axios.get(`${BASE_URL}/patients/discharged`, { params: params ?? {}, withCredentials: true });
+    return res.data;
+  } catch (err: any) {
+    return rejectWithValue(err.response?.data?.error || "Failed to fetch discharged patients");
   }
-);
-
+});
 
 export const updatePatient = createAsyncThunk(
-  'patients/updatePatient',
+  "patients/updatePatient",
   async (
     {
       id,
@@ -152,18 +133,20 @@ export const updatePatient = createAsyncThunk(
       version,
     }: {
       id: number | string;
-      data: { [key: string]: any; assignedStaffIds: { staff_id: string; access_level: 'view' | 'edit' }[] };
+      data: { [key: string]: any; assignedStaffIds: { staff_id: string; access_level: "view" | "edit" }[] };
       version: number;
     },
-    { rejectWithValue }) => {
+    { rejectWithValue }
+  ) => {
     try {
-      const res = await axios.patch(`${BASE_URL}/patients/${id}/update`, {...data,version}, {
-        withCredentials: true,
-      });
-      return res.data.patient || { id, ...data }; 
+      const res = await axios.patch(
+        `${BASE_URL}/patients/${id}/update`,
+        { ...data, version },
+        { withCredentials: true }
+      );
+      return res.data.patient || { id, ...data };
     } catch (err: any) {
       return rejectWithValue(err.response?.data || "Update failed");
-
     }
   }
 );
@@ -177,7 +160,7 @@ export const searchPatients = createAsyncThunk(
       start,
       end,
       hospitalId,
-      adminId
+      adminId,
     }: {
       query: string;
       status?: "active" | "discharged" | "archived";
@@ -190,42 +173,30 @@ export const searchPatients = createAsyncThunk(
   ) => {
     try {
       const params: Record<string, string | number> = { q: query, status };
-
-      if (start) params.start = start;
-      if (end) params.end = end;
+      if (start)    params.start     = start;
+      if (end)      params.end       = end;
       if (hospitalId) params.hospitalId = hospitalId;
-      if (adminId) params.adminId = adminId;
-
-      const res = await axios.get(`${BASE_URL}/patients/search`, {
-        params,
-        withCredentials: true,
-      });
-
-      return res.data;
+      if (adminId)  params.adminId   = adminId;
+      const res = await axios.get(`${BASE_URL}/patients/search`, { params, withCredentials: true });
+      return res.data as Patient[];
     } catch (err: any) {
-      console.error("❌ searchPatients error:", err);
-      return rejectWithValue(err.response?.data || "Search failed");
+      return rejectWithValue(err.response?.data?.error || "Search failed");
     }
   }
 );
 
 export const fetchPatientsByAdmin = createAsyncThunk<
-Patient[],
-number,
-{ rejectValue: string }
->(
-'patients/fetchByAdmin',
-async (adminId, { rejectWithValue }) => {
+  Patient[],
+  number,
+  { rejectValue: string }
+>("patients/fetchByAdmin", async (adminId, { rejectWithValue }) => {
   try {
     const res = await axios.get(`${BASE_URL}/patients/by-admin/${adminId}`, { withCredentials: true });
-    console.log("✅ fetchPatientsByAdmin response:", res.data);
-    return res.data;
+    return res.data as Patient[];
   } catch (err: any) {
-    console.error("❌ fetchPatientsByAdmin error:", err.response?.data);
-    return rejectWithValue(err.response?.data?.error || 'Failed to fetch patients');
+    return rejectWithValue(err.response?.data?.error || "Failed to fetch patients");
   }
-}
-);
+});
 
 export const updateCourtDate = createAsyncThunk(
   "patients/updateCourtDate",
@@ -234,41 +205,37 @@ export const updateCourtDate = createAsyncThunk(
       patientId,
       type,
       newDate,
-      version
-    }: { patientId: number; type: "guardianship" | "ltc"; newDate: string ; version:number},
+      version,
+    }: {
+      patientId: number;
+      type: "guardianship" | "ltc";
+      newDate: string;
+      version: number;
+    },
     { rejectWithValue }
   ) => {
     try {
       await axios.patch(
         `${BASE_URL}/patients/${patientId}/court-date`,
-        {
-          type,
-          newDate,
-          version,
-        },
-        {
-          withCredentials: true,
-        }
+        { type, newDate, version },
+        { withCredentials: true }
       );
-
       return { patientId, type, newDate };
-    } catch (error: any) {
-      return rejectWithValue(error.response?.data?.error || "Update failed");
+    } catch (err: any) {
+      return rejectWithValue(err.response?.data?.error || "Update failed");
     }
   }
 );
-
-
 export const archiveDischargedPatient = createAsyncThunk<
-  { patientId: number },                               
-  { patientId: number; reason?: string;version:number },             
+  { patientId: number },
+  { patientId: number; reason?: string; version: number },
   { rejectValue: string }
->("patients/archiveDischargedPatient", async ({ patientId, reason,version }, { rejectWithValue }) => {
+>("patients/archiveDischargedPatient", async ({ patientId, reason, version }, { rejectWithValue }) => {
   try {
-    await axios.post(`${BASE_URL}/patients/${patientId}/archive`, { reason,version }, { withCredentials: true });
+    await axios.post(`${BASE_URL}/patients/${patientId}/archive`, { reason, version }, { withCredentials: true });
     return { patientId };
-  } catch (e: any) {
-    return rejectWithValue(e?.response?.data?.error || "Failed to archive patient");
+  } catch (err: any) {
+    return rejectWithValue(err.response?.data?.error || "Failed to archive patient");
   }
 });
 
@@ -276,42 +243,27 @@ export const fetchArchivedPatients = createAsyncThunk<
   { count: number; patients: Patient[] },
   { start?: string; end?: string; hospitalId?: string },
   { rejectValue: string }
->(
-  "patients/fetchArchivedPatients",
-  async (params, { rejectWithValue }) => {
-    try {
-      const response = await axios.get(`${BASE_URL}/patients/archived`, {
-        params,
-        withCredentials: true,
-      });
-      return response.data;
-    } catch (error: any) {
-      return rejectWithValue(
-        error.response?.data || "Failed to fetch archived patients"
-      );
-    }
+>("patients/fetchArchivedPatients", async (params, { rejectWithValue }) => {
+  try {
+    const res = await axios.get(`${BASE_URL}/patients/archived`, { params, withCredentials: true });
+    return res.data;
+  } catch (err: any) {
+    return rejectWithValue(err.response?.data?.error || "Failed to fetch archived patients");
   }
-);
+});
 
-
+// ─── Slice ────────────────────────────────────────────────────────────────────
 
 const patientsSlice = createSlice({
-  name: 'patients',
+  name: "patients",
   initialState,
   reducers: {
-     setPatients: (state, action) => {
-      state.patients = action.payload;
-    },
-    clearPatients: (state) => {
-      state.patients = [];  
-    },
+    setPatients: (state, action) => { state.patients = action.payload; },
+    clearPatients: () => initialState,
   },
   extraReducers: (builder) => {
     builder
-      .addCase(fetchPatients.pending, (state) => {
-        state.loading = true;
-        state.error = null;
-      })
+      .addCase(fetchPatients.pending, (state) => { state.loading = true; state.error = null; })
       .addCase(fetchPatients.fulfilled, (state, action) => {
         state.loading = false;
         state.patients = action.payload;
@@ -320,92 +272,92 @@ const patientsSlice = createSlice({
         state.loading = false;
         state.error = action.payload as string;
       })
+
+      // addPatient
+      .addCase(addPatient.pending, (state) => { state.loading = true; state.error = null; })
       .addCase(addPatient.fulfilled, (state, action) => {
-        state.patients.push(action.payload.patient);
         state.loading = false;
-      })
-      .addCase(addPatient.pending, (state) => {
-        state.loading = true;
-        state.error = null;
+        if (action.payload.patient) state.patients.unshift(action.payload.patient);
       })
       .addCase(addPatient.rejected, (state, action) => {
         state.loading = false;
-        state.error = action.payload as string;
+        state.error = (action.payload as any)?.data?.error || "Failed to add patient";
       })
+
+      // fetchPatientById
       .addCase(fetchPatientById.fulfilled, (state, action) => {
         state.selectedPatient = action.payload;
       })
-      .addCase(dischargePatient.pending, (state) => {
-        state.loading = true;
-        state.error = null;
+      .addCase(fetchPatientById.rejected, (state, action) => {
+        state.error = action.payload as string;
+      })
+
+      // dischargePatient
+      .addCase(dischargePatient.pending, (state) => { state.loading = true; state.error = null; })
+      .addCase(dischargePatient.fulfilled, (state, action) => {
+        state.loading = false;
+        state.patients = state.patients.filter(p => p.id !== action.payload.patientId);
       })
       .addCase(dischargePatient.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload as string;
       })
 
-          .addCase(dischargePatient.fulfilled, (state, action) => {
-        state.patients = state.patients.filter(
-          p => p.id !== action.payload.patientId
-        );
-        state.loading = false;
-      })
-
-     .addCase(fetchDischargedPatients.fulfilled, (state, action) => {
-        state.dischargedPatients = action.payload.patients || [];
-        state.dischargedCount = action.payload.count || 0;
-        state.loading = false;
-      })
-    .addCase(fetchDischargedPatients.rejected, (state, action) => {
-      state.loading = false;
-      state.dischargedPatients = [];
-      state.dischargedCount = 0;
-      state.error = action.payload as string;
-    })
-
-
-      .addCase(updatePatient.fulfilled, (state, action) => {
-        const updated = action.payload;
-        const index = state.patients.findIndex((p) => p.id === updated.id);
-        if (index !== -1) {
-          state.patients[index] = updated;
-        }
-      
-        // Also update the selectedPatient if it matches
-        if (state.selectedPatient?.id === updated.id) {
-          state.selectedPatient = updated;
-        }
-      })
-      
-      .addCase(searchPatients.fulfilled, (state, action) => {
-        state.searchResults = action.payload;
-        state.loading = false;
-      })
+      // reactivatePatient
+      .addCase(reactivatePatient.pending, (state) => { state.loading = true; })
       .addCase(reactivatePatient.fulfilled, (state, action) => {
-        const { patientId } = action.payload;
-      
-        // Remove from discharged
-        state.dischargedPatients = state.dischargedPatients.filter(p => p.id !== patientId);
-      
-        // Optional: refetch full list or mark patient as active again
-        const reactivated = state.patients.find(p => p.id === patientId);
-        if (reactivated) {
-          reactivated.status = 'Admitted';
-          reactivated.discharge_note = null;
-          reactivated.discharge_date = null;
-        }
-      
         state.loading = false;
+        state.dischargedPatients = state.dischargedPatients.filter(p => p.id !== action.payload.patientId);
+        const p = state.patients.find(p => p.id === action.payload.patientId);
+        if (p) { p.status = "Admitted"; p.discharge_note = null; p.discharge_date = null; }
       })
       .addCase(reactivatePatient.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload as string;
       })
-     
-      .addCase(fetchPatientsByAdmin.pending, (state) => {
-        state.loading = true;
-        state.error = null;
+
+      // fetchDischargedPatients
+      .addCase(fetchDischargedPatients.pending, (state) => { state.loading = true; state.error = null; })
+      .addCase(fetchDischargedPatients.fulfilled, (state, action) => {
+        state.loading = false;
+        state.dischargedPatients = action.payload.patients ?? [];
+        state.dischargedCount    = action.payload.count    ?? 0;
       })
+      .addCase(fetchDischargedPatients.rejected, (state, action) => {
+        state.loading = false;
+        state.dischargedPatients = [];
+        state.dischargedCount = 0;
+        state.error = action.payload as string;
+      })
+
+      // updatePatient
+      .addCase(updatePatient.pending, (state) => { state.loading = true; state.updateSuccess = false; })
+      .addCase(updatePatient.fulfilled, (state, action) => {
+        state.loading = false;
+        state.updateSuccess = true;
+        const idx = state.patients.findIndex(p => p.id === action.payload.id);
+        if (idx !== -1) state.patients[idx] = action.payload;
+        if (state.selectedPatient?.id === action.payload.id) state.selectedPatient = action.payload;
+      })
+      .addCase(updatePatient.rejected, (state, action) => {
+        state.loading = false;
+        state.updateSuccess = false;
+        state.error = (action.payload as any)?.error || "Update failed";
+      })
+
+      // searchPatients
+      .addCase(searchPatients.pending, (state) => { state.loading = true; state.error = null; })
+      .addCase(searchPatients.fulfilled, (state, action) => {
+        state.loading = false;
+        state.searchResults = action.payload;
+      })
+      .addCase(searchPatients.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload as string;
+      })
+
+      // fetchPatientsByAdmin
+      .addCase(fetchPatientsByAdmin.pending, (state) => { state.loading = true; state.error = null; })
       .addCase(fetchPatientsByAdmin.fulfilled, (state, action) => {
         state.loading = false;
         state.patients = action.payload;
@@ -414,56 +366,48 @@ const patientsSlice = createSlice({
         state.loading = false;
         state.error = action.payload as string;
       })
-       .addCase(updateCourtDate.pending, (state) => {
-        state.loading = true;
-        state.updateSuccess = false;
-        state.error = null;
-      })
-      .addCase(updateCourtDate.fulfilled, (state, action) => {
-        const { patientId, type, newDate } = action.payload;
 
-        if (state.selectedPatient?.id === patientId) {
-          if (type === "guardianship") {
-            state.selectedPatient.guardianship_court_datetime = newDate;
-          } else {
-            state.selectedPatient.ltc_court_datetime = newDate;
+      .addCase(updateCourtDate.pending, (state) => {
+          state.loading = true;
+          state.updateSuccess = false;
+          state.error = null;
+        })
+        .addCase(updateCourtDate.fulfilled, (state, action) => {
+          state.loading = false;  
+          state.updateSuccess = true;
+          const { type, newDate } = action.payload;
+          if (state.selectedPatient) {
+            if (type === "guardianship") {
+              state.selectedPatient.guardianship_court_date = newDate;
+            } else {
+              state.selectedPatient.ltc_court_date = newDate;
+            }
           }
-        }
+        })
+        .addCase(updateCourtDate.rejected, (state, action) => {
+          state.loading = false;
+          state.error = action.payload as string;
+          state.updateSuccess = false;
+        })
 
-        state.loading = false;
-        state.updateSuccess = true;
-      })
-      .addCase(updateCourtDate.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.payload as string;
-        state.updateSuccess = false;
-      })
-       .addCase(fetchArchivedPatients.pending, (state) => {
-        state.archivedLoading = true;
-        state.archivedError = null;
-      })
+      .addCase(fetchArchivedPatients.pending, (state) => { state.archivedLoading = true; state.archivedError = null; })
       .addCase(fetchArchivedPatients.fulfilled, (state, action) => {
         state.archivedLoading = false;
-        state.archivedPatients = action.payload.patients || [];
-        state.archivedError = null;
+        state.archivedPatients = action.payload.patients ?? [];
+        state.archivedCount    = action.payload.count    ?? 0;
       })
       .addCase(fetchArchivedPatients.rejected, (state, action) => {
         state.archivedLoading = false;
         state.archivedError = action.payload as string;
       })
       .addCase(archiveDischargedPatient.fulfilled, (state, action) => {
-        state.dischargedPatients = state.dischargedPatients.filter(
-          p => p.id !== action.payload.patientId
-        );
-
-        state.archivedPatients = state.archivedPatients.filter(
-          p => p.id !== action.payload.patientId
-        );
+        state.dischargedPatients = state.dischargedPatients.filter(p => p.id !== action.payload.patientId);
+      })
+      .addCase(archiveDischargedPatient.rejected, (state, action) => {
+        state.error = action.payload as string;
       });
-
-        
   },
 });
 
-export const { clearPatients } = patientsSlice.actions;
+export const { clearPatients, setPatients } = patientsSlice.actions;
 export default patientsSlice.reducer;

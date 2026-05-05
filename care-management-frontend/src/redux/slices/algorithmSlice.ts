@@ -24,8 +24,8 @@ const initialState: AlgorithmState = {
 
 
 export const loadPatientCountsByAlgorithm = createAsyncThunk<
-  AlgorithmPatientCount[],         // return type
-  string | undefined,              // ⬅ accepts hospitalId or undefined
+  AlgorithmPatientCount[],        
+  string | undefined,             
   { rejectValue: string }
 >(
   "algorithms/loadPatientCountsByAlgorithm",
@@ -71,7 +71,7 @@ const algorithmSlice = createSlice({
   name: "algorithms",
   initialState,
   reducers: {
-    resetAlgorithmState: (state) => {
+     clearAlgorithms: (state) => {
       state.patientCounts = [];
       state.patientsByAlgorithm = [];
       state.loadingCounts = false;
@@ -118,5 +118,5 @@ const algorithmSlice = createSlice({
       });
   },
 });
-
+export const { clearAlgorithms } = algorithmSlice.actions;
 export default algorithmSlice.reducer;

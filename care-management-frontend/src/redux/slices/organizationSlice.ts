@@ -1,37 +1,34 @@
-import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
+// src/redux/slices/organizationSlice.ts
+import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 import type { Organization } from "../types";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
+// ─── Thunks ───────────────────────────────────────────────────────────────────
 
-
-// 🔹 GET ALL ORGANIZATIONS
 export const fetchOrganizations = createAsyncThunk<
   Organization[],
   void,
   { rejectValue: string }
 >("organizations/fetchOrganizations", async (_, { rejectWithValue }) => {
   try {
-    const res = await axios.get(`${BASE_URL}/organizations`, {
-      withCredentials: true,
-    });
+    const res = await axios.get(`${BASE_URL}/organizations`, { withCredentials: true });
     return res.data.organizations;
   } catch (err: any) {
     return rejectWithValue(err.response?.data?.error || "Failed to load organizations");
   }
 });
 
-// 🔹 CREATE ORGANIZATION
 export const createOrganization = createAsyncThunk<
   Organization,
-  { name: string },
+  { name: string; timezone: string },
   { rejectValue: string }
->("organizations/createOrganization", async ({ name }, { rejectWithValue }) => {
+>("organizations/createOrganization", async ({ name, timezone }, { rejectWithValue }) => {
   try {
     const res = await axios.post(
       `${BASE_URL}/organizations`,
-      { name },
+      { name, timezone },
       { withCredentials: true }
     );
     return res.data.organization;
@@ -40,77 +37,73 @@ export const createOrganization = createAsyncThunk<
   }
 });
 
-// 🔹 DELETE ORGANIZATION
+export const updateOrganization = createAsyncThunk<
+  Organization,
+  { orgId: number; name: string; timezone: string },
+  { rejectValue: string }
+>("organizations/updateOrganization", async ({ orgId, name, timezone }, { rejectWithValue }) => {
+  try {
+    const res = await axios.put(
+      `${BASE_URL}/organizations/${orgId}`,
+      { name, timezone },
+      { withCredentials: true }
+    );
+    return res.data.organization;
+  } catch (err: any) {
+    return rejectWithValue(err.response?.data?.error || "Failed to update organization");
+  }
+});
+
 export const deleteOrganization = createAsyncThunk<
   number,
   number,
   { rejectValue: string }
 >("organizations/deleteOrganization", async (orgId, { rejectWithValue }) => {
   try {
-    await axios.delete(`${BASE_URL}/organizations/${orgId}`, {
-      withCredentials: true,
-    });
+    await axios.delete(`${BASE_URL}/organizations/${orgId}`, { withCredentials: true });
     return orgId;
   } catch (err: any) {
     return rejectWithValue(
-      err.response?.data?.error ||
-        "Cannot delete organization while hospitals are attached"
+      err.response?.data?.error || "Cannot delete organization while hospitals are attached"
     );
   }
 });
 
-// 🔹 ASSIGN HOSPITAL TO ORGANIZATION  ✅ FIXED
 export const assignHospitalToOrganization = createAsyncThunk<
   { orgId: number; hospitalId: number },
   { orgId: number; hospitalId: number },
   { rejectValue: string }
->("organizations/assignHospitalToOrganization",
-  async ({ orgId, hospitalId }, { rejectWithValue }) => {
-    try {
-      await axios.post(
-        `${BASE_URL}/organizations/assign`,
-        {
-          organization_id: orgId,
-          hospital_id: hospitalId
-        },
-        { withCredentials: true }
-      );
-
-      return { orgId, hospitalId };
-    } catch (err: any) {
-      return rejectWithValue(
-        err.response?.data?.error || "Failed to assign hospital"
-      );
-    }
+>("organizations/assignHospitalToOrganization", async ({ orgId, hospitalId }, { rejectWithValue }) => {
+  try {
+    await axios.post(
+      `${BASE_URL}/organizations/assign`,
+      { organization_id: orgId, hospital_id: hospitalId },
+      { withCredentials: true }
+    );
+    return { orgId, hospitalId };
+  } catch (err: any) {
+    return rejectWithValue(err.response?.data?.error || "Failed to assign hospital");
   }
-);
+});
 
-// 🔹 REMOVE HOSPITAL FROM ORGANIZATION  ✅ FIXED
 export const removeHospitalFromOrganization = createAsyncThunk<
   { hospitalId: number },
   { hospitalId: number },
   { rejectValue: string }
->("organizations/removeHospitalFromOrganization",
-  async ({ hospitalId }, { rejectWithValue }) => {
-    try {
-      await axios.put(
-        `${BASE_URL}/organizations/remove-hospital/${hospitalId}`,
-        {},
-        { withCredentials: true }
-      );
-
-      return { hospitalId };
-    } catch (err: any) {
-      return rejectWithValue(
-        err.response?.data?.error || "Failed to remove hospital"
-      );
-    }
+>("organizations/removeHospitalFromOrganization", async ({ hospitalId }, { rejectWithValue }) => {
+  try {
+    await axios.put(
+      `${BASE_URL}/organizations/remove-hospital/${hospitalId}`,
+      {},
+      { withCredentials: true }
+    );
+    return { hospitalId };
+  } catch (err: any) {
+    return rejectWithValue(err.response?.data?.error || "Failed to remove hospital");
   }
-);
+});
 
-// ======================================================
-// STATE INTERFACE
-// ======================================================
+// ─── State ────────────────────────────────────────────────────────────────────
 
 interface OrganizationState {
   organizations: Organization[];
@@ -126,9 +119,7 @@ const initialState: OrganizationState = {
   successMessage: null,
 };
 
-// ======================================================
-// SLICE
-// ======================================================
+// ─── Slice ────────────────────────────────────────────────────────────────────
 
 const organizationSlice = createSlice({
   name: "organizations",
@@ -138,79 +129,63 @@ const organizationSlice = createSlice({
       state.error = null;
       state.successMessage = null;
     },
+    // FIX: added clearOrganizations for logoutAndClearAll consistency
+    clearOrganizations: () => initialState,
   },
   extraReducers: (builder) => {
-    // =============================
-    // FETCH
-    // =============================
     builder
+      // fetchOrganizations
       .addCase(fetchOrganizations.pending, (state) => {
         state.loading = true;
         state.error = null;
       })
-      .addCase(
-        fetchOrganizations.fulfilled,
-        (state, action: PayloadAction<Organization[]>) => {
-          state.loading = false;
-          state.organizations = action.payload;
-        }
-      )
+      .addCase(fetchOrganizations.fulfilled, (state, action) => {
+        state.loading = false;
+        state.organizations = action.payload;
+      })
       .addCase(fetchOrganizations.rejected, (state, action) => {
         state.loading = false;
-        state.error = action.payload || "Could not load organizations";
-      });
-
-    // =============================
-    // CREATE
-    // =============================
-    builder
-      .addCase(
-        createOrganization.fulfilled,
-        (state, action: PayloadAction<Organization>) => {
-          state.organizations.push(action.payload);
-          state.successMessage = "Organization created successfully";
-        }
-      )
+        state.error = action.payload ?? "Could not load organizations";
+      })
+      .addCase(createOrganization.fulfilled, (state, action) => {
+        state.organizations.unshift(action.payload);
+        state.successMessage = "Organization created successfully";
+      })
       .addCase(createOrganization.rejected, (state, action) => {
-        state.error = action.payload || "Failed to create organization";
-      });
+        state.error = action.payload ?? "Failed to create organization";
+      })
 
-    // =============================
-    // DELETE
-    // =============================
-    builder
+
+      .addCase(updateOrganization.fulfilled, (state, action) => {
+        const idx = state.organizations.findIndex((o) => o.id === action.payload.id);
+        if (idx !== -1) state.organizations[idx] = action.payload;
+        state.successMessage = "Organization updated successfully";
+      })
+      .addCase(updateOrganization.rejected, (state, action) => {
+        state.error = action.payload ?? "Failed to update organization";
+      })
       .addCase(deleteOrganization.fulfilled, (state, action) => {
-        state.organizations = state.organizations.filter(
-          (org) => org.id !== action.payload
-        );
+        state.organizations = state.organizations.filter((o) => o.id !== action.payload);
         state.successMessage = "Organization deleted successfully";
       })
       .addCase(deleteOrganization.rejected, (state, action) => {
-        state.error =
-          action.payload || "Cannot delete organization with active hospitals";
-      });
+        state.error = action.payload ?? "Cannot delete organization with active hospitals";
+      })
 
-    // =============================
-    // ASSIGN HOSPITAL
-    // =============================
-    builder.addCase(
-      assignHospitalToOrganization.fulfilled,
-      (state) => {
+      .addCase(assignHospitalToOrganization.fulfilled, (state) => {
         state.successMessage = "Hospital assigned to organization";
-      }
-    );
-
-    // =============================
-    // REMOVE HOSPITAL
-    // =============================
-    builder.addCase(
-      removeHospitalFromOrganization.fulfilled,
-      (state) => {
+      })
+      .addCase(assignHospitalToOrganization.rejected, (state, action) => {
+        state.error = action.payload ?? "Failed to assign hospital";
+      })
+      .addCase(removeHospitalFromOrganization.fulfilled, (state) => {
         state.successMessage = "Hospital removed from organization";
-      }
-    );
+      })
+      .addCase(removeHospitalFromOrganization.rejected, (state, action) => {
+        state.error = action.payload ?? "Failed to remove hospital";
+      });
   },
 });
 
-export const { clearOrgMessages } = organizationSlice.actions;
+export const { clearOrgMessages, clearOrganizations } = organizationSlice.actions;
 export default organizationSlice.reducer;

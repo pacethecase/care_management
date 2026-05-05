@@ -11,7 +11,6 @@
   --primary-yellow:  #facc15;  /* Tailwind yellow-500 */
   --primary-blue:    #3b82f6;  /* Tailwind blue-500 */
   --primary-orange: #FFA500;
-  /* Neutrals */
   --bg-light: #fdfdfd;
   --text-main: #000;
   --text-muted: #6B7280;
@@ -23,7 +22,7 @@
   --algo-guardianship:#7E5A9B; 
 }
 
-/* 🧼 Reset & Base */
+
 body {
   margin: 0;
   min-width: 320px;
