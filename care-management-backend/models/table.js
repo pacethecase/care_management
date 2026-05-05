@@ -288,7 +288,7 @@ const createTables = async () => {
         status                  VARCHAR(50) NOT NULL DEFAULT 'Pending'
                                   CHECK (status IN (
                                     'Pending', 'In Progress', 'Completed',
-                                    'Missed', 'Overridden', 'Waived', 'Follow Up', 'Acknowledged'
+                                    'Missed', 'Overridden', 'Waived', 'Follow Up', 'Acknowledged','Delayed Completed'
                                   )),
 
         -- TIMESTAMPTZ: stored as UTC, represents 11:59 PM in hospital's timezone
