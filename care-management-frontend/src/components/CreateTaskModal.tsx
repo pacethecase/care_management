@@ -81,7 +81,7 @@ const CreateTaskModal: React.FC<Props> = ({ onClose, patientId }) => {
     }
   };
 
-  const algorithmOptions       = patient?.active_algorithms || [];
+  const algorithmOptions = [...new Set(patient?.active_algorithms || [])] as string[];
   const hasLTC                 = algorithmOptions.includes("LTC");
   const hasGuardianship        = algorithmOptions.includes("Guardianship");
   const hasNonBlockingEligible = hasLTC || hasGuardianship;

@@ -222,7 +222,7 @@ const getTransitionalCareReport = async (req, res) => {
     const { rows: taskRows } = await client.query(taskSQL, params);
     const grouped = {};
     for (const row of taskRows) {
-      const algo = row.algorithm || "N/A";
+      const algo = row.algorithm || "Additional Tasks";
       if (!grouped[algo]) grouped[algo] = { algorithm: algo, tasks_completed: [] };
       grouped[algo].tasks_completed.push({
         task_name: row.task_name, completed_at: row.completed_at,

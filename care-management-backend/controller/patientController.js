@@ -286,9 +286,9 @@ const getPatientById = async (req, res) => {
         p.created_at, p.added_by_user_id, p.hospital_id, p.updated_at, p.version,
         -- FIX: active_algorithms from patient_algorithms table, not TEXT[] column
         COALESCE(
-          (SELECT json_agg(algorithm ORDER BY assigned_at)
-           FROM patient_algorithms
-           WHERE patient_id = p.id AND removed_at IS NULL),
+          (SELECT json_agg(DISTINCT algorithm ORDER BY algorithm)
+          FROM patient_algorithms
+          WHERE patient_id = p.id AND removed_at IS NULL),
           '[]'
         ) AS active_algorithms,
         json_agg(
