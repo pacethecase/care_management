@@ -619,14 +619,16 @@ const getDischargedPatients = async (req, res) => {
     const [{ rows: patients }, { rows: countRows }] = await Promise.all([
       pool.query(`
         SELECT p.*,
+          h.name AS hospital_name,
           EXTRACT(YEAR FROM AGE(NOW(), p.birth_date))::INTEGER AS age,
           json_agg(json_build_object('id', u.id, 'name', u.name))
             FILTER (WHERE u.id IS NOT NULL) AS assigned_staff
         FROM patients p
+        LEFT JOIN hospitals h ON h.id = p.hospital_id
         LEFT JOIN patient_staff ps ON p.id = ps.patient_id
         LEFT JOIN users u ON ps.staff_id = u.id
         ${whereClause}
-        GROUP BY p.id
+        GROUP BY p.id,h.name
         ORDER BY p.discharge_date DESC NULLS LAST
       `, params),
       pool.query(`SELECT COUNT(*)::int AS count FROM patients p ${whereClause}`, params),
@@ -1176,14 +1178,16 @@ const getArchivedPatients = async (req, res) => {
     const [{ rows: patients }, { rows: countRows }] = await Promise.all([
       pool.query(`
         SELECT p.*,
+          h.name AS hospital_name,
           EXTRACT(YEAR FROM AGE(NOW(), p.birth_date))::INTEGER AS age,
           json_agg(json_build_object('id', u.id, 'name', u.name))
             FILTER (WHERE u.id IS NOT NULL) AS assigned_staff
         FROM patients p
+        LEFT JOIN hospitals h ON h.id = p.hospital_id
         LEFT JOIN patient_staff ps ON p.id = ps.patient_id
         LEFT JOIN users u ON ps.staff_id = u.id
         ${whereClause}
-        GROUP BY p.id
+        GROUP BY p.id,h.name
         ORDER BY p.archived_at DESC NULLS LAST
       `, params),
       pool.query(`SELECT COUNT(*)::int AS count FROM patients p ${whereClause}`, params),
