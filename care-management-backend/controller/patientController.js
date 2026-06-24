@@ -879,14 +879,44 @@ const getSearchedPatients = async (req, res) => {
 
     const { rows } = await pool.query(`
       SELECT p.*,
+        h.name AS hospital_name,
         EXTRACT(YEAR FROM AGE(NOW(), p.birth_date))::INTEGER AS age,
         json_agg(json_build_object('id', u.id, 'name', u.name))
-          FILTER (WHERE u.id IS NOT NULL) AS assigned_staff
+          FILTER (WHERE u.id IS NOT NULL) AS assigned_staff,
+        CASE
+          -- Gray: no visible tasks
+          WHEN NOT EXISTS (
+            SELECT 1 FROM patient_tasks pt
+            WHERE pt.patient_id = p.id AND pt.is_visible = TRUE
+          ) THEN NULL
+
+          -- Red: any task past due and not completed
+          WHEN EXISTS (
+            SELECT 1 FROM patient_tasks pt
+            WHERE pt.patient_id = p.id
+              AND pt.due_date < NOW()
+              AND pt.status NOT IN ('Completed', 'Delayed Completed', 'Acknowledged')
+              AND pt.is_visible = TRUE
+          ) THEN 'missed'
+
+          -- Blue: all up to date AND something due today or tomorrow
+          WHEN EXISTS (
+            SELECT 1 FROM patient_tasks pt
+            WHERE pt.patient_id = p.id
+              AND pt.due_date::date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '1 day'
+              AND pt.status NOT IN ('Completed', 'Delayed Completed', 'Acknowledged', 'Missed')
+              AND pt.is_visible = TRUE
+          ) THEN 'in_progress'
+
+          -- Green: all up to date, nothing urgent
+          ELSE 'completed'
+        END AS task_status
       FROM patients p
+      LEFT JOIN hospitals h ON h.id = p.hospital_id
       LEFT JOIN patient_staff ps ON p.id = ps.patient_id
       LEFT JOIN users u ON ps.staff_id = u.id
       ${whereClause}
-      GROUP BY p.id
+      GROUP BY p.id,h.name
       ORDER BY p.created_at DESC
     `, params);
 
