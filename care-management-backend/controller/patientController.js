@@ -72,23 +72,32 @@ const getPatients = async (req, res) => {
         p.added_by_user_id,
         h.name AS hospital_name,
         CASE
-          WHEN EXISTS (
+          -- Gray: no visible tasks
+          WHEN NOT EXISTS (
             SELECT 1 FROM patient_tasks pt
-            WHERE pt.patient_id = p.id AND pt.status = 'Missed' AND pt.is_visible = TRUE
-          ) THEN 'missed'
+            WHERE pt.patient_id = p.id AND pt.is_visible = TRUE
+          ) THEN NULL
+
+          -- Red: any task past due and not completed
           WHEN EXISTS (
             SELECT 1 FROM patient_tasks pt
             WHERE pt.patient_id = p.id
-              AND pt.due_date <= NOW()
-              AND pt.status NOT IN ('Completed', 'Missed','Delayed Completed')
+              AND pt.due_date < NOW()
+              AND pt.status NOT IN ('Completed', 'Delayed Completed', 'Acknowledged')
+              AND pt.is_visible = TRUE
+          ) THEN 'missed'
+
+          -- Blue: all up to date AND something due today or tomorrow
+          WHEN EXISTS (
+            SELECT 1 FROM patient_tasks pt
+            WHERE pt.patient_id = p.id
+              AND pt.due_date::date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '1 day'
+              AND pt.status NOT IN ('Completed', 'Delayed Completed', 'Acknowledged', 'Missed')
               AND pt.is_visible = TRUE
           ) THEN 'in_progress'
-          WHEN EXISTS (
-            SELECT 1 FROM patient_tasks pt
-            WHERE pt.patient_id = p.id
-              AND pt.is_visible = TRUE
-          ) THEN 'completed'
-          ELSE NULL
+
+          -- Green: all up to date, nothing urgent
+          ELSE 'completed'
         END AS task_status,
         json_agg(json_build_object('id', u.id, 'name', u.name))
           FILTER (WHERE u.id IS NOT NULL) AS assigned_staff
@@ -926,23 +935,32 @@ const getPatientsByAdmin = async (req, res) => {
         json_agg(json_build_object('id', u.id, 'name', u.name))
           FILTER (WHERE u.id IS NOT NULL) AS assigned_staff,
         CASE
-          WHEN EXISTS (
+          -- Gray: no visible tasks
+          WHEN NOT EXISTS (
             SELECT 1 FROM patient_tasks pt
-            WHERE pt.patient_id = p.id AND pt.status = 'Missed' AND pt.is_visible = TRUE
-          ) THEN 'missed'
+            WHERE pt.patient_id = p.id AND pt.is_visible = TRUE
+          ) THEN NULL
+
+          -- Red: any task past due and not completed
           WHEN EXISTS (
             SELECT 1 FROM patient_tasks pt
             WHERE pt.patient_id = p.id
-              AND pt.due_date <= NOW()
-              AND pt.status NOT IN ('Completed', 'Missed','Delayed Completed')
+              AND pt.due_date < NOW()
+              AND pt.status NOT IN ('Completed', 'Delayed Completed', 'Acknowledged')
+              AND pt.is_visible = TRUE
+          ) THEN 'missed'
+
+          -- Blue: all up to date AND something due today or tomorrow
+          WHEN EXISTS (
+            SELECT 1 FROM patient_tasks pt
+            WHERE pt.patient_id = p.id
+              AND pt.due_date::date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '1 day'
+              AND pt.status NOT IN ('Completed', 'Delayed Completed', 'Acknowledged', 'Missed')
               AND pt.is_visible = TRUE
           ) THEN 'in_progress'
-          WHEN EXISTS (
-            SELECT 1 FROM patient_tasks pt
-            WHERE pt.patient_id = p.id
-              AND pt.is_visible = TRUE
-          ) THEN 'completed'
-          ELSE NULL
+
+          -- Green: all up to date, nothing urgent
+          ELSE 'completed'
         END AS task_status
       FROM patients p
       LEFT JOIN hospitals h ON p.hospital_id = h.id
