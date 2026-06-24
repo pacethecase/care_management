@@ -80,13 +80,12 @@ const getPatients = async (req, res) => {
             SELECT 1 FROM patient_tasks pt
             WHERE pt.patient_id = p.id
               AND pt.due_date <= NOW()
-              AND pt.status NOT IN ('Completed', 'Missed')
+              AND pt.status NOT IN ('Completed', 'Missed','Delayed Completed')
               AND pt.is_visible = TRUE
           ) THEN 'in_progress'
           WHEN EXISTS (
             SELECT 1 FROM patient_tasks pt
             WHERE pt.patient_id = p.id
-              AND pt.status = 'Completed'
               AND pt.is_visible = TRUE
           ) THEN 'completed'
           ELSE NULL
@@ -922,14 +921,35 @@ const getPatientsByAdmin = async (req, res) => {
 
     const { rows } = await pool.query(`
       SELECT p.*,
+        h.name AS hospital_name,
         EXTRACT(YEAR FROM AGE(NOW(), p.birth_date))::INTEGER AS age,
         json_agg(json_build_object('id', u.id, 'name', u.name))
-          FILTER (WHERE u.id IS NOT NULL) AS assigned_staff
+          FILTER (WHERE u.id IS NOT NULL) AS assigned_staff,
+        CASE
+          WHEN EXISTS (
+            SELECT 1 FROM patient_tasks pt
+            WHERE pt.patient_id = p.id AND pt.status = 'Missed' AND pt.is_visible = TRUE
+          ) THEN 'missed'
+          WHEN EXISTS (
+            SELECT 1 FROM patient_tasks pt
+            WHERE pt.patient_id = p.id
+              AND pt.due_date <= NOW()
+              AND pt.status NOT IN ('Completed', 'Missed','Delayed Completed')
+              AND pt.is_visible = TRUE
+          ) THEN 'in_progress'
+          WHEN EXISTS (
+            SELECT 1 FROM patient_tasks pt
+            WHERE pt.patient_id = p.id
+              AND pt.is_visible = TRUE
+          ) THEN 'completed'
+          ELSE NULL
+        END AS task_status
       FROM patients p
+      LEFT JOIN hospitals h ON p.hospital_id = h.id
       LEFT JOIN patient_staff ps ON p.id = ps.patient_id
       LEFT JOIN users u ON ps.staff_id = u.id
       WHERE ${conditions.join(" AND ")}
-      GROUP BY p.id
+      GROUP BY p.id,h.name
       ORDER BY p.created_at DESC
     `, params);
 
