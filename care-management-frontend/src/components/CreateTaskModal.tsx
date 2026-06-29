@@ -63,7 +63,8 @@ const CreateTaskModal: React.FC<Props> = ({ onClose, patientId }) => {
   };
 
   const handleSubmit = async () => {
-    if (!formData.name.trim()) { toast.error("Task name is required"); return; }
+    if (!formData.name.trim()) { toast.error("Task name  is required"); return; }
+    if (!formData.description.trim()) { toast.error("Description  is required"); return; }
 
     const payload = {
       ...formData,
@@ -103,7 +104,7 @@ const CreateTaskModal: React.FC<Props> = ({ onClose, patientId }) => {
             </div>
 
             <div className="mb-3">
-              <label className="block font-medium mb-1">Description</label>
+              <label className="block font-medium mb-1">Description*</label>
               <textarea name="description" value={formData.description} onChange={handleChange}
                 placeholder="Description"
                 className="w-full border rounded py-2 px-3 bg-white text-black" />
