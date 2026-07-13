@@ -346,7 +346,7 @@ const createTables = async () => {
     `);
 
     // ── Task Override Requests ─────────────────────────────────────────────────
-    // FIX: requested_date changed from DATE to TIMESTAMPTZ.
+    // FIX: requested_date changed from DATE to TIMESTAMPTZ. requested_at is the new request timestamp.
     await client.query(`
       CREATE TABLE IF NOT EXISTS task_override_requests (
         id              SERIAL PRIMARY KEY,
@@ -355,7 +355,7 @@ const createTables = async () => {
         requested_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         reason          TEXT NOT NULL,
         status          VARCHAR(20) NOT NULL DEFAULT 'Pending'
-                          CHECK (status IN ('Pending', 'Approved', 'Rejected')),
+                          CHECK (status IN ('Pending', 'Approved', 'Denied')),
         approved_by     INTEGER REFERENCES users(id) ON DELETE SET NULL,
         decided_at      TIMESTAMPTZ,
         created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()

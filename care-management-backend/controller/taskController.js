@@ -820,10 +820,10 @@ const overrideTask = async (req, res) => {
 
       // FIX: requested_at instead of requested_date (schema fix)
       await client.query(
-        `INSERT INTO task_override_requests (task_id, requested_by, requested_at, reason, status)
-         VALUES ($1,$2,NOW(),$3,'Pending')`,
-        [taskId, req.user.id, reason.trim()]
-      );
+      `INSERT INTO task_override_requests (task_id, requested_by, requested_at, reason, status)
+      VALUES ($1,$2,$3,$4,'Pending')`,
+      [taskId, req.user.id, newDueDate, reason.trim()]
+    );
 
       // Notify the admin who added the patient
       // FIX: role = 'admin' not is_admin = TRUE
