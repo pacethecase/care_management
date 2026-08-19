@@ -143,6 +143,7 @@ const assignTasksToPatient = async (
       await assignTask("Guardianship - Family/Complex Care Meeting",                                0, patient.is_guardianship, true);
       await assignTask("Guardianship - Attempt to negotiate skilled rate with insurance company as applicable", 0, patient.is_guardianship, true);
       await assignTask("Guardianship - Is a financial inventory of patient assets required?",       1, is_guardianship_financial);
+      await assignTask("Guardianship - Cognitive Status Check", 14, patient.is_guardianship);
     }
 
     if (activeAlgorithms.includes("LTC")) {

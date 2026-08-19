@@ -20,7 +20,7 @@ import { useNavigate } from "react-router-dom";
 import type { Task, Note } from "../redux/types";
 import { showCourtDatePopup } from "../utils/showCourtDatePopup";
 import { useHospitalTimezone } from "../hooks/timezone";
-
+import AskApprovalModal from "../components/AskApprovalModal";
 const PatientTasks = () => {
   const { patientId } = useParams<{ patientId: string }>();
   const dispatch  = useDispatch<AppDispatch>();
@@ -51,6 +51,7 @@ const PatientTasks = () => {
   const [noteDrafts, setNoteDrafts]             = useState<Record<number, {
     task_note: string; contact_info: string; include_note_in_report: boolean;
   }>>({});
+  const [showApprovalModal, setShowApprovalModal] = useState(false);
 
   useEffect(() => {
     if (!patientId) return;
@@ -498,11 +499,24 @@ const PatientTasks = () => {
           <button className={`btn ${activeTab === "Notes" ? "btn-active" : ""}`} onClick={() => setActiveTab("Notes")}>Notes</button>
           {canAct && (
             <button className="btn btn-primary" onClick={() => setShowCreateModal(true)}>Create Task</button>
+            
           )}
+          {canAct && (
+              <button className="btn btn-primary" onClick={() => setShowApprovalModal(true)}>
+                Ask Approval
+              </button>
+            )}
         </div>
 
         {showCreateModal && (
           <CreateTaskModal onClose={() => setShowCreateModal(false)} patientId={Number(patientId)} />
+        )}
+        {showApprovalModal && (
+          <AskApprovalModal
+            patientId={Number(patientId)}
+            tasks={patientTasks}
+            onClose={() => setShowApprovalModal(false)}
+          />
         )}
 
         {/* Algorithm filter */}

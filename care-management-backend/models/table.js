@@ -258,6 +258,9 @@ const createTables = async () => {
 
       CREATE INDEX IF NOT EXISTS idx_tasks_algorithm ON tasks(algorithm);
 
+      CREATE UNIQUE INDEX IF NOT EXISTS tasks_name_unique
+      ON tasks(name);
+      
       CREATE OR REPLACE TRIGGER trg_tasks_updated_at
         BEFORE UPDATE ON tasks
         FOR EACH ROW EXECUTE FUNCTION update_updated_at();
@@ -354,6 +357,7 @@ const createTables = async () => {
         requested_by    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         requested_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         reason          TEXT NOT NULL,
+        decision_note   TEXT,
         status          VARCHAR(20) NOT NULL DEFAULT 'Pending'
                           CHECK (status IN ('Pending', 'Approved', 'Denied')),
         approved_by     INTEGER REFERENCES users(id) ON DELETE SET NULL,
@@ -365,6 +369,40 @@ const createTables = async () => {
         ON task_override_requests(task_id);
       CREATE INDEX IF NOT EXISTS idx_override_requests_status
         ON task_override_requests(status)
+        WHERE status = 'Pending';
+    `);
+
+    //---approval request---/// 
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS task_approval_requests (
+        id                 SERIAL PRIMARY KEY,
+        patient_id         INTEGER NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        patient_task_id    INTEGER REFERENCES patient_tasks(id) ON DELETE SET NULL,
+        hospital_id        INTEGER NOT NULL REFERENCES hospitals(id),
+
+        name               VARCHAR(200) NOT NULL,
+        description        TEXT,
+        estimated_amount   NUMERIC(10,2) NOT NULL CHECK (estimated_amount >= 0),
+
+        status             VARCHAR(20) NOT NULL DEFAULT 'Pending'
+                              CHECK (status IN ('Pending', 'Approved', 'Denied')),
+
+        requested_by       INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        requested_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+        decided_by         INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        decided_at         TIMESTAMPTZ,
+        decision_note      TEXT,
+
+        created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_approval_requests_hospital
+        ON task_approval_requests(hospital_id);
+      CREATE INDEX IF NOT EXISTS idx_approval_requests_patient
+        ON task_approval_requests(patient_id);
+      CREATE INDEX IF NOT EXISTS idx_approval_requests_pending
+        ON task_approval_requests(status)
         WHERE status = 'Pending';
     `);
 

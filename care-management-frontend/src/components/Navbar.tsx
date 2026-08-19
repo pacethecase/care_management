@@ -49,6 +49,7 @@ const Navbar: React.FC = () => {
   const canSeeHome      = !isGlobalAdmin;
   const canSeePatients  = !isGlobalAdmin;
   const canSeeReports   = !isGlobalAdmin;
+  const canSeeRequest  = !isGlobalAdmin;
 
   // Only staff see the Tasks tab
   const canSeeTasks     = role === "staff";
@@ -74,6 +75,7 @@ const Navbar: React.FC = () => {
             {canSeeReports   && <Link to="/reports"   className="tab transition">Reports</Link>}
             {canSeeTasks     && <Link to="/tasks"     className="tab transition">Tasks</Link>}
             {canSeeDashboard && <Link to="/dashboard" className="tab transition">Dashboard</Link>}
+            {canSeeRequest && <Link to="/approvals" className="tab transition">Requests</Link>}
           </div>
 
           {/* Notifications */}

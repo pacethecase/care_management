@@ -5,10 +5,8 @@ import {
   fetchNotifications, markAllRead,
   clearAllNotificationsThunk, deleteNotificationThunk,
 } from "../redux/slices/notificationSlice";
-import { decideOverride, loadPatientTasks } from "../redux/slices/taskSlice";
 import type { Notification } from "../redux/types";
 import { DateTime } from "luxon";
-import { toast } from "react-toastify";
 import BlueLoader from "./BlueLoader";
 
 const NotificationPanel = () => {
@@ -45,14 +43,21 @@ const NotificationPanel = () => {
         <p className="text-gray-500 text-sm">No notifications</p>
       ) : (
         notifications.map((n: Notification) => {
-          const patientTaskId = Number((n as any).patient_task_id ?? (n as any).task_id);
+          const isRequestNotif = n.type === "override_request" || n.type === "approval_request";
+          const isOverrideType = (n.type || "").startsWith("override");
 
+          const titleColor = isOverrideType
+            ? "text-red-700"
+            : (n.type || "").startsWith("approval")
+            ? "text-purple-700"
+            : "text-gray-600";
+
+      
           return (
             <div
               key={n.id}
               className={`relative mb-3 p-3 border rounded-md ${n.read ? "bg-gray-100" : "bg-yellow-50"}`}
             >
-              {/* Dismiss */}
               <div
                 className="absolute top-2 right-2 text-gray-400 hover:text-red-600 cursor-pointer text-lg leading-none"
                 title="Dismiss"
@@ -61,69 +66,29 @@ const NotificationPanel = () => {
                 ×
               </div>
 
-              {/* Title */}
-              <div className={`font-medium text-sm pr-4 ${
-                (n.type || "").startsWith("override") ? "text-red-700" : "text-gray-600"
-              }`}>
+              <div className={`font-medium text-sm pr-4 ${titleColor}`}>
                 {n.title}
               </div>
 
-              {/* Timestamp */}
               <div className="text-xs text-gray-500">
                 {n.created_at
-                  ? DateTime.fromISO(n.created_at, { zone: "utc" })
-                      .toLocal()
-                      .toFormat("MMM d, yyyy, h:mm a")
+                  ? DateTime.fromISO(n.created_at, { zone: "utc" }).toLocal().toFormat("MMM d, yyyy, h:mm a")
                   : "N/A"}
               </div>
 
-              {/* Message */}
               <div className="text-sm text-gray-700 mt-1">
                 {(n.message || "").split("\n").map((line, idx) => (
                   <span key={idx}>{line}<br /></span>
                 ))}
               </div>
+              <div className="mt-2">
+                
+              </div>
 
-              {/* Override approve/deny buttons — only for pending override requests */}
-              {n.type === "override_request" && patientTaskId && n.request_status === "Pending" && (
-                <div className="flex gap-2 mt-2">
-                  <button
-                    className="btn btn-xs bg-green-600 text-white hover:bg-green-700"
-                    onClick={async () => {
-                      try {
-                        await dispatch(decideOverride({ patientTaskId, decision: "Approved" })).unwrap();
-                        toast.success("Override approved");
-                      } catch (e: any) {
-                        toast.error(e?.error || e?.message || "Failed to approve");
-                      } finally {
-                        dispatch(fetchNotifications());
-                        if ((n as any).patient_id) {
-                          dispatch(loadPatientTasks(Number((n as any).patient_id)));
-                        }
-                      }
-                    }}
-                  >
-                    Approve
-                  </button>
-                  <button
-                    className="btn btn-xs bg-red-600 text-white hover:bg-red-700"
-                    onClick={async () => {
-                      try {
-                        await dispatch(decideOverride({ patientTaskId, decision: "Denied" })).unwrap();
-                        toast.info("Override denied");
-                      } catch (e: any) {
-                        toast.error(e?.error || e?.message || "Failed to deny");
-                      } finally {
-                        dispatch(fetchNotifications());
-                        if ((n as any).patient_id) {
-                          dispatch(loadPatientTasks(Number((n as any).patient_id)));
-                        }
-                      }
-                    }}
-                  >
-                    Deny
-                  </button>
-                </div>
+              {isRequestNotif && (
+                <a href="/approvals" className={`!text-gray-500 text-sm`}>
+                  Review on Requests page →
+                </a>
               )}
             </div>
           );

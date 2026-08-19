@@ -274,6 +274,7 @@ const getHistoricalTimelineReport = async (req, res) => {
     // FIX: fetch status_history from patient_task_status_history table
     let query = `
       SELECT
+        pt.id AS patient_task_id,
         t.name AS task_name,
         pt.completed_at,
         pt.task_note,
@@ -312,15 +313,62 @@ const getHistoricalTimelineReport = async (req, res) => {
     query += ` GROUP BY pt.id, t.name ORDER BY pt.completed_at ASC`;
 
     const { rows } = await pool.query(query, params);
-    const weeksMap  = {};
 
-    for (const row of rows) {
-      const completedAt = dayjs(row.completed_at);
-      const weekNumber  = Math.floor(completedAt.diff(admittedDate, "day") / 7) + 1;
+    // ── Fetch approval requests for this patient ──────────────────────────────
+    // Split by whether they're tied to a specific patient_task or standalone.
+    let approvalQuery = `
+      SELECT id, name, description, estimated_amount, status, decision_note,
+             requested_at, decided_at, patient_task_id
+      FROM task_approval_requests
+      WHERE patient_id = $1
+    `;
+    const approvalParams = [patientId];
+    let aIdx = 2;
+    if (start_date) {
+      approvalQuery += ` AND requested_at >= $${aIdx++}`;
+      approvalParams.push(DateTime.fromISO(start_date, { zone: timezone }).startOf("day").toUTC().toISO());
+    }
+    if (end_date) {
+      approvalQuery += ` AND requested_at <= $${aIdx++}`;
+      approvalParams.push(DateTime.fromISO(end_date, { zone: timezone }).endOf("day").toUTC().toISO());
+    }
+    approvalQuery += ` ORDER BY requested_at ASC`;
+
+    const { rows: approvalRows } = await pool.query(approvalQuery, approvalParams);
+
+    const approvalsByTaskId = new Map(); // patient_task_id -> [approvals]
+    const standaloneApprovals = [];       // approvals with no patient_task_id
+
+    for (const a of approvalRows) {
+      const entry = {
+        id: a.id,
+        name: a.name,
+        description: a.description,
+        estimated_amount: Number(a.estimated_amount),
+        status: a.status,
+        decision_note: a.decision_note,
+        requested_at: a.requested_at,
+        decided_at: a.decided_at,
+      };
+      if (a.patient_task_id) {
+        if (!approvalsByTaskId.has(a.patient_task_id)) approvalsByTaskId.set(a.patient_task_id, []);
+        approvalsByTaskId.get(a.patient_task_id).push(entry);
+      } else {
+        standaloneApprovals.push(entry);
+      }
+    }
+
+    const weeksMap = {};
+
+    const weekKeyFor = (date) => {
+      const weekNumber = Math.floor(dayjs(date).diff(admittedDate, "day") / 7) + 1;
       const weekStart   = admittedDate.add((weekNumber - 1) * 7, "day");
       const weekEnd     = admittedDate.add(weekNumber * 7 - 1, "day");
-      const weekKey     = `Week #${weekNumber} (${weekStart.format("MM.DD.YY")} - ${weekEnd.format("MM.DD.YY")})`;
+      return `Week #${weekNumber} (${weekStart.format("MM.DD.YY")} - ${weekEnd.format("MM.DD.YY")})`;
+    };
 
+    for (const row of rows) {
+      const weekKey = weekKeyFor(row.completed_at);
       if (!weeksMap[weekKey]) weeksMap[weekKey] = [];
 
       const history       = row.status_history || [];
@@ -333,6 +381,7 @@ const getHistoricalTimelineReport = async (req, res) => {
         .map(h => ({ reason: h.note ?? null, timestamp: h.changed_at, changed_by_user_id: h.changed_by_user_id }));
 
       weeksMap[weekKey].push({
+        type: "task",
         task_name: row.task_name,
         completed_at: row.completed_at,
         task_note: row.task_note,
@@ -341,6 +390,28 @@ const getHistoricalTimelineReport = async (req, res) => {
         delayed: isDelayed,
         delayed_reason,
         overrides,
+        // Approval requests raised against this specific task, if any
+        approvals: approvalsByTaskId.get(row.patient_task_id) ?? [],
+      });
+    }
+
+    // Standalone approvals — placed in the week matching their requested_at date
+    for (const a of standaloneApprovals) {
+      const weekKey = weekKeyFor(a.requested_at);
+      if (!weeksMap[weekKey]) weeksMap[weekKey] = [];
+
+      weeksMap[weekKey].push({
+        type: "approval",
+        ...a,
+      });
+    }
+
+    // Re-sort each week's entries chronologically by their relevant timestamp
+    for (const key of Object.keys(weeksMap)) {
+      weeksMap[key].sort((a, b) => {
+        const aTime = new Date(a.type === "approval" ? a.requested_at : a.completed_at).getTime();
+        const bTime = new Date(b.type === "approval" ? b.requested_at : b.completed_at).getTime();
+        return aTime - bTime;
       });
     }
 

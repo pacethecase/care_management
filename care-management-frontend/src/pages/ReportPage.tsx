@@ -106,7 +106,7 @@ const ReportPage = () => {
   }, [selectedReport, selectedDate, selectedHospitalId, selectedAdminId,
       selectedPatientId, startRange, endRange, dispatch]);
 
-  const handlePrint = () => {
+   const handlePrint = () => {
     const content     = document.getElementById("report-content");
     const printWindow = window.open("", "_blank");
     if (!content || !printWindow) return;
@@ -138,6 +138,44 @@ const ReportPage = () => {
             .print-Completed, .print-Delayed-Completed { background-color: #16a34a !important; }
             .print-Missed { background-color: #ef4444 !important; }
             .italic { font-style: italic; color: #b91c1c; }
+
+            /* FIX: approval request card styling — Tailwind classes don't
+               carry over into this standalone print document, so these are
+               written out explicitly to match bg-purple-50/border-purple-200 etc. */
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+            .bg-purple-50  { background-color: #faf5ff !important; }
+            .border-purple-200 { border-color: #e9d5ff !important; }
+            .text-purple-500 { color: #a855f7 !important; }
+            .text-purple-700 { color: #7e22ce !important; }
+            .text-purple-800 { color: #6b21a8 !important; }
+            .text-purple-900 { color: #581c87 !important; }
+            .rounded { border-radius: 0.25rem; }
+            .border { border-width: 1px; border-style: solid; }
+            .px-2 { padding-left: 0.5rem; padding-right: 0.5rem; }
+            .py-1 { padding-top: 0.25rem; padding-bottom: 0.25rem; }
+            .py-1\\.5 { padding-top: 0.375rem; padding-bottom: 0.375rem; }
+            .mt-1 { margin-top: 0.25rem; }
+            .mt-2 { margin-top: 0.5rem; }
+            .mb-2 { margin-bottom: 0.5rem; }
+            .space-y-2 > * + * { margin-top: 0.5rem; }
+            .font-semibold { font-weight: 600; }
+            .font-medium   { font-weight: 500; }
+            .italic { font-style: italic; }
+            .text-xs { font-size: 0.75rem; }
+            .text-sm { font-size: 0.875rem; }
+            .ml-1 { margin-left: 0.25rem; }
+            .px-1\\.5 { padding-left: 0.375rem; padding-right: 0.375rem; }
+            .py-0\\.5 { padding-top: 0.125rem; padding-bottom: 0.125rem; }
+            .rounded-full { border-radius: 9999px; }
+            .bg-yellow-100 { background-color: #fef9c3 !important; }
+            .text-yellow-700 { color: #a16207 !important; }
+            .bg-green-100  { background-color: #dcfce7 !important; }
+            .text-green-700 { color: #15803d !important; }
+            .bg-red-100    { background-color: #fee2e2 !important; }
+            .text-red-700  { color: #b91c1c !important; }
+            .bg-gray-100   { background-color: #f3f4f6 !important; }
+            .text-gray-700 { color: #374151 !important; }
           </style>
         </head>
         <body>

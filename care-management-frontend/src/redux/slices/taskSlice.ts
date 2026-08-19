@@ -4,6 +4,48 @@ import axios from "axios";
 import type { Task } from "../types";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL;
+export interface OverrideRequest {
+  id: number;
+  reason: string;
+  decision_note: string | null;
+  status: "Pending" | "Approved" | "Denied";
+  requested_at: string;
+  requested_date: string;
+  decided_at: string | null;
+  patient_task_id: number;
+  task_name: string;
+  ideal_due_date: string | null;
+  estimated_delay_days: number | null;
+  patient_id: number;
+  patient_name: string;
+  patient_status?: string;
+  hospital_id: number;
+  hospital_name: string;
+  requested_by: number | null;
+  requested_by_name: string | null;
+  decided_by: number | null;
+  decided_by_name: string | null;
+}
+
+export interface OverrideRequestsReport {
+  totals: {
+    totalRequests: number;
+    pendingCount: number;
+    approvedCount: number;
+    deniedCount: number;
+    avgTurnaroundHours: number;
+    avgDelayDays: number;
+  };
+  byHospital: {
+    hospitalId: number;
+    hospitalName: string;
+    totalRequests: number;
+    pendingCount: number;
+    approvedCount: number;
+    deniedCount: number;
+    avgDelayDays: number;
+  }[];
+}
 
 interface TaskState {
   patientTasks: Task[];
@@ -16,6 +58,10 @@ interface TaskState {
   taskNames: string[];
   taskNamesLoading: boolean;
   taskNamesError: string | null;
+  overrideRequests: OverrideRequest[];
+  overrideReport: OverrideRequestsReport | null;
+  overrideLoading: boolean;
+  overrideError: string | null;
 }
 
 const initialState: TaskState = {
@@ -29,6 +75,10 @@ const initialState: TaskState = {
   taskNames: [],
   taskNamesLoading: false,
   taskNamesError: null,
+  overrideRequests: [],
+  overrideReport: null,
+  overrideLoading: false,
+  overrideError: null,
 };
 
 // ─── Thunks ───────────────────────────────────────────────────────────────────
@@ -75,18 +125,17 @@ export const loadMissedTasks = createAsyncThunk(
   }
 );
 
-export const startTask = createAsyncThunk<
-  { taskId: number; version: number; status: string; started_at: string },
-  { taskId: number; version: number },
-  { rejectValue: string }
->("tasks/startTask", async ({ taskId, version }, { rejectWithValue }) => {
-  try {
-    const res = await axios.post(`${BASE_URL}/tasks/${taskId}/start`, { version }, { withCredentials: true });
-    return res.data;
-  } catch (err: any) {
-    return rejectWithValue(err.response?.data?.error || "Failed to start task");
+export const startTask = createAsyncThunk<{ taskId: number; version: number; status: string; started_at: string }, { taskId: number; version: number }, { rejectValue: string }>(
+  "tasks/startTask",
+  async ({ taskId, version }, { rejectWithValue }) => {
+    try {
+      const res = await axios.post(`${BASE_URL}/tasks/${taskId}/start`, { version }, { withCredentials: true });
+      return res.data;
+    } catch (err: any) {
+      return rejectWithValue(err.response?.data?.error || "Failed to start task");
+    }
   }
-});
+);
 
 export const completeTask = createAsyncThunk(
   "tasks/completeTask",
@@ -138,22 +187,21 @@ export const followUpTask = createAsyncThunk(
   }
 );
 
-export const updateTaskNoteMeta = createAsyncThunk<
-  any,
-  { taskId: number; version: number; data: { task_note?: string; include_note_in_report?: boolean; contact_info?: string } },
-  { rejectValue: any }
->("tasks/updateTaskNoteMeta", async ({ taskId, version, data }, { rejectWithValue }) => {
-  try {
-    const res = await axios.patch(
-      `${BASE_URL}/tasks/patient_tasks/${taskId}/note`,
-      { ...data, version },
-      { withCredentials: true }
-    );
-    return res.data.task;
-  } catch (err: any) {
-    return rejectWithValue(err.response ? { status: err.response.status, ...err.response.data } : { status: 500, message: "Unknown error" });
+export const updateTaskNoteMeta = createAsyncThunk<any, { taskId: number; version: number; data: { task_note?: string; include_note_in_report?: boolean; contact_info?: string } }, { rejectValue: any }>(
+  "tasks/updateTaskNoteMeta",
+  async ({ taskId, version, data }, { rejectWithValue }) => {
+    try {
+      const res = await axios.patch(
+        `${BASE_URL}/tasks/patient_tasks/${taskId}/note`,
+        { ...data, version },
+        { withCredentials: true }
+      );
+      return res.data.task;
+    } catch (err: any) {
+      return rejectWithValue(err.response ? { status: err.response.status, ...err.response.data } : { status: 500, message: "Unknown error" });
+    }
   }
-});
+);
 
 export const acknowledgeTask = createAsyncThunk(
   "tasks/acknowledgeTask",
@@ -204,40 +252,60 @@ export const fetchAllTaskNames = createAsyncThunk<string[], void, { rejectValue:
   }
 );
 
-export const overrideTask = createAsyncThunk<
-  { message: string; task?: any },
-  { patientTaskId: number; version: number; override_date: string; reason: string },
-  { rejectValue: string }
->("tasks/overrideTask", async ({ patientTaskId, version, override_date, reason }, { rejectWithValue }) => {
-  try {
-    const res = await axios.post(
-      `${BASE_URL}/tasks/${patientTaskId}/override`,
-      { override_date, version, reason },
-      { withCredentials: true }
-    );
-    return res.data;
-  } catch (err: any) {
-    return rejectWithValue(err?.response?.data?.error || err?.message || "Failed to override task");
+export const overrideTask = createAsyncThunk<{ message: string; task?: any }, { patientTaskId: number; version: number; override_date: string; reason: string }, { rejectValue: string }>(
+  "tasks/overrideTask",
+  async ({ patientTaskId, version, override_date, reason }, { rejectWithValue }) => {
+    try {
+      const res = await axios.post(
+        `${BASE_URL}/tasks/${patientTaskId}/override`,
+        { override_date, version, reason },
+        { withCredentials: true }
+      );
+      return res.data;
+    } catch (err: any) {
+      return rejectWithValue(err?.response?.data?.error || err?.message || "Failed to override task");
+    }
   }
-});
-
-export const decideOverride = createAsyncThunk<
-  { message: string },
-  { patientTaskId: number; decision: "Approved" | "Denied" },
-  { rejectValue: string }
->("tasks/decideOverride", async ({ patientTaskId, decision }, { rejectWithValue }) => {
-  try {
-    const res = await axios.patch(
-      `${BASE_URL}/tasks/${patientTaskId}/overridedecision`,
-      { decision },
-      { withCredentials: true }
-    );
-    return res.data;
-  } catch (err: any) {
-    return rejectWithValue(err?.response?.data?.error || err?.message || "Failed to decide override");
+);
+export const decideOverride = createAsyncThunk<{ message: string }, { patientTaskId: number; decision: "Approved" | "Denied"; decision_note?: string }, { rejectValue: string }>(
+  "tasks/decideOverride",
+  async ({ patientTaskId, decision, decision_note }, { rejectWithValue }) => {
+    try {
+      const res = await axios.patch(
+        `${BASE_URL}/tasks/${patientTaskId}/overridedecision`,
+        { decision, decision_note },
+        { withCredentials: true }
+      );
+      return res.data;
+    } catch (err: any) {
+      return rejectWithValue(err?.response?.data?.error || err?.message || "Failed to decide override");
+    }
   }
-});
+);
 
+export const loadOverrideRequests = createAsyncThunk<OverrideRequest[], { hospitalId?: string | number; status?: string; includeDischarged?: boolean } | undefined, { rejectValue: string }>(
+  "tasks/loadOverrideRequests",
+  async (params, { rejectWithValue }) => {
+    try {
+      const res = await axios.get(`${BASE_URL}/tasks/override-requests`, { params, withCredentials: true });
+      return res.data as OverrideRequest[];
+    } catch (err: any) {
+      return rejectWithValue(err.response?.data?.error || "Failed to load override requests");
+    }
+  }
+);
+
+export const loadOverrideRequestsReport = createAsyncThunk<OverrideRequestsReport, { hospitalId?: string | number; start?: string; end?: string; includeDischarged?: boolean } | undefined, { rejectValue: string }>(
+  "tasks/loadOverrideRequestsReport",
+  async (params, { rejectWithValue }) => {
+    try {
+      const res = await axios.get(`${BASE_URL}/tasks/override-requests/report`, { params, withCredentials: true });
+      return res.data as OverrideRequestsReport;
+    } catch (err: any) {
+      return rejectWithValue(err.response?.data?.error || "Failed to load override requests report");
+    }
+  }
+);
 // ─── Slice ────────────────────────────────────────────────────────────────────
 
 const taskSlice = createSlice({
@@ -247,12 +315,10 @@ const taskSlice = createSlice({
     clearTaskError:   (state) => { state.taskError = null; },
     clearGeneralError: (state) => { state.error = null; },
     clearTaskMessages: (state) => { state.error = null; state.successMessage = null; },
-    // FIX: resetTasks returns initialState so everything resets cleanly
     resetTasks: () => initialState,
   },
   extraReducers: (builder) => {
     builder
-      // loadPatientTasks
       .addCase(loadPatientTasks.pending, (state) => { state.loading = true; state.error = null; })
       .addCase(loadPatientTasks.fulfilled, (state, action) => { state.loading = false; state.patientTasks = action.payload; })
       .addCase(loadPatientTasks.rejected, (state, action) => {
@@ -261,19 +327,15 @@ const taskSlice = createSlice({
         state.taskError = (action.payload as any)?.error || action.payload as string || "Failed to fetch tasks";
       })
 
-      // loadPriorityTasks
       .addCase(loadPriorityTasks.fulfilled, (state, action) => { state.priorityTasks = action.payload; })
       .addCase(loadPriorityTasks.rejected, (state, action) => { state.error = action.payload as string; })
 
-      // loadMissedTasks
       .addCase(loadMissedTasks.fulfilled, (state, action) => { state.missedTasks = action.payload; })
       .addCase(loadMissedTasks.rejected, (state, action) => { state.error = action.payload as string; })
 
-      // startTask
       .addCase(startTask.pending, (state) => { state.loading = true; state.error = null; })
       .addCase(startTask.fulfilled, (state, action) => {
         state.loading = false;
-        // FIX: update task status in local state immediately
         const idx = state.patientTasks.findIndex(t => t.patient_task_id === action.payload.taskId);
         if (idx !== -1) {
           state.patientTasks[idx].status     = action.payload.status;
@@ -283,12 +345,10 @@ const taskSlice = createSlice({
       })
       .addCase(startTask.rejected, (state, action) => { state.loading = false; state.error = action.payload ?? "Failed to start task"; })
 
-      // completeTask
       .addCase(completeTask.pending, (state) => { state.loading = true; state.error = null; state.taskError = null; })
       .addCase(completeTask.fulfilled, (state) => { state.loading = false; })
       .addCase(completeTask.rejected, (state, action) => { state.loading = false; state.taskError = action.payload as string || "Failed to complete task"; })
 
-      // markTaskAsMissed
       .addCase(markTaskAsMissed.pending, (state) => { state.loading = true; state.taskError = null; })
       .addCase(markTaskAsMissed.fulfilled, (state, action) => {
         state.loading = false;
@@ -297,7 +357,6 @@ const taskSlice = createSlice({
       })
       .addCase(markTaskAsMissed.rejected, (state, action) => { state.loading = false; state.taskError = action.payload as string || "Failed to mark task as missed"; })
 
-      // followUpTask
       .addCase(followUpTask.pending, (state) => { state.loading = true; })
       .addCase(followUpTask.fulfilled, (state, action) => {
         state.loading = false;
@@ -306,7 +365,6 @@ const taskSlice = createSlice({
       })
       .addCase(followUpTask.rejected, (state, action) => { state.loading = false; state.error = action.payload as string; })
 
-      // updateTaskNoteMeta
       .addCase(updateTaskNoteMeta.fulfilled, (state, action) => {
         const updated = action.payload;
         if (!updated) return;
@@ -315,7 +373,6 @@ const taskSlice = createSlice({
       })
       .addCase(updateTaskNoteMeta.rejected, (state, action) => { state.error = action.payload as string; })
 
-      // acknowledgeTask
       .addCase(acknowledgeTask.fulfilled, (state, action) => {
         const updated = action.payload?.task || action.payload;
         if (!updated?.id) return;
@@ -324,17 +381,14 @@ const taskSlice = createSlice({
       })
       .addCase(acknowledgeTask.rejected, (state, action) => { state.taskError = action.payload as string || "Failed to acknowledge task"; })
 
-      // createManualTask
       .addCase(createManualTask.pending, (state) => { state.loading = true; state.taskError = null; })
       .addCase(createManualTask.fulfilled, (state) => { state.loading = false; })
       .addCase(createManualTask.rejected, (state, action) => { state.loading = false; state.taskError = action.payload as string || "Failed to create manual task"; })
 
-      // fetchAllTaskNames
       .addCase(fetchAllTaskNames.pending, (state) => { state.taskNamesLoading = true; state.taskNamesError = null; })
       .addCase(fetchAllTaskNames.fulfilled, (state, action) => { state.taskNamesLoading = false; state.taskNames = action.payload; })
       .addCase(fetchAllTaskNames.rejected, (state, action) => { state.taskNamesLoading = false; state.taskNamesError = action.payload ?? "Unknown error"; })
 
-      // overrideTask
       .addCase(overrideTask.pending, (state) => { state.loading = true; state.taskError = null; })
       .addCase(overrideTask.fulfilled, (state, action) => {
         state.loading = false;
@@ -353,10 +407,25 @@ const taskSlice = createSlice({
       })
       .addCase(overrideTask.rejected, (state, action) => { state.loading = false; state.taskError = action.payload ?? "Failed to override task"; })
 
-      // decideOverride
       .addCase(decideOverride.pending, (state) => { state.loading = true; state.error = null; state.successMessage = null; })
       .addCase(decideOverride.fulfilled, (state, action) => { state.loading = false; state.successMessage = action.payload.message; })
-      .addCase(decideOverride.rejected, (state, action) => { state.loading = false; state.error = action.payload ?? "Failed to process override decision"; });
+      .addCase(decideOverride.rejected, (state, action) => { state.loading = false; state.error = action.payload ?? "Failed to process override decision"; })
+
+      .addCase(loadOverrideRequests.pending, (state) => { state.overrideLoading = true; state.overrideError = null; })
+      .addCase(loadOverrideRequests.fulfilled, (state, action) => { state.overrideLoading = false; state.overrideRequests = action.payload; })
+      .addCase(loadOverrideRequests.rejected, (state, action) => {
+        state.overrideLoading = false;
+        state.overrideRequests = [];
+        state.overrideError = action.payload ?? "Failed to load override requests";
+      })
+
+      .addCase(loadOverrideRequestsReport.pending, (state) => { state.overrideLoading = true; state.overrideError = null; })
+      .addCase(loadOverrideRequestsReport.fulfilled, (state, action) => { state.overrideLoading = false; state.overrideReport = action.payload; })
+      .addCase(loadOverrideRequestsReport.rejected, (state, action) => {
+        state.overrideLoading = false;
+        state.overrideReport = null;
+        state.overrideError = action.payload ?? "Failed to load override requests report";
+      });
   },
 });
 

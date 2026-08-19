@@ -538,10 +538,12 @@ const reactivatePatient = async (req, res) => {
       return res.status(409).json({ error: "Patient already updated or access denied. Refresh and try again." });
     }
 
-    // FIX: re-open patient_algorithms entries from patient_algorithms table
+    // FIX: re-open patient_algorithms entries from patient_algorithms table.
     const { rows: algoRows } = await client.query(
-      `SELECT DISTINCT algorithm FROM patient_algorithms
-       WHERE patient_id = $1 ORDER BY assigned_at DESC`,
+      `SELECT DISTINCT ON (algorithm) algorithm, assigned_at
+       FROM patient_algorithms
+       WHERE patient_id = $1
+       ORDER BY algorithm, assigned_at DESC`,
       [patientId]
     );
     for (const { algorithm } of algoRows) {

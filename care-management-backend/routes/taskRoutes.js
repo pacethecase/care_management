@@ -5,6 +5,7 @@ const {
   startTask, completeTask, markTaskAsMissed, getMissedTasks,
   getPriorityTasks, followUpCourtTask, updateTaskNote, acknowledgeTask,
   addManualTaskForPatient, getTaskNames, overrideTask, handleOverrideDecision,
+  getOverrideRequests, getOverrideRequestsReport,
 } = require("../controller/taskController");
 
 router.get("/priority",    verifyToken, getPriorityTasks);
@@ -21,6 +22,7 @@ router.post("/:taskId/follow-up",       verifyToken, requireEditAccess, blockNon
 router.patch("/:taskId/overridedecision", verifyToken, handleOverrideDecision);
 router.post("/:taskId/override",        verifyToken, requireEditAccess, blockNonClinicalUsers, overrideTask);
 router.patch("/:taskId/acknowledge", verifyToken, requireEditAccess, blockNonClinicalUsers, acknowledgeTask);
- 
+router.get("/override-requests",verifyToken, getOverrideRequests);
+router.get("/override-requests/report",verifyToken,getOverrideRequestsReport);
 module.exports = router;
  

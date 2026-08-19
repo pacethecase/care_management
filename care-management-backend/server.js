@@ -20,6 +20,7 @@ const hospitalRoutes     = require("./routes/hospitalRoutes");
 const adminRoutes        = require("./routes/adminRoutes");
 const organizationRoutes = require("./routes/organizationRoutes");
 const publicRoutes       = require("./routes/publicRoutes");
+const approvalRoutes     = require("./routes/approvalRoutes");
 const path = require("path");
 const setupMissedTaskJob    = require("./controller/missedTaskJob");
 const setupCourtReminderJob = require("./controller/setupCourtReminderJob");
@@ -32,6 +33,7 @@ app.set("trust proxy", 1);
 const allowedOrigins = [
   "http://localhost:5173",
   "http://localhost:5174",
+  "http://localhost:5175",
   "https://care-management-nine.vercel.app",
   "https://www.pacethecase.com",
   "https://pacethecase.com",
@@ -92,6 +94,7 @@ app.use("/hospitals",     hospitalRoutes);
 app.use("/admin",         adminRoutes);
 app.use("/organizations", organizationRoutes);
 app.use("/public",        publicRoutes);
+app.use("/approval", approvalRoutes);
 
 app.use((err, req, res, next) => {
   console.error("Unhandled error:", err.message);

@@ -34,7 +34,7 @@ import EditPatientPage from './pages/EditPatientPage';
 import LengthOfStayReport from './pages/LengthOfStayReport';
 import OpportunityLOSPage from './pages/OpportunityLOSPage';
 import ArchivedPatients from './pages/ArchivedPatients';
-
+import RequestPage from './pages/RequestPage';
 function App() {
   const dispatch = useDispatch<AppDispatch>();
   const { user, authLoaded } = useSelector((state: RootState) => state.user);
@@ -197,7 +197,16 @@ function App() {
             </PrivateRoute>
           }
         />
+        <Route
+          path="/approvals"
+          element={
+            <PrivateRoute allowedRoles={['super_admin', 'admin','staff']}>
+              <RequestPage />
+            </PrivateRoute>
+          }
+        />
       </Routes>
+      
 
       <Notifications />
       <ToastContainer position="top-right" autoClose={3000} theme="light" />

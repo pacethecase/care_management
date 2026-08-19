@@ -11,9 +11,10 @@ import hospitalReducer from "../slices/hospitalSlice";
 import adminReducer from "../slices/adminSlice";
 import organizationReducer from "../slices/organizationSlice";
 import publicReducer from "../slices/publicSlice";
-
+import approvalReducer from "../slices/approvalSlice";
 export const store = configureStore({
   reducer: {
+    approval: approvalReducer,
     user: userReducer,
     patients: patientsReducer,
     tasks: taskReducer,
