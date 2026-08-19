@@ -237,7 +237,10 @@ const getApprovalsReport = async (req, res) => {
     } else if (isStaff(user)) {
       isStaffScope = true;
       params.push(user.id);
-      conditions.push(`r.requested_by = $${params.length}`);
+      conditions.push(
+        `(r.requested_by = $${params.length}
+          OR EXISTS (SELECT 1 FROM patient_staff ps WHERE ps.patient_id = r.patient_id AND ps.staff_id = $${params.length}))`
+      );
     } else {
       return res.status(403).json({ error: "Access denied." });
     }

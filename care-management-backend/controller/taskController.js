@@ -1131,7 +1131,10 @@ const getOverrideRequestsReport = async (req, res) => {
     } else if (isStaff(user)) {
       isStaffScope = true;
       params.push(user.id);
-      conditions.push(`r.requested_by = $${params.length}`);
+      conditions.push(
+        `(r.requested_by = $${params.length}
+          OR EXISTS (SELECT 1 FROM patient_staff ps WHERE ps.patient_id = p.id AND ps.staff_id = $${params.length}))`
+      );
     } else {
       return res.status(403).json({ error: "Access denied." });
     }
@@ -1158,7 +1161,7 @@ const getOverrideRequestsReport = async (req, res) => {
          COALESCE(AVG(EXTRACT(EPOCH FROM (r.decided_at - r.created_at)) / 3600)
                     FILTER (WHERE r.decided_at IS NOT NULL), 0)::numeric AS avg_turnaround_hours,
         ROUND(COALESCE(AVG(EXTRACT(EPOCH FROM (r.requested_at - pt.ideal_due_date)) / 86400)
-           FILTER (WHERE pt.ideal_due_date IS NOT NULL), 0)::numeric, 2) AS avg_delay_days
+          FILTER (WHERE pt.ideal_due_date IS NOT NULL AND r.status = 'Approved'), 0)::numeric, 2) AS avg_delay_days
        ${joinBase}
        WHERE ${whereClause}`,
       params
@@ -1174,7 +1177,7 @@ const getOverrideRequestsReport = async (req, res) => {
            COUNT(*) FILTER (WHERE r.status = 'Approved')::int AS approved_count,
            COUNT(*) FILTER (WHERE r.status = 'Denied')::int   AS denied_count,
           ROUND(COALESCE(AVG(EXTRACT(EPOCH FROM (r.requested_at - pt.ideal_due_date)) / 86400)
-           FILTER (WHERE pt.ideal_due_date IS NOT NULL), 0)::numeric, 2) AS avg_delay_days
+            FILTER (WHERE pt.ideal_due_date IS NOT NULL AND r.status = 'Approved'), 0)::numeric, 2) AS avg_delay_days
          ${joinBase}
          WHERE ${whereClause}
          GROUP BY p.hospital_id, h.name
