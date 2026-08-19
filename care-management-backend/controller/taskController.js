@@ -470,10 +470,11 @@ const getMissedTasks = async (req, res) => {
         AND p.is_archived = FALSE
         AND pt.is_visible = TRUE
         AND NOT EXISTS (
-          SELECT 1 FROM patient_task_status_history h
-          WHERE h.patient_task_id = pt.id
+        SELECT 1 FROM patient_task_status_history h
+        WHERE h.patient_task_id = pt.id
             AND h.new_status = 'Missed'
             AND h.note IS NOT NULL
+            AND h.note != 'Auto-marked missed by system'
         )
     `;
     const params = [staffId, hospital_id];
