@@ -7,6 +7,7 @@ const {
   getApprovals,
   decideApproval,
   getApprovalsReport,
+  getApprovalDeciders,
 } = require("../controller/approvalController");
 
 const { verifyToken } = require("../middleware/authMiddleware");
@@ -30,5 +31,6 @@ router.get("/approval-requests", getApprovals);
 
 // ─── DECIDE (approve/deny) ──────────────────────────────────────────────────────
 router.patch("/approval-requests/:id/decision", decideApproval);
+router.get("/approvals/deciders",getApprovalDeciders);
 
 module.exports = router;

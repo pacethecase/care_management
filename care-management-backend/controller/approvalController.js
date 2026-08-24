@@ -129,7 +129,7 @@ const createApprovalRequest = async (req, res) => {
       const { rows: [notif] } = await client.query(
         `INSERT INTO notifications (user_id, patient_id, title, message, type)
          VALUES ($1,$2,$3,$4,'approval_request') RETURNING *`,
-        [target.id, patient.id, "Approval Needed",
+        [target.id, patient.id, "Approval Request Needed",
          `"${name.trim()}" ($${amount.toFixed(2)}) requested for ${patient.first_name} ${patient.last_name} at ${patient.hospital_name}`]
       );
       io?.to?.(`user-${target.id}`)?.emit("notification", notif);
@@ -189,12 +189,17 @@ const getApprovals = async (req, res) => {
     conditions.push(showDischarged ? `p.status = 'Discharged'` : `p.status = 'Admitted'`);
 
     if (status) { params.push(status); conditions.push(`r.status = $${params.length}`); }
-
+    if (req.query.decidedBy) {
+      params.push(req.query.decidedBy);
+      conditions.push(`r.decided_by = $${params.length}`);
+    }
     const { rows } = await pool.query(
       `SELECT
          r.id, r.name, r.description, r.estimated_amount, r.status,
          r.requested_at, r.decided_at, r.decision_note,
          r.patient_id, p.first_name || ' ' || p.last_name AS patient_name, p.status AS patient_status,
+         p.mrn AS patient_mrn,
+         DATE_PART('year', AGE(p.birth_date)) AS patient_age,
          r.hospital_id, h.name AS hospital_name,
          r.requested_by, ureq.name AS requested_by_name,
          r.decided_by, udec.name AS decided_by_name
@@ -249,7 +254,10 @@ const getApprovalsReport = async (req, res) => {
 
     if (start) { params.push(start); conditions.push(`r.requested_at::date >= $${params.length}`); }
     if (end)   { params.push(end);   conditions.push(`r.requested_at::date <= $${params.length}`); }
-
+    if (req.query.decidedBy) {
+      params.push(req.query.decidedBy);
+      conditions.push(`r.decided_by = $${params.length}`);
+    }
     const whereClause = conditions.join(" AND ");
 
     const { rows: [totals] } = await pool.query(
@@ -400,7 +408,7 @@ const decideApproval = async (req, res) => {
       [user.id, request.hospital_id]
     );
 
-    const title   = `Approval ${decision}`;
+    const title   = `Approval Request ${decision}`;
     const message = `"${request.name}" for ${request.first_name} ${request.last_name} at ${request.hospital_name} was ${decision.toLowerCase()}${decision_note ? ` — ${decision_note.trim()}` : ""}.`;
     const type    = decision === "Approved" ? "approval_approved" : "approval_denied";
 
@@ -432,9 +440,57 @@ const decideApproval = async (req, res) => {
     client.release();
   }
 };
+
+// ─── GET APPROVAL DECIDERS (for filter dropdown) ──────────────────────────────
+// Distinct list of admins who have ever decided an approval request in scope.
+// Deliberately ignores status/decidedBy/includeDischarged so the dropdown
+// doesn't shrink as the user filters.
+const getApprovalDeciders = async (req, res) => {
+  const user = req.user;
+  if (!user?.is_approved)
+    return res.status(403).json({ error: "Access denied: user not approved." });
+
+  try {
+    let params = [];
+    let conditions = [];
+
+    if (isAdmin(user) || isSuperAdmin(user) || hasGlobalAccess(user)) {
+      const { sql: scopeSQL, params: scopeParams } = getApprovalScope(req);
+      params = [...scopeParams];
+      conditions = [scopeSQL];
+    } else if (isStaff(user)) {
+      params.push(user.id);
+      conditions.push(
+        `(r.requested_by = $${params.length}
+          OR EXISTS (SELECT 1 FROM patient_staff ps WHERE ps.patient_id = r.patient_id AND ps.staff_id = $${params.length}))`
+      );
+    } else {
+      return res.status(403).json({ error: "Access denied." });
+    }
+
+    conditions.push(`r.decided_by IS NOT NULL`);
+
+    const { rows } = await pool.query(
+      `SELECT DISTINCT r.decided_by AS id, u.name
+       FROM task_approval_requests r
+       JOIN users u ON u.id = r.decided_by
+       WHERE ${conditions.join(" AND ")}
+       ORDER BY u.name`,
+      params
+    );
+
+    return res.status(200).json(rows);
+
+  } catch (err) {
+    console.error("getApprovalDeciders error:", err);
+    return res.status(500).json({ error: "Internal Server Error" });
+  }
+};
+
 module.exports = {
   createApprovalRequest,
   getApprovals,
   decideApproval,
   getApprovalsReport,
+  getApprovalDeciders
 };

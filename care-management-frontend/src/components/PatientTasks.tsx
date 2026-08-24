@@ -503,7 +503,7 @@ const PatientTasks = () => {
           )}
           {canAct && (
               <button className="btn btn-primary" onClick={() => setShowApprovalModal(true)}>
-                Ask Approval
+                Request Approval
               </button>
             )}
         </div>

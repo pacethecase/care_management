@@ -18,6 +18,8 @@ export interface OverrideRequest {
   estimated_delay_days: number | null;
   patient_id: number;
   patient_name: string;
+  patient_mrn?: string | null;
+  patient_age?: number | null;
   patient_status?: string;
   hospital_id: number;
   hospital_name: string;
@@ -26,7 +28,10 @@ export interface OverrideRequest {
   decided_by: number | null;
   decided_by_name: string | null;
 }
-
+export interface OverrideDecider {
+  id: number;
+  name: string;
+}
 export interface OverrideRequestsReport {
   totals: {
     totalRequests: number;
@@ -60,6 +65,8 @@ interface TaskState {
   taskNamesError: string | null;
   overrideRequests: OverrideRequest[];
   overrideReport: OverrideRequestsReport | null;
+  overrideDeciders: OverrideDecider[];        
+  overrideDecidersLoading: boolean;  
   overrideLoading: boolean;
   overrideError: string | null;
 }
@@ -77,6 +84,8 @@ const initialState: TaskState = {
   taskNamesError: null,
   overrideRequests: [],
   overrideReport: null,
+  overrideDeciders: [],         
+  overrideDecidersLoading: false, 
   overrideLoading: false,
   overrideError: null,
 };
@@ -283,7 +292,7 @@ export const decideOverride = createAsyncThunk<{ message: string }, { patientTas
   }
 );
 
-export const loadOverrideRequests = createAsyncThunk<OverrideRequest[], { hospitalId?: string | number; status?: string; includeDischarged?: boolean } | undefined, { rejectValue: string }>(
+export const loadOverrideRequests = createAsyncThunk<OverrideRequest[], { hospitalId?: string | number; status?: string; includeDischarged?: boolean; decidedBy?: string | number } | undefined, { rejectValue: string }>(
   "tasks/loadOverrideRequests",
   async (params, { rejectWithValue }) => {
     try {
@@ -295,7 +304,7 @@ export const loadOverrideRequests = createAsyncThunk<OverrideRequest[], { hospit
   }
 );
 
-export const loadOverrideRequestsReport = createAsyncThunk<OverrideRequestsReport, { hospitalId?: string | number; start?: string; end?: string; includeDischarged?: boolean } | undefined, { rejectValue: string }>(
+export const loadOverrideRequestsReport = createAsyncThunk<OverrideRequestsReport, { hospitalId?: string | number; start?: string; end?: string; includeDischarged?: boolean; decidedBy?: string | number } | undefined, { rejectValue: string }>(
   "tasks/loadOverrideRequestsReport",
   async (params, { rejectWithValue }) => {
     try {
@@ -306,6 +315,22 @@ export const loadOverrideRequestsReport = createAsyncThunk<OverrideRequestsRepor
     }
   }
 );
+
+export const loadOverrideDeciders = createAsyncThunk<OverrideDecider[], { hospitalId?: string | number } | undefined, { rejectValue: string }>(
+  "tasks/loadOverrideDeciders",
+  async (params, { rejectWithValue }) => {
+    try {
+      const res = await axios.get(`${BASE_URL}/tasks/overrides/deciders`, {
+        params,
+        withCredentials: true,
+      });
+      return res.data as OverrideDecider[];
+    } catch (err: any) {
+      return rejectWithValue(err.response?.data?.error || "Failed to load deciders");
+    }
+  }
+);
+
 // ─── Slice ────────────────────────────────────────────────────────────────────
 
 const taskSlice = createSlice({
@@ -425,6 +450,15 @@ const taskSlice = createSlice({
         state.overrideLoading = false;
         state.overrideReport = null;
         state.overrideError = action.payload ?? "Failed to load override requests report";
+      })
+      .addCase(loadOverrideDeciders.pending, (state) => { state.overrideDecidersLoading = true; })
+      .addCase(loadOverrideDeciders.fulfilled, (state, action) => {
+        state.overrideDecidersLoading = false;
+        state.overrideDeciders = action.payload;
+      })
+      .addCase(loadOverrideDeciders.rejected, (state) => {
+        state.overrideDecidersLoading = false;
+        state.overrideDeciders = [];
       });
   },
 });

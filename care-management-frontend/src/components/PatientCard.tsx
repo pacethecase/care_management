@@ -165,6 +165,7 @@ const PatientCard: React.FC<PatientCardProps> = ({
       <div className="text-sm text-[var(--text-dark)] space-y-1">
         <p><span className="font-semibold">Age:</span> {age} years</p>
         <p><span className="font-semibold">Room:</span> {patient.room_no || "N/A"}</p>
+        <p><span className="font-semibold">MRN:</span> {patient.mrn || "N/A"}</p>
         <p>
           <span className="font-semibold">Workflow Map:</span>{" "}
           {algorithms.length > 0 ? algorithms.join(", ") : "Not Provided"}

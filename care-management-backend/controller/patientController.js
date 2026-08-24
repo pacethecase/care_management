@@ -147,7 +147,7 @@ const addPatient = async (req, res) => {
 
     // FIX: removed duplicate role/hospital checks that were inside try block
 
-    if (!first_name || !last_name || !birth_date || !roomNo || !mrn)
+    if (!first_name || !last_name || !birth_date || !mrn)
       return res.status(400).json({ message: "Missing required fields" });
 
     if (!assignedStaffIds?.length)
@@ -163,6 +163,8 @@ const addPatient = async (req, res) => {
 
     if (is_guardianship && !is_guardianship_financial && !is_guardianship_person)
       return res.status(400).json({ error: "Guardianship selected — please choose at least one: Financial or Person." });
+    if (!is_behavioral && !is_ltc && !is_guardianship)
+          return res.status(400).json({ error: "Please select at least one care type: Behavioral, LTC, or Guardianship." });
 
     const { rows: existing } = await pool.query(
       `SELECT id FROM patients

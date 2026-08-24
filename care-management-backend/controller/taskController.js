@@ -846,7 +846,7 @@ const overrideTask = async (req, res) => {
           `INSERT INTO notifications (user_id, patient_id, patient_task_id, title, message, type)
            VALUES ($1,$2,$3,$4,$5,'override_request') RETURNING *`,
           [target.id, task.patient_id, task.id,
-           "Override Approval Needed",
+           "Override Request Submitted",
            `Task "${task.task_name}" for ${task.first_name} ${task.last_name} at ${task.hospital_name} requires approval. Reason: ${reason.trim()}`]
         );
         io?.to?.(`user-${target.id}`)?.emit("notification", notif);
@@ -985,7 +985,7 @@ const handleOverrideDecision = async (req, res) => {
     );
 
     const type    = decision === "Approved" ? "override_approved" : "override_denied";
-    const title   = `Override ${decision}`;
+    const title   = `Override Request ${decision}`;
     const message = `Task "${request.task_name}" for ${request.first_name} ${request.last_name} at ${request.hospital_name} was ${decision.toLowerCase()}${decision_note ? ` — ${decision_note.trim()}` : ""}.`;
 
     const recipientIds = new Set([
@@ -1073,7 +1073,10 @@ const getOverrideRequests = async (req, res) => {
     conditions.push(showDischarged ? `p.status = 'Discharged'` : `p.status = 'Admitted'`);
 
     if (status) { params.push(status); conditions.push(`r.status = $${params.length}`); }
-
+    if (req.query.decidedBy) {
+      params.push(req.query.decidedBy);
+      conditions.push(`r.approved_by = $${params.length}`);
+    }
     // FIX: ideal_due_date + estimated_delay_days — rough estimate of how many
     // days the override target date (r.requested_at) sits past the task's
     // original ideal_due_date. Not exact (other tasks may already be delayed),
@@ -1088,6 +1091,8 @@ const getOverrideRequests = async (req, res) => {
          pt.ideal_due_date,
          ROUND(EXTRACT(EPOCH FROM (r.requested_at - pt.ideal_due_date)) / 86400)::int AS estimated_delay_days,
          p.id AS patient_id, p.first_name || ' ' || p.last_name AS patient_name, p.status AS patient_status,
+        p.mrn AS patient_mrn,
+         DATE_PART('year', AGE(p.birth_date)) AS patient_age,
          p.hospital_id, h.name AS hospital_name,
          r.requested_by, ureq.name AS requested_by_name,
          r.approved_by AS decided_by, udec.name AS decided_by_name
@@ -1144,7 +1149,10 @@ const getOverrideRequestsReport = async (req, res) => {
 
     if (start) { params.push(start); conditions.push(`r.created_at::date >= $${params.length}`); }
     if (end)   { params.push(end);   conditions.push(`r.created_at::date <= $${params.length}`); }
-
+    if (req.query.decidedBy) {
+      params.push(req.query.decidedBy);
+      conditions.push(`r.approved_by = $${params.length}`);
+    }
     const joinBase = `
       FROM task_override_requests r
       JOIN patient_tasks pt ON r.task_id = pt.id
@@ -1213,10 +1221,56 @@ const getOverrideRequestsReport = async (req, res) => {
     return res.status(500).json({ error: "Failed to generate overrides report." });
   }
 };
+
+// ─── GET OVERRIDE DECIDERS (for filter dropdown) ──────────────────────────────
+const getOverrideDeciders = async (req, res) => {
+  const user = req.user;
+  if (!user?.is_approved)
+    return res.status(403).json({ error: "Access denied: user not approved." });
+
+  try {
+    let params = [];
+    let conditions = [];
+
+    if (isAdmin(user) || isSuperAdmin(user) || hasGlobalAccess(user)) {
+      const { sql: scopeSQL, params: scopeParams } = getOverrideScope(req);
+      params = [...scopeParams];
+      conditions = [scopeSQL];
+    } else if (isStaff(user)) {
+      params.push(user.id);
+      conditions.push(
+        `(r.requested_by = $${params.length}
+          OR EXISTS (SELECT 1 FROM patient_staff ps WHERE ps.patient_id = p.id AND ps.staff_id = $${params.length}))`
+      );
+    } else {
+      return res.status(403).json({ error: "Access denied." });
+    }
+
+    conditions.push(`r.approved_by IS NOT NULL`);
+
+    const { rows } = await pool.query(
+      `SELECT DISTINCT r.approved_by AS id, u.name
+       FROM task_override_requests r
+       JOIN patient_tasks pt ON r.task_id = pt.id
+       JOIN patients p ON pt.patient_id = p.id
+       JOIN users u ON u.id = r.approved_by
+       WHERE ${conditions.join(" AND ")}
+       ORDER BY u.name`,
+      params
+    );
+
+    return res.status(200).json(rows);
+
+  } catch (err) {
+    console.error("getOverrideDeciders error:", err);
+    return res.status(500).json({ error: "Internal Server Error" });
+  }
+};
+
 module.exports = {
   startTask, completeTask, markTaskAsMissed, getMissedTasks,
   getPriorityTasks, followUpCourtTask, updateTaskNote,
   acknowledgeTask, addManualTaskForPatient, getTaskNames,
   overrideTask, handleOverrideDecision,
-  getOverrideRequests, getOverrideRequestsReport,
+  getOverrideRequests, getOverrideRequestsReport,getOverrideDeciders
 };

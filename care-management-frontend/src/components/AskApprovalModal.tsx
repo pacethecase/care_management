@@ -6,6 +6,10 @@ import { createApprovalRequest } from "../redux/slices/approvalSlice";
 import { toast } from "react-toastify";
 import type { Task } from "../redux/types";
 
+// FIX: temporarily hidden per request — keep functionality intact for
+// possible re-enable later. Flip to true to bring the dropdown back.
+const SHOW_RELATED_TASK_FIELD = false;
+
 interface Props {
   patientId: number;
   tasks: Task[];
@@ -56,21 +60,25 @@ const AskApprovalModal = ({ patientId, tasks, onClose }: Props) => {
           <h2 className="text-3xl font-semibold mb-4">Ask Approval</h2>
 
           <div className="card">
-            <div className="mb-3">
-              <label className="block font-medium mb-1">Related Task (optional)</label>
-              <select
-                className="w-full border rounded py-2 px-3 bg-white text-black"
-                value={patientTaskId}
-                onChange={(e) => setPatientTaskId(e.target.value)}
-              >
-                <option value="">Not tied to a specific task</option>
-                {tasks.map(t => (
-                  <option key={t.patient_task_id} value={t.patient_task_id}>
-                    {t.task_name} ({t.status})
-                  </option>
-                ))}
-              </select>
-            </div>
+            {/* FIX: hidden per request, keeping state/logic intact so this
+                can be re-enabled later by flipping SHOW_RELATED_TASK_FIELD */}
+            {SHOW_RELATED_TASK_FIELD && (
+              <div className="mb-3">
+                <label className="block font-medium mb-1">Related Task (optional)</label>
+                <select
+                  className="w-full border rounded py-2 px-3 bg-white text-black"
+                  value={patientTaskId}
+                  onChange={(e) => setPatientTaskId(e.target.value)}
+                >
+                  <option value="">Not tied to a specific task</option>
+                  {tasks.map(t => (
+                    <option key={t.patient_task_id} value={t.patient_task_id}>
+                      {t.task_name} ({t.status})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             <div className="mb-3">
               <label className="block font-medium mb-1">Name*</label>

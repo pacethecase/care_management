@@ -8,13 +8,15 @@ export interface ApprovalRequest {
   id: number;
   name: string;
   description: string | null;
-  estimated_amount: number;
+  estimated_amount: number; 
   status: "Pending" | "Approved" | "Denied";
   requested_at: string;
   decided_at: string | null;
   decision_note: string | null;
   patient_id: number;
   patient_name: string;
+  patient_mrn?: string | null;
+  patient_age?: number | null;
   hospital_id: number;
   hospital_name: string;
   requested_by: number | null;
@@ -48,16 +50,24 @@ export interface ApprovalsReport {
 interface ApprovalState {
   list: ApprovalRequest[];
   report: ApprovalsReport | null;
+  deciders: ApprovalDecider[];  
+  decidersLoading: boolean;   
   loading: boolean;
   error: string | null;
   approvalError: string | null;
   successMessage: string | null;
+}
+export interface ApprovalDecider {
+  id: number;
+  name: string;
 }
 
 const initialState: ApprovalState = {
   list: [],
   report: null,
   loading: false,
+  deciders: [],        
+  decidersLoading: false,
   error: null,
   approvalError: null,
   successMessage: null,
@@ -91,7 +101,7 @@ export const createApprovalRequest = createAsyncThunk(
 export const loadApprovals = createAsyncThunk(
   "approvals/loadApprovals",
   async (
-    params: { hospitalId?: string | number; status?: string; includeDischarged?: boolean } | undefined,
+    params: { hospitalId?: string | number; status?: string; includeDischarged?: boolean; decidedBy?: string | number } | undefined,
     { rejectWithValue }
   ) => {
     try {
@@ -109,7 +119,7 @@ export const loadApprovals = createAsyncThunk(
 export const loadApprovalsReport = createAsyncThunk(
   "approvals/loadApprovalsReport",
   async (
-    params: { hospitalId?: string | number; start?: string; end?: string; includeDischarged?: boolean } | undefined,
+    params: { hospitalId?: string | number; start?: string; end?: string; includeDischarged?: boolean; decidedBy?: string | number } | undefined,
     { rejectWithValue }
   ) => {
     try {
@@ -143,6 +153,23 @@ export const decideApproval = createAsyncThunk(
   }
 );
 
+export const loadApprovalDeciders = createAsyncThunk(
+  "approvals/loadApprovalDeciders",
+  async (
+    params: { hospitalId?: string | number } | undefined,
+    { rejectWithValue }
+  ) => {
+    try {
+      const res = await axios.get(`${BASE_URL}/approval/approvals/deciders`, {
+        params,
+        withCredentials: true,
+      });
+      return res.data as ApprovalDecider[];
+    } catch (err: any) {
+      return rejectWithValue(err.response?.data?.error || "Failed to load deciders");
+    }
+  }
+);
 
 // ─── Slice ────────────────────────────────────────────────────────────────────
 
@@ -197,6 +224,16 @@ const approvalSlice = createSlice({
         state.loading = false;
         state.report = null;
         state.error = action.payload as string || "Failed to load approvals report";
+      })
+            // loadApprovalDeciders
+      .addCase(loadApprovalDeciders.pending, (state) => { state.decidersLoading = true; })
+      .addCase(loadApprovalDeciders.fulfilled, (state, action) => {
+        state.decidersLoading = false;
+        state.deciders = action.payload;
+      })
+      .addCase(loadApprovalDeciders.rejected, (state) => {
+        state.decidersLoading = false;
+        state.deciders = [];
       });
   },
 });

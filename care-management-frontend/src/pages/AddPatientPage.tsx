@@ -103,63 +103,51 @@ const AddPatientPage = () => {
       [name]: type === "checkbox" ? (e.target as HTMLInputElement).checked : value,
     }));
   };
-
-  const validateForm = () => {
-    if (!formData.first_name || !formData.last_name || !formData.birth_date || !formData.roomNo || !formData.mrn) {
-      toast.warn("Please fill in all required fields.");
-      return false;
-    }
-    if (!formData.admitted_date) {
-      toast.warn("Please enter the admitted date.");
-      return false;
-    }
-    if (formData.assignedStaffIds.length === 0) {
-      toast.error("At least one staff member must be assigned.");
-      return false;
-    }
-    if (!formData.assignedStaffIds.some((s) => s.access_level === "edit")) {
-      toast.error("At least one assigned staff must have edit access.");
-      return false;
-    }
-    return true;
-  };
-
+const validateForm = () => {
+  if (!formData.first_name.trim()) {
+    toast.error("First name is required.");
+    return false;
+  }
+  if (!formData.last_name.trim()) {
+    toast.error("Last name is required.");
+    return false;
+  }
+  if (!formData.birth_date) {
+    toast.error("Birth date is required.");
+    return false;
+  }
+  if (!formData.mrn.trim()) {
+    toast.error("MRN is required.");
+    return false;
+  }
+  if (!formData.admitted_date) {
+    toast.error("Admitted date is required.");
+    return false;
+  }
+  if (formData.assignedStaffIds.length === 0) {
+    toast.error("At least one staff member must be assigned.");
+    return false;
+  }
+  if (!formData.assignedStaffIds.some((s) => s.access_level === "edit")) {
+    toast.error("At least one assigned staff must have edit access.");
+    return false;
+  }
+  if (!formData.is_behavioral && !formData.is_ltc && !formData.is_guardianship) {
+    toast.error("Please select at least one care type: Behavioral, LTC, or Guardianship.");
+    return false;
+  }
+  if (formData.is_ltc && !formData.is_ltc_medical && !formData.is_ltc_financial) {
+    toast.error("LTC selected — please choose at least one: Financial or Medical.");
+    return false;
+  }
+  if (formData.is_guardianship && !formData.is_guardianship_financial && !formData.is_guardianship_person) {
+    toast.error("Guardianship selected — please choose at least one: Financial or Person.");
+    return false;
+  }
+  return true;
+};
   const handleSubmit = async () => {
-    if (!validateForm()) {
-      toast.warn("⚠️ Please fill in all required fields.", {
-        position: "top-right",
-        autoClose: 4000,
-      });
-      return;
-    }
-
-    if (formData.assignedStaffIds.length === 0) {
-      toast.error("At least one staff member must be assigned.", {
-        position: "top-right",
-        autoClose: 5000,
-      });
-      return;
-    }
-
-    const hasEditAccess = formData.assignedStaffIds.some(
-      (s) => s.access_level === "edit"
-    );
-    if (!hasEditAccess) {
-      toast.error("At least one assigned staff must have edit access.", {
-        position: "top-right",
-        autoClose: 5000,
-      });
-      return;
-    }
-    if (formData.is_ltc && !formData.is_ltc_medical && !formData.is_ltc_financial) {
-      toast.error("LTC selected — please choose at least one: Financial or Medical.");
-      return;
-    }
-
-    if (formData.is_guardianship && !formData.is_guardianship_financial && !formData.is_guardianship_person) {
-      toast.error("Guardianship selected — please choose at least one: Financial or Person.");
-      return;
-    }
+    if (!validateForm()) return;
 
     try {
       setIsSubmitting(true);
@@ -277,11 +265,11 @@ const AddPatientPage = () => {
             </div>
 
             <div>
-              <label className="block font-medium">Room #*</label>
+              <label className="block font-medium">Room #</label>
               <input
                 className="bg-white text-black border rounded py-2 px-3 w-full"
                 type="text" name="roomNo"
-                value={formData.roomNo} onChange={handleChange} required
+                value={formData.roomNo} onChange={handleChange}
               />
             </div>
 
