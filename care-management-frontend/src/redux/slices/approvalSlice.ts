@@ -8,7 +8,7 @@ export interface ApprovalRequest {
   id: number;
   name: string;
   description: string | null;
-  estimated_amount: number; 
+  estimated_amount: number;
   status: "Pending" | "Approved" | "Denied";
   requested_at: string;
   decided_at: string | null;
@@ -47,27 +47,61 @@ export interface ApprovalsReport {
   }[];
 }
 
+export interface ApprovalDecider {
+  id: number;
+  name: string;
+}
+
+// NEW: option shape for the "Patient" filter dropdown
+export interface ApprovalPatient {
+  id: number;
+  name: string;
+  mrn?: string | null;
+}
+
+// NEW: shared filter params used by loadApprovals / loadApprovalsReport
+interface ApprovalListParams {
+  hospitalId?: string | number;
+  status?: string;
+  includeDischarged?: boolean;
+  decidedBy?: string | number;
+  start?: string;
+  end?: string;
+  patientId?: string | number;
+  requestedByMe?: boolean;
+}
+
+interface ApprovalReportParams {
+  hospitalId?: string | number;
+  start?: string;
+  end?: string;
+  includeDischarged?: boolean;
+  decidedBy?: string | number;
+  patientId?: string | number;
+  requestedByMe?: boolean;
+}
+
 interface ApprovalState {
   list: ApprovalRequest[];
   report: ApprovalsReport | null;
-  deciders: ApprovalDecider[];  
-  decidersLoading: boolean;   
+  deciders: ApprovalDecider[];
+  decidersLoading: boolean;
+  patients: ApprovalPatient[];        // NEW
+  patientsLoading: boolean;           // NEW
   loading: boolean;
   error: string | null;
   approvalError: string | null;
   successMessage: string | null;
-}
-export interface ApprovalDecider {
-  id: number;
-  name: string;
 }
 
 const initialState: ApprovalState = {
   list: [],
   report: null,
   loading: false,
-  deciders: [],        
+  deciders: [],
   decidersLoading: false,
+  patients: [],           // NEW
+  patientsLoading: false, // NEW
   error: null,
   approvalError: null,
   successMessage: null,
@@ -98,10 +132,11 @@ export const createApprovalRequest = createAsyncThunk(
   }
 );
 
+// FIX: params now include start/end (requested date range), patientId, requestedByMe
 export const loadApprovals = createAsyncThunk(
   "approvals/loadApprovals",
   async (
-    params: { hospitalId?: string | number; status?: string; includeDischarged?: boolean; decidedBy?: string | number } | undefined,
+    params: ApprovalListParams | undefined,
     { rejectWithValue }
   ) => {
     try {
@@ -116,10 +151,11 @@ export const loadApprovals = createAsyncThunk(
   }
 );
 
+// FIX: params now include patientId, requestedByMe (start/end already existed)
 export const loadApprovalsReport = createAsyncThunk(
   "approvals/loadApprovalsReport",
   async (
-    params: { hospitalId?: string | number; start?: string; end?: string; includeDischarged?: boolean; decidedBy?: string | number } | undefined,
+    params: ApprovalReportParams | undefined,
     { rejectWithValue }
   ) => {
     try {
@@ -167,6 +203,27 @@ export const loadApprovalDeciders = createAsyncThunk(
       return res.data as ApprovalDecider[];
     } catch (err: any) {
       return rejectWithValue(err.response?.data?.error || "Failed to load deciders");
+    }
+  }
+);
+
+// NEW: patient dropdown options — scoped only by hospitalId, same
+// independence rule as loadApprovalDeciders (ignores status/date/decidedBy/
+// requestedByMe/includeDischarged so the list doesn't shrink while filtering)
+export const loadApprovalPatients = createAsyncThunk(
+  "approvals/loadApprovalPatients",
+  async (
+    params: { hospitalId?: string | number } | undefined,
+    { rejectWithValue }
+  ) => {
+    try {
+      const res = await axios.get(`${BASE_URL}/approval/approvals/patients`, {
+        params,
+        withCredentials: true,
+      });
+      return res.data as ApprovalPatient[];
+    } catch (err: any) {
+      return rejectWithValue(err.response?.data?.error || "Failed to load patients");
     }
   }
 );
@@ -225,7 +282,8 @@ const approvalSlice = createSlice({
         state.report = null;
         state.error = action.payload as string || "Failed to load approvals report";
       })
-            // loadApprovalDeciders
+
+      // loadApprovalDeciders
       .addCase(loadApprovalDeciders.pending, (state) => { state.decidersLoading = true; })
       .addCase(loadApprovalDeciders.fulfilled, (state, action) => {
         state.decidersLoading = false;
@@ -234,6 +292,17 @@ const approvalSlice = createSlice({
       .addCase(loadApprovalDeciders.rejected, (state) => {
         state.decidersLoading = false;
         state.deciders = [];
+      })
+
+      // loadApprovalPatients — NEW
+      .addCase(loadApprovalPatients.pending, (state) => { state.patientsLoading = true; })
+      .addCase(loadApprovalPatients.fulfilled, (state, action) => {
+        state.patientsLoading = false;
+        state.patients = action.payload;
+      })
+      .addCase(loadApprovalPatients.rejected, (state) => {
+        state.patientsLoading = false;
+        state.patients = [];
       });
   },
 });

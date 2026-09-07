@@ -67,7 +67,6 @@ const createApprovalRequest = async (req, res) => {
 
     await client.query("BEGIN");
 
-    // FIX: joined hospital name for use in notification messages
     const { rows: patientRows } = await client.query(
       `SELECT p.id, p.hospital_id, p.first_name, p.last_name, h.name AS hospital_name
        FROM patients p
@@ -110,8 +109,6 @@ const createApprovalRequest = async (req, res) => {
 
     const io = req.app.get("io");
 
-    // Notify admins at this hospital + super_admins in the org — action needed.
-    // Requester excluded here since they get a separate confirmation below.
     const { rows: notifyTargets } = await client.query(
       `SELECT u.id FROM users u
        WHERE u.is_approved = TRUE
@@ -135,9 +132,6 @@ const createApprovalRequest = async (req, res) => {
       io?.to?.(`user-${target.id}`)?.emit("notification", notif);
     }
 
-    // Self-notify the requester — confirmation only, no action implied.
-    // If the requester is an admin, they still cannot decide their own
-    // request (enforced in decideApproval) — this is purely informational.
     const { rows: [selfNotif] } = await client.query(
       `INSERT INTO notifications (user_id, patient_id, title, message, type)
        VALUES ($1,$2,$3,$4,'approval_submitted') RETURNING *`,
@@ -159,12 +153,13 @@ const createApprovalRequest = async (req, res) => {
 };
 
 // ─── GET APPROVALS (dashboard list) ────────────────────────────────────────────
+// FIX: added start/end (requested_at date range), patientId, requestedByMe
 const getApprovals = async (req, res) => {
   const user = req.user;
   if (!user?.is_approved)
     return res.status(403).json({ error: "Access denied: user not approved." });
 
-  const { status, includeDischarged } = req.query;
+  const { status, includeDischarged, start, end, patientId } = req.query;
   const showDischarged = includeDischarged === "true";
 
   try {
@@ -188,11 +183,19 @@ const getApprovals = async (req, res) => {
     // Default = current (Admitted) patients only. Checkbox flips to show discharged only.
     conditions.push(showDischarged ? `p.status = 'Discharged'` : `p.status = 'Admitted'`);
 
-    if (status) { params.push(status); conditions.push(`r.status = $${params.length}`); }
+    if (status)    { params.push(status);    conditions.push(`r.status = $${params.length}`); }
+    if (start)     { params.push(start);     conditions.push(`r.requested_at::date >= $${params.length}`); }
+    if (end)       { params.push(end);       conditions.push(`r.requested_at::date <= $${params.length}`); }
+    if (patientId) { params.push(patientId); conditions.push(`r.patient_id = $${params.length}`); }
     if (req.query.decidedBy) {
       params.push(req.query.decidedBy);
       conditions.push(`r.decided_by = $${params.length}`);
     }
+    if (req.query.requestedByMe === "true") {
+      params.push(user.id);
+      conditions.push(`r.requested_by = $${params.length}`);
+    }
+
     const { rows } = await pool.query(
       `SELECT
          r.id, r.name, r.description, r.estimated_amount, r.status,
@@ -222,12 +225,13 @@ const getApprovals = async (req, res) => {
 };
 
 // ─── GET APPROVALS REPORT (dedicated reporting page) ──────────────────────────
+// FIX: added patientId, requestedByMe (start/end already existed)
 const getApprovalsReport = async (req, res) => {
   const user = req.user;
   if (!user?.is_approved)
     return res.status(403).json({ error: "Access denied: user not approved." });
 
-  const { start, end, includeDischarged } = req.query;
+  const { start, end, includeDischarged, patientId } = req.query;
   const showDischarged = includeDischarged === "true";
 
   try {
@@ -252,11 +256,16 @@ const getApprovalsReport = async (req, res) => {
 
     conditions.push(showDischarged ? `p.status = 'Discharged'` : `p.status = 'Admitted'`);
 
-    if (start) { params.push(start); conditions.push(`r.requested_at::date >= $${params.length}`); }
-    if (end)   { params.push(end);   conditions.push(`r.requested_at::date <= $${params.length}`); }
+    if (start)     { params.push(start);     conditions.push(`r.requested_at::date >= $${params.length}`); }
+    if (end)       { params.push(end);       conditions.push(`r.requested_at::date <= $${params.length}`); }
+    if (patientId) { params.push(patientId); conditions.push(`r.patient_id = $${params.length}`); }
     if (req.query.decidedBy) {
       params.push(req.query.decidedBy);
       conditions.push(`r.decided_by = $${params.length}`);
+    }
+    if (req.query.requestedByMe === "true") {
+      params.push(user.id);
+      conditions.push(`r.requested_by = $${params.length}`);
     }
     const whereClause = conditions.join(" AND ");
 
@@ -345,7 +354,6 @@ const decideApproval = async (req, res) => {
 
     await client.query("BEGIN");
 
-    // FIX: joined patient + hospital name for use in the decision message
     const { rows: [request] } = await client.query(
       `SELECT r.*, p.first_name, p.last_name, h.name AS hospital_name
        FROM task_approval_requests r
@@ -361,7 +369,6 @@ const decideApproval = async (req, res) => {
       return res.status(409).json({ error: "Request already decided." });
     }
 
-    // Requester cannot approve/deny their own request, regardless of role
     if (request.requested_by === user.id) {
       await client.query("ROLLBACK");
       return res.status(403).json({ error: "You cannot approve or deny your own request. Please wait for another admin to review it." });
@@ -386,9 +393,6 @@ const decideApproval = async (req, res) => {
       [decision, user.id, decision_note?.trim() ?? null, id]
     );
 
-    // FIX: broaden decision notifications — requester + patient's assigned
-    // staff + all admins/super_admins at hospital/org excluding the decider,
-    // PLUS the decider themselves (self-confirmation, was previously missing).
     const { rows: staffRows } = await client.query(
       `SELECT ps.staff_id AS id FROM patient_staff ps
        JOIN users u ON u.id = ps.staff_id
@@ -416,7 +420,7 @@ const decideApproval = async (req, res) => {
       ...staffRows.map(r => r.id),
       ...adminRows.map(r => r.id),
       request.requested_by,
-      user.id, // FIX: the decider themselves now also gets a confirmation
+      user.id,
     ].filter(Boolean));
 
     const io = req.app.get("io");
@@ -442,9 +446,6 @@ const decideApproval = async (req, res) => {
 };
 
 // ─── GET APPROVAL DECIDERS (for filter dropdown) ──────────────────────────────
-// Distinct list of admins who have ever decided an approval request in scope.
-// Deliberately ignores status/decidedBy/includeDischarged so the dropdown
-// doesn't shrink as the user filters.
 const getApprovalDeciders = async (req, res) => {
   const user = req.user;
   if (!user?.is_approved)
@@ -487,10 +488,55 @@ const getApprovalDeciders = async (req, res) => {
   }
 };
 
+// ─── GET APPROVAL PATIENTS (for filter dropdown) ──────────────────────────────
+// NEW: distinct list of patients who have an approval request in scope.
+// Deliberately ignores status/date/decidedBy/requestedByMe/includeDischarged
+// so the dropdown doesn't shrink as the user filters — mirrors deciders pattern.
+const getApprovalPatients = async (req, res) => {
+  const user = req.user;
+  if (!user?.is_approved)
+    return res.status(403).json({ error: "Access denied: user not approved." });
+
+  try {
+    let params = [];
+    let conditions = [];
+
+    if (isAdmin(user) || isSuperAdmin(user) || hasGlobalAccess(user)) {
+      const { sql: scopeSQL, params: scopeParams } = getApprovalScope(req);
+      params = [...scopeParams];
+      conditions = [scopeSQL];
+    } else if (isStaff(user)) {
+      params.push(user.id);
+      conditions.push(
+        `(r.requested_by = $${params.length}
+          OR EXISTS (SELECT 1 FROM patient_staff ps WHERE ps.patient_id = r.patient_id AND ps.staff_id = $${params.length}))`
+      );
+    } else {
+      return res.status(403).json({ error: "Access denied." });
+    }
+
+    const { rows } = await pool.query(
+      `SELECT DISTINCT p.id, p.first_name || ' ' || p.last_name AS name, p.mrn
+       FROM task_approval_requests r
+       JOIN patients p ON p.id = r.patient_id
+       WHERE ${conditions.join(" AND ")}
+       ORDER BY name`,
+      params
+    );
+
+    return res.status(200).json(rows);
+
+  } catch (err) {
+    console.error("getApprovalPatients error:", err);
+    return res.status(500).json({ error: "Internal Server Error" });
+  }
+};
+
 module.exports = {
   createApprovalRequest,
   getApprovals,
   decideApproval,
   getApprovalsReport,
-  getApprovalDeciders
+  getApprovalDeciders,
+  getApprovalPatients,
 };

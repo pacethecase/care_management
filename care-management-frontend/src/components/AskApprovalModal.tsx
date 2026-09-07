@@ -57,7 +57,7 @@ const AskApprovalModal = ({ patientId, tasks, onClose }: Props) => {
 
       <div className="fixed inset-0 z-50 flex items-center justify-center">
         <div className="bg-white p-6 rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto shadow-lg border border-gray-300 text-black">
-          <h2 className="text-3xl font-semibold mb-4">Ask Approval</h2>
+          <h2 className="text-3xl font-semibold mb-4">Request Approval</h2>
 
           <div className="card">
             {/* FIX: hidden per request, keeping state/logic intact so this

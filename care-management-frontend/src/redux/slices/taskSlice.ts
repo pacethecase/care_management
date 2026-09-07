@@ -4,6 +4,7 @@ import axios from "axios";
 import type { Task } from "../types";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL;
+
 export interface OverrideRequest {
   id: number;
   reason: string;
@@ -28,10 +29,19 @@ export interface OverrideRequest {
   decided_by: number | null;
   decided_by_name: string | null;
 }
+
 export interface OverrideDecider {
   id: number;
   name: string;
 }
+
+// NEW: option shape for the "Patient" filter dropdown
+export interface OverridePatient {
+  id: number;
+  name: string;
+  mrn?: string | null;
+}
+
 export interface OverrideRequestsReport {
   totals: {
     totalRequests: number;
@@ -52,6 +62,28 @@ export interface OverrideRequestsReport {
   }[];
 }
 
+// NEW: shared filter params used by loadOverrideRequests / loadOverrideRequestsReport
+interface OverrideListParams {
+  hospitalId?: string | number;
+  status?: string;
+  includeDischarged?: boolean;
+  decidedBy?: string | number;
+  start?: string;
+  end?: string;
+  patientId?: string | number;
+  requestedByMe?: boolean;
+}
+
+interface OverrideReportParams {
+  hospitalId?: string | number;
+  start?: string;
+  end?: string;
+  includeDischarged?: boolean;
+  decidedBy?: string | number;
+  patientId?: string | number;
+  requestedByMe?: boolean;
+}
+
 interface TaskState {
   patientTasks: Task[];
   priorityTasks: Task[];
@@ -65,8 +97,10 @@ interface TaskState {
   taskNamesError: string | null;
   overrideRequests: OverrideRequest[];
   overrideReport: OverrideRequestsReport | null;
-  overrideDeciders: OverrideDecider[];        
-  overrideDecidersLoading: boolean;  
+  overrideDeciders: OverrideDecider[];
+  overrideDecidersLoading: boolean;
+  overridePatients: OverridePatient[];        // NEW
+  overridePatientsLoading: boolean;           // NEW
   overrideLoading: boolean;
   overrideError: string | null;
 }
@@ -84,8 +118,10 @@ const initialState: TaskState = {
   taskNamesError: null,
   overrideRequests: [],
   overrideReport: null,
-  overrideDeciders: [],         
-  overrideDecidersLoading: false, 
+  overrideDeciders: [],
+  overrideDecidersLoading: false,
+  overridePatients: [],           // NEW
+  overridePatientsLoading: false, // NEW
   overrideLoading: false,
   overrideError: null,
 };
@@ -276,6 +312,7 @@ export const overrideTask = createAsyncThunk<{ message: string; task?: any }, { 
     }
   }
 );
+
 export const decideOverride = createAsyncThunk<{ message: string }, { patientTaskId: number; decision: "Approved" | "Denied"; decision_note?: string }, { rejectValue: string }>(
   "tasks/decideOverride",
   async ({ patientTaskId, decision, decision_note }, { rejectWithValue }) => {
@@ -292,7 +329,8 @@ export const decideOverride = createAsyncThunk<{ message: string }, { patientTas
   }
 );
 
-export const loadOverrideRequests = createAsyncThunk<OverrideRequest[], { hospitalId?: string | number; status?: string; includeDischarged?: boolean; decidedBy?: string | number } | undefined, { rejectValue: string }>(
+// FIX: params now include start/end (created_at date range), patientId, requestedByMe
+export const loadOverrideRequests = createAsyncThunk<OverrideRequest[], OverrideListParams | undefined, { rejectValue: string }>(
   "tasks/loadOverrideRequests",
   async (params, { rejectWithValue }) => {
     try {
@@ -304,7 +342,8 @@ export const loadOverrideRequests = createAsyncThunk<OverrideRequest[], { hospit
   }
 );
 
-export const loadOverrideRequestsReport = createAsyncThunk<OverrideRequestsReport, { hospitalId?: string | number; start?: string; end?: string; includeDischarged?: boolean; decidedBy?: string | number } | undefined, { rejectValue: string }>(
+// FIX: params now include patientId, requestedByMe (start/end already existed)
+export const loadOverrideRequestsReport = createAsyncThunk<OverrideRequestsReport, OverrideReportParams | undefined, { rejectValue: string }>(
   "tasks/loadOverrideRequestsReport",
   async (params, { rejectWithValue }) => {
     try {
@@ -327,6 +366,24 @@ export const loadOverrideDeciders = createAsyncThunk<OverrideDecider[], { hospit
       return res.data as OverrideDecider[];
     } catch (err: any) {
       return rejectWithValue(err.response?.data?.error || "Failed to load deciders");
+    }
+  }
+);
+
+// NEW: patient dropdown options — scoped only by hospitalId, same
+// independence rule as loadOverrideDeciders (ignores status/date/decidedBy/
+// requestedByMe/includeDischarged so the list doesn't shrink while filtering)
+export const loadOverridePatients = createAsyncThunk<OverridePatient[], { hospitalId?: string | number } | undefined, { rejectValue: string }>(
+  "tasks/loadOverridePatients",
+  async (params, { rejectWithValue }) => {
+    try {
+      const res = await axios.get(`${BASE_URL}/tasks/overrides/patients`, {
+        params,
+        withCredentials: true,
+      });
+      return res.data as OverridePatient[];
+    } catch (err: any) {
+      return rejectWithValue(err.response?.data?.error || "Failed to load patients");
     }
   }
 );
@@ -451,6 +508,7 @@ const taskSlice = createSlice({
         state.overrideReport = null;
         state.overrideError = action.payload ?? "Failed to load override requests report";
       })
+
       .addCase(loadOverrideDeciders.pending, (state) => { state.overrideDecidersLoading = true; })
       .addCase(loadOverrideDeciders.fulfilled, (state, action) => {
         state.overrideDecidersLoading = false;
@@ -459,6 +517,17 @@ const taskSlice = createSlice({
       .addCase(loadOverrideDeciders.rejected, (state) => {
         state.overrideDecidersLoading = false;
         state.overrideDeciders = [];
+      })
+
+      // loadOverridePatients — NEW
+      .addCase(loadOverridePatients.pending, (state) => { state.overridePatientsLoading = true; })
+      .addCase(loadOverridePatients.fulfilled, (state, action) => {
+        state.overridePatientsLoading = false;
+        state.overridePatients = action.payload;
+      })
+      .addCase(loadOverridePatients.rejected, (state) => {
+        state.overridePatientsLoading = false;
+        state.overridePatients = [];
       });
   },
 });

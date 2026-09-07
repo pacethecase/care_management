@@ -5,8 +5,9 @@ import { useDispatch, useSelector } from "react-redux";
 import {
   loadPatientTasks, startTask, completeTask,
   markTaskAsMissed, followUpTask, acknowledgeTask,
-  updateTaskNoteMeta, overrideTask,
+  updateTaskNoteMeta, overrideTask, loadOverrideRequests,
 } from "../redux/slices/taskSlice";
+import { loadApprovals } from "../redux/slices/approvalSlice";
 import { fetchPatientById, updateCourtDate } from "../redux/slices/patientSlice";
 import { fetchPatientNotes, addPatientNote, updatePatientNote, deletePatientNote } from "../redux/slices/noteSlice";
 import CreateTaskModal from "../components/CreateTaskModal";
@@ -28,7 +29,8 @@ const PatientTasks = () => {
   const location  = useLocation();
   const backLink  = location.state?.from || "/patients";
 
-  const { patientTasks, loading: taskLoading, taskError } = useSelector((s: RootState) => s.tasks);
+  const { patientTasks, loading: taskLoading, taskError, overrideRequests: patientOverrides } = useSelector((s: RootState) => s.tasks);
+  const { list: patientApprovals } = useSelector((s: RootState) => s.approval);
   const { selectedPatient: patient, loading: patientLoading } = useSelector((s: RootState) => s.patients);
   const { notes } = useSelector((s: RootState) => s.notes);
   const { user }  = useSelector((s: RootState) => s.user);
@@ -52,12 +54,22 @@ const PatientTasks = () => {
     task_note: string; contact_info: string; include_note_in_report: boolean;
   }>>({});
   const [showApprovalModal, setShowApprovalModal] = useState(false);
+  const [showRequestsMenu, setShowRequestsMenu]   = useState(false); // NEW
 
   useEffect(() => {
     if (!patientId) return;
     dispatch(fetchPatientById(Number(patientId)));
     dispatch(loadPatientTasks(Number(patientId)));
     dispatch(fetchPatientNotes(Number(patientId)));
+  }, [dispatch, patientId]);
+
+  // NEW: pull this patient's approval + override requests so the button
+  // knows whether to go purple. Cheap re-use of the same filtered endpoints
+  // the Requests page already relies on.
+  useEffect(() => {
+    if (!patientId) return;
+    dispatch(loadApprovals({ patientId }));
+    dispatch(loadOverrideRequests({ patientId }));
   }, [dispatch, patientId]);
 
   useEffect(() => {
@@ -79,6 +91,18 @@ const PatientTasks = () => {
       }));
     }
   }, [expandedTaskId, noteDrafts, patientTasks]);
+
+  // NEW: pending-request signal for the Requests button
+  const pendingApprovalsCount = useMemo(
+    () => patientApprovals.filter(r => r.status === "Pending").length,
+    [patientApprovals]
+  );
+  const pendingOverridesCount = useMemo(
+    () => patientOverrides.filter(r => r.status === "Pending").length,
+    [patientOverrides]
+  );
+  const pendingCount = pendingApprovalsCount + pendingOverridesCount;
+  const hasPendingRequest = pendingCount > 0;
 
   // ── Action handlers ─────────────────────────────────────────────────────────
   const reload = () => {
@@ -499,13 +523,49 @@ const PatientTasks = () => {
           <button className={`btn ${activeTab === "Notes" ? "btn-active" : ""}`} onClick={() => setActiveTab("Notes")}>Notes</button>
           {canAct && (
             <button className="btn btn-primary" onClick={() => setShowCreateModal(true)}>Create Task</button>
-            
           )}
+
+          {/* NEW: single Requests button, purple when this patient has any
+              pending approval/override request. Click opens a small menu to
+              either view the filtered Requests page or start a new approval
+              request — replaces the old standalone "Request Approval" button. */}
           {canAct && (
-              <button className="btn btn-primary" onClick={() => setShowApprovalModal(true)}>
-                Request Approval
-              </button>
+          <div className="relative">
+            <button
+              className="btn text-white"
+              style={{ backgroundColor: hasPendingRequest ? "#8968CD" : "var(--prussian-blue)" }}
+              onClick={() => setShowRequestsMenu(prev => !prev)}
+            >
+              Requests{hasPendingRequest ? ` • ${pendingCount}` : ""}
+            </button>
+
+            {showRequestsMenu && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setShowRequestsMenu(false)} />
+                <div className="absolute right-0 z-20 mt-2 w-60 bg-white text-black rounded-lg shadow-lg border overflow-hidden">
+                  <button
+                    className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100"
+                    onClick={() => {
+                      setShowRequestsMenu(false);
+                      navigate("/approvals", { state: { patientId: Number(patientId), from: location.pathname } });
+                    }}
+                  >
+                    View Requests{hasPendingRequest ? ` (${pendingCount} pending)` : ""}
+                  </button>
+                  <button
+                    className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 border-t"
+                    onClick={() => {
+                      setShowRequestsMenu(false);
+                      setShowApprovalModal(true);
+                    }}
+                  >
+                    New Approval Request
+                  </button>
+                </div>
+              </>
             )}
+          </div>
+        )}
         </div>
 
         {showCreateModal && (

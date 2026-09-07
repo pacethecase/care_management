@@ -1043,13 +1043,15 @@ const getOverrideScope = (req) => {
   // admin — locked to their own hospital
   return { sql: "p.hospital_id = $1", params: [Number(user.hospital_id)] };
 };
+
 // ─── GET OVERRIDE REQUESTS (dashboard list) ────────────────────────────────────
+// FIX: added start/end (created_at date range), patientId, requestedByMe
 const getOverrideRequests = async (req, res) => {
   const user = req.user;
   if (!user?.is_approved)
     return res.status(403).json({ error: "Access denied: user not approved." });
 
-  const { status, includeDischarged } = req.query;
+  const { status, includeDischarged, start, end, patientId } = req.query;
   const showDischarged = includeDischarged === "true";
 
   try {
@@ -1072,15 +1074,19 @@ const getOverrideRequests = async (req, res) => {
 
     conditions.push(showDischarged ? `p.status = 'Discharged'` : `p.status = 'Admitted'`);
 
-    if (status) { params.push(status); conditions.push(`r.status = $${params.length}`); }
+    if (status)    { params.push(status);    conditions.push(`r.status = $${params.length}`); }
+    if (start)     { params.push(start);     conditions.push(`r.created_at::date >= $${params.length}`); }
+    if (end)       { params.push(end);       conditions.push(`r.created_at::date <= $${params.length}`); }
+    if (patientId) { params.push(patientId); conditions.push(`p.id = $${params.length}`); }
     if (req.query.decidedBy) {
       params.push(req.query.decidedBy);
       conditions.push(`r.approved_by = $${params.length}`);
     }
-    // FIX: ideal_due_date + estimated_delay_days — rough estimate of how many
-    // days the override target date (r.requested_at) sits past the task's
-    // original ideal_due_date. Not exact (other tasks may already be delayed),
-    // just a directional signal.
+    if (req.query.requestedByMe === "true") {
+      params.push(user.id);
+      conditions.push(`r.requested_by = $${params.length}`);
+    }
+
     const { rows } = await pool.query(
       `SELECT
          r.id, r.reason, r.status, r.decision_note,
@@ -1117,12 +1123,13 @@ const getOverrideRequests = async (req, res) => {
 };
 
 // ─── GET OVERRIDE REQUESTS REPORT ──────────────────────────────────────────────
+// FIX: added patientId, requestedByMe (start/end already existed)
 const getOverrideRequestsReport = async (req, res) => {
   const user = req.user;
   if (!user?.is_approved)
     return res.status(403).json({ error: "Access denied: user not approved." });
 
-  const { start, end, includeDischarged } = req.query;
+  const { start, end, includeDischarged, patientId } = req.query;
   const showDischarged = includeDischarged === "true";
 
   try {
@@ -1147,11 +1154,16 @@ const getOverrideRequestsReport = async (req, res) => {
 
     conditions.push(showDischarged ? `p.status = 'Discharged'` : `p.status = 'Admitted'`);
 
-    if (start) { params.push(start); conditions.push(`r.created_at::date >= $${params.length}`); }
-    if (end)   { params.push(end);   conditions.push(`r.created_at::date <= $${params.length}`); }
+    if (start)     { params.push(start);     conditions.push(`r.created_at::date >= $${params.length}`); }
+    if (end)       { params.push(end);       conditions.push(`r.created_at::date <= $${params.length}`); }
+    if (patientId) { params.push(patientId); conditions.push(`p.id = $${params.length}`); }
     if (req.query.decidedBy) {
       params.push(req.query.decidedBy);
       conditions.push(`r.approved_by = $${params.length}`);
+    }
+    if (req.query.requestedByMe === "true") {
+      params.push(user.id);
+      conditions.push(`r.requested_by = $${params.length}`);
     }
     const joinBase = `
       FROM task_override_requests r
@@ -1223,6 +1235,7 @@ const getOverrideRequestsReport = async (req, res) => {
 };
 
 // ─── GET OVERRIDE DECIDERS (for filter dropdown) ──────────────────────────────
+// unchanged — kept for context, do not modify
 const getOverrideDeciders = async (req, res) => {
   const user = req.user;
   if (!user?.is_approved)
@@ -1267,10 +1280,56 @@ const getOverrideDeciders = async (req, res) => {
   }
 };
 
+// ─── GET OVERRIDE PATIENTS (for filter dropdown) ──────────────────────────────
+// NEW: same independence rule as deciders — ignores status/date/decidedBy/
+// requestedByMe/includeDischarged so the dropdown doesn't shrink while filtering.
+const getOverridePatients = async (req, res) => {
+  const user = req.user;
+  if (!user?.is_approved)
+    return res.status(403).json({ error: "Access denied: user not approved." });
+
+  try {
+    let params = [];
+    let conditions = [];
+
+    if (isAdmin(user) || isSuperAdmin(user) || hasGlobalAccess(user)) {
+      const { sql: scopeSQL, params: scopeParams } = getOverrideScope(req);
+      params = [...scopeParams];
+      conditions = [scopeSQL];
+    } else if (isStaff(user)) {
+      params.push(user.id);
+      conditions.push(
+        `(r.requested_by = $${params.length}
+          OR EXISTS (SELECT 1 FROM patient_staff ps WHERE ps.patient_id = p.id AND ps.staff_id = $${params.length}))`
+      );
+    } else {
+      return res.status(403).json({ error: "Access denied." });
+    }
+
+    const { rows } = await pool.query(
+      `SELECT DISTINCT p.id, p.first_name || ' ' || p.last_name AS name, p.mrn
+       FROM task_override_requests r
+       JOIN patient_tasks pt ON r.task_id = pt.id
+       JOIN patients p ON pt.patient_id = p.id
+       WHERE ${conditions.join(" AND ")}
+       ORDER BY name`,
+      params
+    );
+
+    return res.status(200).json(rows);
+
+  } catch (err) {
+    console.error("getOverridePatients error:", err);
+    return res.status(500).json({ error: "Internal Server Error" });
+  }
+};
+
+
 module.exports = {
   startTask, completeTask, markTaskAsMissed, getMissedTasks,
   getPriorityTasks, followUpCourtTask, updateTaskNote,
   acknowledgeTask, addManualTaskForPatient, getTaskNames,
   overrideTask, handleOverrideDecision,
-  getOverrideRequests, getOverrideRequestsReport,getOverrideDeciders
+  getOverrideRequests, getOverrideRequestsReport,getOverrideDeciders,
+  getOverridePatients,
 };

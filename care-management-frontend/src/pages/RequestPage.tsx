@@ -5,15 +5,17 @@ import { RootState, AppDispatch } from "../redux/store";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import BlueLoader from "../components/BlueLoader";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { toast } from "react-toastify";
 import { FaPrint } from "react-icons/fa";
 import {
   loadApprovals, decideApproval, loadApprovalsReport, loadApprovalDeciders,
+  loadApprovalPatients,
 } from "../redux/slices/approvalSlice";
 import type { ApprovalRequest } from "../redux/slices/approvalSlice";
 import {
   loadOverrideRequests, loadOverrideRequestsReport, decideOverride, loadOverrideDeciders,
+  loadOverridePatients,
 } from "../redux/slices/taskSlice";
 import type { OverrideRequest } from "../redux/slices/taskSlice";
 
@@ -21,6 +23,7 @@ type RequestType = "approvals" | "overrides";
 
 const RequestsPage = () => {
   const dispatch = useDispatch<AppDispatch>();
+  const location = useLocation();
 
   const { user }      = useSelector((s: RootState) => s.user);
   const { hospitals } = useSelector((s: RootState) => s.hospitals);
@@ -29,12 +32,14 @@ const RequestsPage = () => {
     report: approvalsReport,
     loading: approvalsLoading,
     deciders: approvalDeciders,
+    patients: approvalPatients,
   } = useSelector((s: RootState) => s.approval);
   const {
     overrideRequests,
     overrideReport,
     overrideLoading,
     overrideDeciders,
+    overridePatients,
   } = useSelector((s: RootState) => s.tasks);
 
   const isSuperAdmin = user?.role === "super_admin";
@@ -47,27 +52,56 @@ const RequestsPage = () => {
   const [decidingId, setDecidingId]         = useState<number | null>(null);
   const [decidedBy, setDecidedBy]           = useState("");
 
-  // Main list + report — depends on all filters, including decidedBy
+  // NEW filters
+  const [dateStart, setDateStart]           = useState("");
+  const [dateEnd, setDateEnd]               = useState("");
+  const [patientId, setPatientId]           = useState(
+    (location.state as any)?.patientId ? String((location.state as any).patientId) : ""
+  );
+  const [requestedByMe, setRequestedByMe]   = useState(false);
+
+  // Main list + report — depends on all filters
   useEffect(() => {
-    const params = { hospitalId: hospitalId || undefined, status: statusFilter || undefined, includeDischarged, decidedBy: decidedBy || undefined };
+    const params = {
+      hospitalId: hospitalId || undefined,
+      status: statusFilter || undefined,
+      includeDischarged,
+      decidedBy: decidedBy || undefined,
+      start: dateStart || undefined,
+      end: dateEnd || undefined,
+      patientId: patientId || undefined,
+      requestedByMe: requestedByMe || undefined,
+    };
+    const reportParams = {
+      hospitalId: hospitalId || undefined,
+      includeDischarged,
+      decidedBy: decidedBy || undefined,
+      start: dateStart || undefined,
+      end: dateEnd || undefined,
+      patientId: patientId || undefined,
+      requestedByMe: requestedByMe || undefined,
+    };
     if (tab === "approvals") {
       dispatch(loadApprovals(params));
-      dispatch(loadApprovalsReport({ hospitalId: hospitalId || undefined, includeDischarged, decidedBy: decidedBy || undefined }));
+      dispatch(loadApprovalsReport(reportParams));
     } else {
       dispatch(loadOverrideRequests(params));
-      dispatch(loadOverrideRequestsReport({ hospitalId: hospitalId || undefined, includeDischarged, decidedBy: decidedBy || undefined }));
+      dispatch(loadOverrideRequestsReport(reportParams));
     }
-  }, [dispatch, tab, hospitalId, statusFilter, includeDischarged, decidedBy]);
+  }, [dispatch, tab, hospitalId, statusFilter, includeDischarged, decidedBy, dateStart, dateEnd, patientId, requestedByMe]);
 
-  // Decider dropdown options — deliberately independent of status/decidedBy/
-  // includeDischarged, so the option list doesn't shrink as it's used to filter.
-  // Only scoped by tab + hospitalId.
+  // Decider + Patient dropdown options — deliberately independent of
+  // status/decidedBy/includeDischarged/date/patient/requestedByMe, so the
+  // option lists don't shrink as they're used to filter. Only scoped by
+  // tab + hospitalId.
   useEffect(() => {
     const params = { hospitalId: hospitalId || undefined };
     if (tab === "approvals") {
       dispatch(loadApprovalDeciders(params));
+      dispatch(loadApprovalPatients(params));
     } else {
       dispatch(loadOverrideDeciders(params));
+      dispatch(loadOverridePatients(params));
     }
   }, [dispatch, tab, hospitalId]);
 
@@ -81,24 +115,53 @@ const RequestsPage = () => {
     if (!stillValid) setDecidedBy("");
   }, [tab, hospitalId, approvalDeciders, overrideDeciders]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Same guard for the patient filter
+  useEffect(() => {
+    if (!patientId) return;
+    const options = tab === "approvals" ? approvalPatients : overridePatients;
+    const stillValid = options.some(p => String(p.id) === patientId);
+    if (!stillValid) setPatientId("");
+  }, [tab, hospitalId, approvalPatients, overridePatients]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const deciderOptions = tab === "approvals" ? approvalDeciders : overrideDeciders;
+  const patientOptions = tab === "approvals" ? approvalPatients : overridePatients;
 
   const reload = () => {
-    const params = { hospitalId: hospitalId || undefined, status: statusFilter || undefined, includeDischarged, decidedBy: decidedBy || undefined };
+    const params = {
+      hospitalId: hospitalId || undefined,
+      status: statusFilter || undefined,
+      includeDischarged,
+      decidedBy: decidedBy || undefined,
+      start: dateStart || undefined,
+      end: dateEnd || undefined,
+      patientId: patientId || undefined,
+      requestedByMe: requestedByMe || undefined,
+    };
+    const reportParams = {
+      hospitalId: hospitalId || undefined,
+      includeDischarged,
+      decidedBy: decidedBy || undefined,
+      start: dateStart || undefined,
+      end: dateEnd || undefined,
+      patientId: patientId || undefined,
+      requestedByMe: requestedByMe || undefined,
+    };
     if (tab === "approvals") {
       dispatch(loadApprovals(params));
-      dispatch(loadApprovalsReport({ hospitalId: hospitalId || undefined, includeDischarged, decidedBy: decidedBy || undefined }));
+      dispatch(loadApprovalsReport(reportParams));
     } else {
       dispatch(loadOverrideRequests(params));
-      dispatch(loadOverrideRequestsReport({ hospitalId: hospitalId || undefined, includeDischarged, decidedBy: decidedBy || undefined }));
+      dispatch(loadOverrideRequestsReport(reportParams));
     }
-    // Deciders list can also shift after a decision (a new decider may now
-    // qualify), so refresh it too.
-    const deciderParams = { hospitalId: hospitalId || undefined };
+    // Decider/patient lists can also shift after a decision (a new decider
+    // may now qualify), so refresh them too.
+    const optionParams = { hospitalId: hospitalId || undefined };
     if (tab === "approvals") {
-      dispatch(loadApprovalDeciders(deciderParams));
+      dispatch(loadApprovalDeciders(optionParams));
+      dispatch(loadApprovalPatients(optionParams));
     } else {
-      dispatch(loadOverrideDeciders(deciderParams));
+      dispatch(loadOverrideDeciders(optionParams));
+      dispatch(loadOverridePatients(optionParams));
     }
   };
 
@@ -223,7 +286,7 @@ const RequestsPage = () => {
           </div>
         </div>
 
-        {/* Filters: report type, status, hospital (super/global only), include discharged */}
+        {/* Filters: report type, status, hospital (super/global only), date range, patient, requested by me, include discharged */}
         <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 mb-6 overflow-x-auto">
           <div className="flex items-center gap-6 flex-wrap">
             <div>
@@ -255,6 +318,7 @@ const RequestsPage = () => {
                 <option value="Denied">Denied</option>
               </select>
             </div>
+
             <div>
               <label className="block text-xs text-gray-600">Decided By</label>
               <select value={decidedBy} onChange={e => setDecidedBy(e.target.value)}
@@ -266,7 +330,33 @@ const RequestsPage = () => {
               </select>
             </div>
 
-            
+            <div>
+              <label className="block text-xs text-gray-600">From</label>
+              <input type="date" value={dateStart} onChange={e => setDateStart(e.target.value)}
+                className="border rounded-md px-2 py-1 text-sm" />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-600">To</label>
+              <input type="date" value={dateEnd} onChange={e => setDateEnd(e.target.value)}
+                className="border rounded-md px-2 py-1 text-sm" />
+            </div>
+
+            <div>
+              <label className="block text-xs text-gray-600">Patient</label>
+              <select value={patientId} onChange={e => setPatientId(e.target.value)}
+                className="border rounded-md px-2 py-1 text-sm min-w-[180px]">
+                <option value="">All Patients</option>
+                {patientOptions.map((p: any) => (
+                  <option key={p.id} value={p.id}>{p.name}{p.mrn ? ` (${p.mrn})` : ""}</option>
+                ))}
+              </select>
+            </div>
+
+            <label className="flex items-center gap-2 mt-4 text-sm">
+              <input type="checkbox" checked={requestedByMe}
+                onChange={e => setRequestedByMe(e.target.checked)} />
+              Requested by Me
+            </label>
 
             <label className="flex items-center gap-2 mt-4 text-sm">
               <input type="checkbox" checked={includeDischarged}
@@ -303,7 +393,7 @@ const RequestsPage = () => {
                       <th className="px-4 py-3 text-left text-sm font-semibold">MRN</th>
                       <th className="px-4 py-3 text-left text-sm font-semibold">Age</th>
                       {(isSuperAdmin || hasGlobal) && <th className="px-4 py-3 text-left text-sm font-semibold">Hospital</th>}
-                      <th className="px-4 py-3 text-left text-sm font-semibold">Approval Request</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold">Request</th>
                       <th className="px-4 py-3 text-left text-sm font-semibold">Est. Amount</th>
                       <th className="px-4 py-3 text-left text-sm font-semibold">Status</th>
                       <th className="px-4 py-3 text-left text-sm font-semibold">Requested By</th>
@@ -322,7 +412,11 @@ const RequestsPage = () => {
                     ) : approvalsList.map((r: ApprovalRequest, i: number) => {
                       const isOwnRequest = r.requested_by === user.id;
                       return (
-                        <tr key={r.id} className={i % 2 === 0 ? "bg-gray-50" : "bg-white"}>
+                        <tr key={r.id} className={
+                          r.status === "Pending"
+                            ? "bg-purple-50"
+                            : i % 2 === 0 ? "bg-gray-50" : "bg-white"
+                        }>
                           <td className="px-4 py-2 text-sm text-gray-700">{r.patient_name}</td>
                           <td className="px-4 py-2 text-sm text-gray-700">{r.patient_mrn || "—"}</td>
                           <td className="px-4 py-2 text-sm text-gray-700">{r.patient_age ?? "—"}</td>
@@ -404,7 +498,11 @@ const RequestsPage = () => {
                     ) : overrideRequests.map((r: OverrideRequest, i: number) => {
                       const isOwnRequest = r.requested_by === user.id;
                       return (
-                        <tr key={r.id} className={i % 2 === 0 ? "bg-gray-50" : "bg-white"}>
+                        <tr key={r.id} className={
+                          r.status === "Pending"
+                            ? "bg-purple-50"
+                            : i % 2 === 0 ? "bg-gray-50" : "bg-white"
+                        }>
                           <td className="px-4 py-2 text-sm text-gray-700">{r.patient_name}</td>
                           <td className="px-4 py-2 text-sm text-gray-700">{r.patient_mrn || "—"}</td>
                           <td className="px-4 py-2 text-sm text-gray-700">{r.patient_age ?? "—"}</td>
